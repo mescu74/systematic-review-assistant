@@ -1,0 +1,6 @@
+{
+  "research_question": "Can AI be used effectively in screening papers for systematic reviews?\n",
+  "inclusion_criteria": "1. Include only papers that focus on the screening phase\n2. Include papers that use tools in systematic or literature reviews \n3. Include papers from 1 January 2024 onwards\n4. Include only papers focused on Biomedical domain\n",
+  "exclusion_criteria": "1. Exclude preprints\n2. Exclude papers which focus on the use of AI for uses other than screening papers in systematic reviews\n",
+  "timestamp": "2024-12-26T11:19:06.379920"
+}
