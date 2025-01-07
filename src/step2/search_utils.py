@@ -1,11 +1,13 @@
+from __future__ import annotations
+
+
 def build_pubmed_query(
     keywords: list,
     inclusion_criteria: dict,
     exclusion_criteria: dict,
-    additional_filters: dict = None
+    additional_filters: dict = None,
 ) -> str:
-    """
-    Constructs a PubMed-compatible query string from user-defined keywords and criteria.
+    """Constructs a PubMed-compatible query string from user-defined keywords and criteria.
 
     Args:
         keywords (list): A list of keyword strings.
@@ -16,16 +18,15 @@ def build_pubmed_query(
     Returns:
         str: PubMed query string ready for E-utilities.
     """
-    
     # Basic example: combine all keywords with OR logic, then wrap with parentheses
     # and combine them with AND for mandatory terms from inclusion_criteria, etc.
-    
+
     # 1) Combine keywords
-    if keywords:
-        keyword_query = " OR ".join([f"({kw})" for kw in keywords])
-    else:
-        keyword_query = ""
-    
+    if not keywords:
+        raise ValueError("At least one keyword is required")
+
+    keyword_query = " OR ".join([f"({kw})" for kw in keywords])
+
     # 2) Incorporate inclusion criteria
     # For example, if inclusion_criteria has "language: english", "study_type: clinical_trial", etc.
     # You might transform them into specific PubMed tags: e.g., "clinical trial[pt]" for publication type
@@ -41,7 +42,7 @@ def build_pubmed_query(
             # e.g. clinical trial => "clinical trial[pt]"
             inclusion_query_parts.append(f"{val}[pt]")
         # Add more logic as needed
-    
+
     inclusion_query = " AND ".join(inclusion_query_parts)
 
     # 3) Exclusion criteria
@@ -54,8 +55,8 @@ def build_pubmed_query(
         # expand as needed
 
     exclusion_query = " AND ".join(exclusion_query_parts)
-    
-    # 4) Additional filters, e.g. date range: "2020:2023[dp]" 
+
+    # 4) Additional filters, e.g. date range: "2020:2023[dp]"
     filter_query_parts = []
     if additional_filters:
         pub_date_range = additional_filters.get("date_range")
@@ -63,7 +64,7 @@ def build_pubmed_query(
             # Example: '2020:2023' => "2020:2023[dp]"
             filter_query_parts.append(f"{pub_date_range}[dp]")
         # Add more as needed (journal filters, etc.)
-    
+
     filter_query = " AND ".join(filter_query_parts)
 
     # Combine everything
@@ -74,6 +75,6 @@ def build_pubmed_query(
         combined_query += f" AND {exclusion_query}"
     if filter_query:
         combined_query += f" AND {filter_query}"
-    
+
     # Clean up or handle edge cases
     return combined_query.strip()
