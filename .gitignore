@@ -2,6 +2,9 @@
 venv/
 env/
 
+# Logs from UI
+logs/
+
 # Python
 __pycache__/
 *.py[cod]
