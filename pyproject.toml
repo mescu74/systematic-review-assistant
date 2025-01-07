@@ -1,0 +1,193 @@
+[project]
+name = "systematic-review-assistant"
+version = "0.1.0"
+description = "SR assistant prototype"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "langchain>=0.3.14",
+  "langchain-community>=0.3.14",
+  "langchain-core>=0.3.29",
+  "langchain-openai>=0.2.14",
+  "llama-index>=0.12.10",
+  "numpy==1.26.2",
+  "openai>=1.14.0",
+  "pandas==2.1.4",
+  "pypdf>=5.1.0,<6.0.0",
+  "python-docx==1.0.1",
+  "python-dotenv==1.0.0",
+  "streamlit>=1.41.1",
+  "biopython>=1.83",
+  "pydantic>=2.10.4",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=7.4.3",
+    "pytest-async>=0.1.1",
+    "pytest-cov>=6.0.0",
+    "pytest-sugar>=1.0.0",
+    "pytest-xdist>=3.6.1",
+    "ruff>=0.8.6",
+]
+
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/step1", "src/step2"]
+
+[tool.pyright]
+stubPath = "typings"
+useLibraryCodeForTypes = true
+venvPath = "."
+venv = ".venv"
+pythonVersion = "3.12"
+typeCheckingMode = "strict"
+reportImportCycles = true
+analyzeUnannotatedFunctions = true
+reportMatchNotExhaustive = "warning"
+reportDeprecated = true
+reportOptionalCall = true
+reportUnusedVariable = true
+reportIncompleteStub = true
+reportPropertyTypeMismatch = true
+deprecateTypingAliases = true
+reportCallInDefaultInitializer = true
+reportImplicitOverride = true
+reportImplicitStringConcatenation = true
+reportMissingSuperCall = "warning"
+reportShadowedImports = true
+reportUninitializedInstanceVariable = true
+# Library code causing these all the time
+reportUnknownMemberType = false
+reportUnknownVariableType = false
+reportUnknownArgumentType = false
+
+[tool.mypy]
+strict = true
+warn_unreachable = true
+pretty = true
+show_column_numbers = true
+show_error_codes = true
+show_error_context = true
+ignore_missing_imports = true
+mypy_path = "./src:./tests"
+
+[tool.ruff]
+line-length = 88
+
+src = ["src", "tests"]
+namespace-packages = []
+target-version = "py312"
+respect-gitignore = true
+
+exclude = []
+fix = true
+
+[tool.ruff.lint]
+logger-objects = ["loguru.logger"]
+select = ["ALL"]
+ignore = [
+  "ISC001",  # Implicit string concatenation
+  "PLR",     # Design related pylint codes
+  "E501",    # Line too long
+  "UP017",   # datetime.UTC instead of datetime.timezone.utc. Don't think so.
+  "PLE1205", # too many arguments for `logging` format string, not for loguru
+  "D100",    # Missing docstring in public module
+  "D103",    # Missing docstring
+  "D400",    # First line should end with a period
+  "TRY300",  # Use else in try except
+  "ANN401",  # Can't use Any for *args or **kwargs
+  "BLE001",  # except Exception
+  "COM812",  # Trailing comma
+]
+fixable = ["ALL"]
+unfixable = [
+  "T20",   # Removes print statements
+  "F841",  # Removes unused variables
+  "UP017",
+]
+
+task-tags = ["TODO", "FIXME", "XXX", "HACK", "BUG", "NOTE", "PERF"]
+
+[tool.ruff.lint.flake8-unused-arguments]
+ignore-variadic-names = true
+
+[tool.ruff.format]
+quote-style = "double"
+exclude = ["generated", "3rdparty", "vendor"]
+docstring-code-format = true
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+ignore-decorators = ["declared_attr", "validator", "root_validator"]
+property-decorators = ["property", 'functools.cached_property']
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = [
+  "chr",
+  "typer.Argument",
+  "typer.Option",
+  "fastapi.Depends",
+  "fastapi.Query",
+]
+
+[tool.ruff.lint.pyupgrade]
+keep-runtime-typing = true
+
+[tool.ruff.lint.flake8-builtins]
+builtins-ignorelist = ["id", "type", "input"]
+
+[tool.ruff.lint.pep8-naming]
+staticmethod-decorators = [
+  "pydantic.validator",
+  "pydantic.root_validator",
+  "pydantic.model_validator",
+  "pydantic.validate_call",
+  "pydantic.validate_arguments",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["step1", "step2", "step3", "step4", "core"]
+required-imports = ["from __future__ import annotations"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+  "T20",
+  "D100",
+  "D101",
+  "D102",
+  "D103",
+  "D104",
+  "D105",
+  "D106",
+  "D107",
+  "S101", # use of "assert"
+  "S102", # use of "exec"
+  "S106", # possible hardcoded password.
+]
+
+[tool.ruff.lint.flake8-quotes]
+docstring-quotes = "double"
+inline-quotes = "double"
+avoid-escape = true
+
+[tool.ruff.lint.pycodestyle]
+max-line-length = 88
+max-doc-length = 120
+ignore-overlong-task-comments = true
+
+[tool.pytest.ini_options]
+addopts = "-ra -q --import-mode=importlib"
+pythonpath = ["src"]
+testpaths = ["tests"]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::UserWarning",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
