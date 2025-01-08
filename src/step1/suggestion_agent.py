@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
+from typing import Dict, List, Any, Union, cast
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
@@ -50,16 +51,16 @@ class SuggestionAgent:
         self.workflow = self._create_workflow()
         self.memory = MemorySaver()
         self.agent = self._compile_agent()
-        self.messages: list[BaseMessage] = []
+        self.messages: List[BaseMessage] = []
         self.config = self._create_config()
 
     def _create_workflow(self) -> StateGraph:
         """Create the agent workflow."""
         workflow = StateGraph(state_schema=MessagesState)
 
-        def call_model(state: MessagesState) -> dict:
+        def call_model(state: MessagesState) -> Dict[str, AIMessage]:
             """Call the model with the current state."""
-            response = self.llm.invoke(state["messages"])
+            response = cast(AIMessage, self.llm.invoke(state["messages"]))
             return {"messages": response}
 
         workflow.add_node("model", call_model)
@@ -72,11 +73,9 @@ class SuggestionAgent:
 
     def _create_config(self) -> RunnableConfig:
         """Create agent configuration."""
-        config = {
-            "recursion_limit": 1000,
-            "configurable": {"thread_id": uuid.uuid4().hex},
-        }
-        return RunnableConfig(**config)
+        return RunnableConfig(
+            recursion_limit=1000, configurable={"thread_id": str(uuid.uuid4().hex)}
+        )
 
     def get_suggestions(self, criteria: ReviewCriteria) -> str:
         """Get suggestions for the given criteria."""
@@ -94,10 +93,10 @@ class SuggestionAgent:
         ai_message = result["messages"][-1]
         if isinstance(ai_message, AIMessage):
             self.messages.append(ai_message)
-            return ai_message.content
+            return cast(str, ai_message.content)
         raise ValueError(f"Unexpected message type: {type(ai_message)}")
 
-    def get_message_history(self) -> list[BaseMessage]:
+    def get_message_history(self) -> List[BaseMessage]:
         """Get the full message history."""
         return self.messages.copy()
 

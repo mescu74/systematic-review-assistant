@@ -3,9 +3,12 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
+from typing import List
 
 
-def log_pubmed_search(query_string, pmid_list, log_file="search_log.json"):
+def log_pubmed_search(
+    query_string: str, pmid_list: List[str], log_file: str = "search_log.json"
+) -> None:
     record = {
         "timestamp": datetime.utcnow().isoformat(),
         "query": query_string,

@@ -3,9 +3,12 @@ from __future__ import annotations
 import datetime
 import json
 import os
+import uuid
+from typing import cast
 
 import streamlit as st
 from dotenv import load_dotenv
+from langchain_core.runnables import RunnableConfig
 
 from step1.suggestion_agent import ReviewCriteria, SuggestionAgent
 
@@ -15,11 +18,13 @@ load_dotenv()
 
 def init_agent_config() -> RunnableConfig:
     if "agent_config" in st.session_state:
-        return st.session_state.agent_config
-    config = {"recursion_limit": 1000, "configurable": {"thread_id": uuid.uuid4().hex}}
-    config = RunnableConfig(**config)
+        return cast(RunnableConfig, st.session_state.agent_config)
+
+    config = RunnableConfig(
+        recursion_limit=1000, configurable={"thread_id": str(uuid.uuid4().hex)}
+    )
     st.session_state.agent_config = config
-    return st.session_state.agent_config
+    return config
 
 
 def init_suggestion_agent() -> SuggestionAgent:
