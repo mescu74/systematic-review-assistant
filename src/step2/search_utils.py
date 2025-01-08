@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from typing import Any
+
 
 def build_pubmed_query(
-    keywords: list,
-    inclusion_criteria: dict,
-    exclusion_criteria: dict,
-    additional_filters: dict = None,
+    keywords: list[str],
+    inclusion_criteria: dict[str, Any],
+    exclusion_criteria: dict[str, Any],
+    additional_filters: dict[str, Any] | None = None,
 ) -> str:
     """Constructs a PubMed-compatible query string from user-defined keywords and criteria.
 

@@ -1,7 +1,7 @@
-# pubmed_integration.py
 from __future__ import annotations
 
 import os
+from typing import Any, cast
 
 from Bio import Entrez
 from dotenv import load_dotenv
@@ -10,83 +10,69 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Get credentials from .env file
-Entrez.email = os.getenv("NCBI_EMAIL")
-Entrez.api_key = os.getenv("NCBI_API_KEY")
+email = os.getenv("NCBI_EMAIL")
+api_key = os.getenv("NCBI_API_KEY")
 
-# Add error checking
-if not Entrez.email or not Entrez.api_key:
+if email is None or api_key is None:
     raise ValueError("Missing NCBI_EMAIL or NCBI_API_KEY in .env file")
+
+# Type ignore for Entrez attributes which are dynamically set
+Entrez.email = email  # type: ignore
+Entrez.api_key = api_key  # type: ignore
 
 
 def pubmed_search(query: str, max_results: int = 1000) -> list[str]:
-    """Searches PubMed with the given query and returns a list of PMIDs.
-
-    Args:
-        query (str): Search query string
-        max_results (int): Maximum number of results to return
-
-    Returns:
-        List[str]: List of PubMed IDs
-
-    Raises:
-        Exception: If the search fails
-    """
+    """Searches PubMed with the given query and returns a list of PMIDs."""
     try:
-        handle = Entrez.esearch(db="pubmed", term=query, retmax=max_results)
-        record = Entrez.read(handle)
+        # Type ignore for untyped Entrez functions
+        handle = Entrez.esearch(db="pubmed", term=query, retmax=max_results)  # type: ignore
+        record = Entrez.read(handle)  # type: ignore
         handle.close()
         pmid_list = record.get("IdList", [])
 
         if not pmid_list:
             print(f"Warning: No results found for query: {query}")
 
-        return pmid_list
+        return cast(list[str], pmid_list)
 
     except Exception as e:
         raise Exception(f"PubMed search failed: {e!s}")
 
 
-def pubmed_fetch_details(pmids: list[str]) -> dict:
-    """Fetches article details for each PMID using EFetch.
-
-    Args:
-        pmids (List[str]): List of PubMed IDs
-
-    Returns:
-        Dict: Dictionary containing article details
-
-    Raises:
-        ValueError: If pmids is empty
-        Exception: If fetch fails
-    """
+def pubmed_fetch_details(pmids: list[str]) -> dict[str, Any]:
+    """Fetches article details for each PMID using EFetch."""
     if not pmids:
         raise ValueError("No PMIDs provided")
 
     try:
-        batch_ids = ",".join(pmids)
-        handle = Entrez.efetch(db="pubmed", id=batch_ids, retmode="xml")
-        records = Entrez.read(handle)
-        handle.close()
+        # Process PMIDs in batches to avoid overwhelming the server
+        batch_size = 100
+        all_records = {}
 
-        # Validate records structure
-        if not records or "PubmedArticle" not in records:
-            raise ValueError("Unexpected response format from PubMed")
+        for i in range(0, len(pmids), batch_size):
+            batch_ids = ",".join(pmids[i : i + batch_size])
 
-        return records
+            # Type ignore for untyped Entrez functions
+            handle = Entrez.efetch(db="pubmed", id=batch_ids, retmode="xml")  # type: ignore
+            records = Entrez.read(handle)  # type: ignore
+            handle.close()
+
+            # Add records to the collection
+            if isinstance(records, dict):
+                all_records.update(records)
+            else:
+                all_records.update(
+                    {str(i): record for i, record in enumerate(records, start=i)}
+                )
+
+        return all_records
 
     except Exception as e:
         raise Exception(f"Failed to fetch PubMed details: {e!s}")
 
 
-def extract_article_info(article: dict) -> dict[str, str]:
-    """Extracts key information from a PubMed article record.
-
-    Args:
-        article (Dict): PubMed article record
-
-    Returns:
-        Dict[str, str]: Dictionary containing article information
-    """
+def extract_article_info(article: dict[str, Any]) -> dict[str, str]:
+    """Extracts key information from a PubMed article record."""
     try:
         medline = article["MedlineCitation"]
         article_info = medline["Article"]

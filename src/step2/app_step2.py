@@ -7,7 +7,7 @@ from logger import log_pubmed_search
 from pubmed_integration import pubmed_fetch_details, pubmed_search
 
 
-def run_step2_search_and_index():
+def run_step2_search_and_index() -> None:
     st.title("Step 2: Automated PubMed Query & Indexing (BioPython)")
 
     # Retrieve the search criteria from Step 1 (if stored in session state)
