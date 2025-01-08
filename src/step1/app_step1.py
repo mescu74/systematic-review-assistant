@@ -6,17 +6,26 @@ import os
 
 import streamlit as st
 from dotenv import load_dotenv
-from langchain.chains import ConversationChain
-from langchain.memory import ConversationBufferMemory
-from langchain_openai import ChatOpenAI
+
+from step1.suggestion_agent import ReviewCriteria, SuggestionAgent
 
 # Load environment variables from .env if present
 load_dotenv()
 
-# Initialize LLM - Adjust model_name and parameters as needed
-llm = ChatOpenAI(model_name="gpt-4", temperature=0.2)
-memory = ConversationBufferMemory()
-chain = ConversationChain(llm=llm, memory=memory, verbose=False)
+
+def init_agent_config() -> RunnableConfig:
+    if "agent_config" in st.session_state:
+        return st.session_state.agent_config
+    config = {"recursion_limit": 1000, "configurable": {"thread_id": uuid.uuid4().hex}}
+    config = RunnableConfig(**config)
+    st.session_state.agent_config = config
+    return st.session_state.agent_config
+
+
+def init_suggestion_agent() -> SuggestionAgent:
+    """Initialize the suggestion agent."""
+    return SuggestionAgent(model="gpt-4", temperature=0.0)
+
 
 # Set up page
 st.set_page_config(page_title="AI-Assisted Systematic Review - Step 1", layout="wide")
@@ -31,6 +40,11 @@ if "exclusion_criteria" not in st.session_state:
     st.session_state["exclusion_criteria"] = ""
 if "llm_suggestions" not in st.session_state:
     st.session_state["llm_suggestions"] = ""
+if "suggestions_agent" not in st.session_state:
+    st.session_state["suggestions_agent"] = init_suggestion_agent()
+if "suggestions_agent_state" not in st.session_state:
+    st.session_state.suggestions_agent_state = {}
+    st.session_state.suggestions_agent_state["messages"] = []
 
 # Layout for input fields and LLM feedback
 col1, col2 = st.columns(2)
@@ -64,25 +78,14 @@ with col2:
 
 # LLM Interaction
 if validate_button:
-    user_input_summary = f"""
-    Research Question: {st.session_state['research_question']}
-    Inclusion Criteria: {st.session_state['inclusion_criteria']}
-    Exclusion Criteria: {st.session_state['exclusion_criteria']}
-    """
-
-    prompt = f"""
-    The user provided the following systematic review setup:
-
-    {user_input_summary}
-
-    Please:
-    1. Check if the criteria are clear and unambiguous.
-    2. Suggest any improvements or additional details that might help during the screening process.
-    3. Identify any contradictions or points needing clarification.
-    """
-
-    response = chain.run(prompt)
-    st.session_state["llm_suggestions"] = response
+    criteria = ReviewCriteria(
+        research_question=st.session_state["research_question"],
+        inclusion_criteria=st.session_state["inclusion_criteria"],
+        exclusion_criteria=st.session_state["exclusion_criteria"],
+    )
+    st.session_state["llm_suggestions"] = st.session_state[
+        "suggestions_agent"
+    ].get_suggestions(criteria)
     st.rerun()
 
 st.subheader("Finalize & Save")
