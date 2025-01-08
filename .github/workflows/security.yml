@@ -1,0 +1,41 @@
+name: Security audit
+
+on:
+  schedule:
+    - cron: "0 0 * * 0" # Run weekly on Sunday at midnight
+  push:
+    paths:
+      - "pyproject.toml"
+      - ".github/workflows/security.yml"
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "Set up Python"
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: ".python-version"
+          cache: "pip"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "${{ env.UV_VERSION }}"
+
+      - name: Install security tools
+        run: |
+          uv pip install pip-audit safety pysa-flow ruff
+
+      - name: Run dependency security audit
+        continue-on-error: true # Don't block on vulnerabilities during development
+        run: |
+          uv pip freeze | uv run pip-audit --requirement -
+          uv pip freeze | uv run safety check --stdin
+
+      - name: Run Ruff security checks
+        continue-on-error: true
+        run: |
+          uv run ruff check --select=S --statistics .
