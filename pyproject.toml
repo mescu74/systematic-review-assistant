@@ -2,7 +2,7 @@
 name = "systematic-review-assistant"
 version = "0.1.0"
 description = "SR assistant prototype"
-readme = "README.md"
+readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.12"
 dependencies = [
   "langchain>=0.3.14",
@@ -19,6 +19,7 @@ dependencies = [
   "streamlit>=1.41.1",
   "biopython>=1.83",
   "pydantic>=2.10.4",
+  "langgraph>=0.2.61",
 ]
 
 [dependency-groups]
@@ -29,6 +30,9 @@ dev = [
     "pytest-sugar>=1.0.0",
     "pytest-xdist>=3.6.1",
     "ruff>=0.8.6",
+    "mypy>=1.14.1",
+    "coverage>=7.6.10",
+    "pre-commit>=4.0.1",
 ]
 
 
@@ -42,6 +46,7 @@ venvPath = "."
 venv = ".venv"
 pythonVersion = "3.12"
 typeCheckingMode = "strict"
+include = ["src/**", "tests/**"]
 reportImportCycles = true
 analyzeUnannotatedFunctions = true
 reportMatchNotExhaustive = "warning"
@@ -71,6 +76,8 @@ show_error_codes = true
 show_error_context = true
 ignore_missing_imports = true
 mypy_path = "./src:./tests"
+files = ["src", "tests"]
+exclude = ["typings"]
 
 [tool.ruff]
 line-length = 88
@@ -80,7 +87,13 @@ namespace-packages = []
 target-version = "py312"
 respect-gitignore = true
 
-exclude = []
+extend-exclude = [
+  "generated",
+  "3rdparty",
+  "vendor",
+  "typings",
+  ".pytest_cache"
+]
 fix = true
 
 [tool.ruff.lint]
@@ -180,13 +193,36 @@ max-doc-length = 120
 ignore-overlong-task-comments = true
 
 [tool.pytest.ini_options]
-addopts = "-ra -q --import-mode=importlib"
+addopts = "-vvv -ra -q --import-mode=importlib"
 pythonpath = ["src"]
-testpaths = ["tests"]
+testpaths = ["tests/unit"]  # Default to unit tests
+markers = [
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests (default)",
+]
 filterwarnings = [
     "ignore::DeprecationWarning",
     "ignore::UserWarning",
 ]
+
+[tool.coverage.run]
+source = ["src"]
+branch = true
+omit = [
+    "tests/*",
+    "**/__init__.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
+show_missing = true
+fail_under = 0  # Set minimum coverage percentage when ready
 
 [build-system]
 requires = ["hatchling"]
