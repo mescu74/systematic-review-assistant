@@ -1,0 +1,84 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":semanticCommits",
+    ":automergePatch",
+    ":automergeMinor",
+    ":enableVulnerabilityAlerts",
+    ":rebaseStalePrs"
+  ],
+  "schedule": ["every weekend"],
+  "timezone": "UTC",
+  "lockFileMaintenance": {
+    "enabled": true
+  },
+  "packageRules": [
+    {
+      "matchPackagePatterns": ["*"],
+      "semanticCommitType": "chore"
+    },
+    {
+      "matchDepTypes": ["python"],
+      "groupName": "python dependencies",
+      "semanticCommitType": "build"
+    },
+    {
+      "matchManagers": ["pre-commit"],
+      "groupName": "pre-commit hooks",
+      "semanticCommitType": "ci"
+    },
+    {
+      "matchManagers": ["github-actions"],
+      "groupName": "github actions",
+      "semanticCommitType": "ci"
+    },
+    {
+      "matchPackageNames": ["ruff", "ruff-pre-commit"],
+      "groupName": "ruff",
+      "semanticCommitType": "style"
+    },
+    {
+      "matchPackageNames": ["mypy", "types-*"],
+      "groupName": "type checking",
+      "semanticCommitType": "types"
+    },
+    {
+      "matchPackageNames": ["pytest*"],
+      "groupName": "pytest",
+      "semanticCommitType": "test"
+    }
+  ],
+  "pre-commit": {
+    "enabled": true
+  },
+  "github-actions": {
+    "enabled": true,
+    "fileMatch": ["^.github/workflows/[^/]+\\.ya?ml$"]
+  },
+  "pip_requirements": {
+    "fileMatch": ["^pyproject\\.toml$"]
+  },
+  "python": {
+    "enabled": true
+  },
+  "ignorePaths": [
+    "**/node_modules/**",
+    "**/bower_components/**",
+    "**/vendor/**",
+    "**/examples/**",
+    "**/__pycache__/**",
+    "**/.git/**",
+    "**/.github/**",
+    "**/typings/**"
+  ],
+  "labels": ["dependencies"],
+  "prConcurrentLimit": 10,
+  "prHourlyLimit": 2,
+  "rangeStrategy": "pin",
+  "separateMajorMinor": true,
+  "separateMinorPatch": false,
+  "dependencyDashboard": true,
+  "dependencyDashboardTitle": "📦 Dependency Dashboard",
+  "commitMessagePrefix": "⬆️ "
+}

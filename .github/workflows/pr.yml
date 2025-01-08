@@ -1,0 +1,81 @@
+name: PR Checks
+
+on:
+  pull_request:
+    branches: ["main"]
+  push:
+    branches: ["main"]
+
+env:
+  UV_VERSION: "0.5.15"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    # Allow failing during development
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "Set up Python"
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: ".python-version"
+          cache: "pip"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "${{ env.UV_VERSION }}"
+
+      - name: Install dependencies
+        run: |
+          uv sync
+
+      - name: Lint
+        run: |
+          uv run ruff check
+          uv run ruff format --check
+
+      - name: Unit Test
+        run: |
+          uv run pytest tests/unit --cov=src --cov-report=term --cov-report=html
+
+      - name: Integration Test
+        continue-on-error: true
+        run: |
+          uv run pytest tests/integration -m integration
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: htmlcov
+          retention-days: 14
+
+  typecheck:
+    runs-on: ubuntu-latest
+    # Allow failing during development
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "Set up Python"
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: ".python-version"
+          cache: "pip"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "${{ env.UV_VERSION }}"
+
+      - name: Install dependencies
+        run: |
+          uv sync
+
+      - name: Type check
+        run: |
+          uv run mypy
