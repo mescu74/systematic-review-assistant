@@ -3,16 +3,11 @@ from __future__ import annotations
 import datetime
 import json
 import os
-import uuid
 
 import streamlit as st
 from dotenv import load_dotenv
-from langchain_core.messages import HumanMessage
-from langchain_core.runnables import RunnableConfig
-from langchain_openai import ChatOpenAI
-from langgraph.checkpoint.memory import MemorySaver
-from langgraph.graph import START, MessagesState
-from langgraph.graph.state import CompiledStateGraph, StateGraph
+
+from step1.suggestion_agent import ReviewCriteria, SuggestionAgent
 
 # Load environment variables from .env if present
 load_dotenv()
@@ -27,33 +22,9 @@ def init_agent_config() -> RunnableConfig:
     return st.session_state.agent_config
 
 
-def init_suggestion_agent() -> CompiledStateGraph:
-    """Setup a simple LangGraph agent."""
-    # Initialize LLM
-    llm = ChatOpenAI(model="gpt-4o", temperature=0.0)
-
-    # Define a new graph
-    workflow = StateGraph(state_schema=MessagesState)
-
-    # Define the function that calls the model
-    def call_model(state: MessagesState) -> dict:
-        response = llm.invoke(state["messages"])
-        return {"messages": response}
-
-    # Define the two nodes we will cycle between
-    workflow.add_node("model", call_model)
-    workflow.add_edge(START, "model")
-
-    # Add memory
-    memory = MemorySaver()
-
-    # The thread id is a unique key that identifies
-    # this particular conversation.
-    # We'll just generate a random uuid here.
-    st.session_state["suggestions_agent"] = workflow.compile(
-        checkpointer=memory
-    ).with_config(init_agent_config())
-    return st.session_state["suggestions_agent"]
+def init_suggestion_agent() -> SuggestionAgent:
+    """Initialize the suggestion agent."""
+    return SuggestionAgent(model="gpt-4", temperature=0.0)
 
 
 # Set up page
@@ -71,7 +42,6 @@ if "llm_suggestions" not in st.session_state:
     st.session_state["llm_suggestions"] = ""
 if "suggestions_agent" not in st.session_state:
     st.session_state["suggestions_agent"] = init_suggestion_agent()
-# LangGraph agent state holding full message history
 if "suggestions_agent_state" not in st.session_state:
     st.session_state.suggestions_agent_state = {}
     st.session_state.suggestions_agent_state["messages"] = []
@@ -108,35 +78,14 @@ with col2:
 
 # LLM Interaction
 if validate_button:
-    user_input_summary = f"""\
-    Research Question: {st.session_state['research_question']}
-    Inclusion Criteria: {st.session_state['inclusion_criteria']}
-    Exclusion Criteria: {st.session_state['exclusion_criteria']}
-    """
-
-    prompt = f"""\
-    The user provided the following systematic review setup:
-
-    {user_input_summary}
-
-    Please:
-    1. Check if the criteria are clear and unambiguous.
-    2. Suggest any improvements or additional details that might help during the screening process.
-    3. Identify any contradictions or points needing clarification.
-    """
-
-    st.session_state["suggestions_agent_state"]["messages"].append(
-        HumanMessage(content=prompt)
+    criteria = ReviewCriteria(
+        research_question=st.session_state["research_question"],
+        inclusion_criteria=st.session_state["inclusion_criteria"],
+        exclusion_criteria=st.session_state["exclusion_criteria"],
     )
-    st.session_state["suggestion_agent_state"] = st.session_state[
+    st.session_state["llm_suggestions"] = st.session_state[
         "suggestions_agent"
-    ].invoke(
-        st.session_state["suggestions_agent_state"],
-        config=st.session_state.agent_config,
-    )
-    st.session_state["llm_suggestions"] = st.session_state["suggestion_agent_state"][
-        "messages"
-    ][-1].content
+    ].get_suggestions(criteria)
     st.rerun()
 
 st.subheader("Finalize & Save")
