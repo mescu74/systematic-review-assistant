@@ -23,7 +23,8 @@ def test_dir(tmp_path: Path) -> Path:
     # Clean up is handled automatically by pytest's tmp_path
 
 
-def test_pubmed_records_to_documents() -> None:
+@pytest.mark.integration
+def test_pubmed_records_to_textnodes() -> None:
     # Test data
     pubmed_records = [
         {
@@ -49,6 +50,7 @@ def test_pubmed_records_to_documents() -> None:
     )
 
 
+@pytest.mark.integration
 def test_build_llama_index_from_pubmed(test_dir: Path) -> None:
     # Test data
     pubmed_records = [

@@ -7,7 +7,9 @@ from step2.search_utils import build_pubmed_query
 
 def test_basic_keyword_search() -> None:
     keywords = ["diabetes", "obesity"]
-    result = build_pubmed_query(keywords=keywords, inclusion_criteria={}, exclusion_criteria={})
+    result = build_pubmed_query(
+        keywords=keywords, inclusion_criteria={}, exclusion_criteria={}
+    )
     expected = "(diabetes) OR (obesity)"
     assert result == expected
 

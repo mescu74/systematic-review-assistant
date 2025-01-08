@@ -1,10 +1,14 @@
 """Tests for pubmed_integration module."""
+
 from __future__ import annotations
 
 import pytest
-from unittest.mock import patch
 
-from step2.pubmed_integration import extract_article_info, pubmed_fetch_details, pubmed_search
+from step2.pubmed_integration import (
+    extract_article_info,
+    pubmed_fetch_details,
+    pubmed_search,
+)
 
 
 @pytest.mark.integration
@@ -12,7 +16,7 @@ def test_pubmed_search() -> None:
     """Test PubMed search functionality."""
     query = "systematic review AND machine learning"
     pmids = pubmed_search(query, max_results=5)
-    
+
     assert isinstance(pmids, list)
     assert len(pmids) <= 5
     assert all(isinstance(pmid, str) for pmid in pmids)
@@ -24,7 +28,7 @@ def test_pubmed_fetch_details(monkeypatch: pytest.MonkeyPatch) -> None:
     # Use a small sample of PMIDs
     pmids = ["123456", "789012"]
     records = pubmed_fetch_details(pmids)
-    
+
     assert isinstance(records, dict)
     assert "PubmedArticle" in records
 
@@ -41,18 +45,14 @@ def test_extract_article_info() -> None:
                 "Abstract": {"AbstractText": ["Test abstract"]},
                 "Journal": {
                     "Title": "Test Journal",
-                    "JournalIssue": {
-                        "PubDate": {
-                            "Year": "2023"
-                        }
-                    }
-                }
-            }
+                    "JournalIssue": {"PubDate": {"Year": "2023"}},
+                },
+            },
         }
     }
-    
+
     info = extract_article_info(article)
-    
+
     assert isinstance(info, dict)
     assert info["pmid"] == "123456"
     assert info["title"] == "Test Title"
