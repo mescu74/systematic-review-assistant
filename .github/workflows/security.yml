@@ -23,7 +23,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
-          version: "${{ env.UV_VERSION }}"
+          version: "0.1.19"
 
       - name: Install security tools
         run: |
