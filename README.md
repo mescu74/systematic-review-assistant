@@ -1,5 +1,7 @@
 # SR Assistant Prototype
 
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+
 Systematic Review Assistant Prototype.
 
 tl;dr:
@@ -7,21 +9,21 @@ tl;dr:
 ```sh
 ❯ make
 bootstrap                      How to install the `uv` project managent tool
-python                         Install project local Python managed by uv
-list-python                    Show Python versions available with uv
+python/insll                   Install project local Python managed by uv
 install                        Install runtime dependencies
 dev-install                    Install all dependencies for development
 format                         Format and fix code with ruff
 lint                           Lint code with ruff
-type-check                     Run MyPy
-test-unit                      Run unit tests only
-test-integration               Run integration tests only
-test-all                       Run all tests (unit and integration)
-test-cov                       Run unit tests with coverage
-test-cov-all                   Run all tests with coverage
+typecheck                      Run MyPy
+test/unit                      Run unit tests only
+test/integration               Run integration tests only
+test/all                       Run all tests (unit and integration)
+test/cov                       Run unit tests with coverage
+test/cov-all                   Run all tests with coverage
 pre-commit                     Run pre-commit on all files
 clean                          Clean Python build artifacts
 dev-clean                      Clean everything including development artifacts
+supabase/install               Install Supabase CLI
 help                           Show this help
 ```
 
