@@ -511,6 +511,19 @@ wheels = [
 ]
 
 [[package]]
+name = "hypothesis"
+version = "6.123.13"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "attrs" },
+    { name = "sortedcontainers" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/c3/57/db0f0f6dd394c406d51fae046c114ee6d5a6ff5a7193e7d7cc0b5d880172/hypothesis-6.123.13.tar.gz", hash = "sha256:4a680787b7f84d7df918d9c05203677931495e548bbc962aa1c9e4643add58f3", size = 420543 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7e/db/f714aff822383ee2ea076670741de3161d4be6ffb1e4da03b90ce1cb95a9/hypothesis-6.123.13-py3-none-any.whl", hash = "sha256:57c3b797664f6b45ce322a2e7854ee1c49fca67c07803cfa6ce2a9b825629d34", size = 482870 },
+]
+
+[[package]]
 name = "identify"
 version = "2.6.5"
 source = { registry = "https://pypi.org/simple" }
@@ -1956,6 +1969,15 @@ wheels = [
 ]
 
 [[package]]
+name = "sortedcontainers"
+version = "2.4.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/e8/c4/ba2f8066cceb6f23394729afe52f3bf7adec04bf9ed2c820b39e19299111/sortedcontainers-2.4.0.tar.gz", hash = "sha256:25caa5a06cc30b6b83d11423433f65d1f9d76c4c6a0c90e3379eaa43b9bfdb88", size = 30594 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/32/46/9cb0e58b2deb7f82b84065f37f3bffeb12413f947f9388e4cac22c4621ce/sortedcontainers-2.4.0-py2.py3-none-any.whl", hash = "sha256:a163dcaede0f1c021485e957a39245190e74249897e2ae4b2aa38595db237ee0", size = 29575 },
+]
+
+[[package]]
 name = "soupsieve"
 version = "2.6"
 source = { registry = "https://pypi.org/simple" }
@@ -2054,6 +2076,7 @@ dependencies = [
     { name = "openai" },
     { name = "pandas" },
     { name = "pydantic" },
+    { name = "pydantic-settings" },
     { name = "pypdf" },
     { name = "python-docx" },
     { name = "python-dotenv" },
@@ -2063,6 +2086,7 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "coverage" },
+    { name = "hypothesis" },
     { name = "mypy" },
     { name = "pre-commit" },
     { name = "pytest" },
@@ -2087,6 +2111,7 @@ requires-dist = [
     { name = "openai", specifier = ">=1.14.0" },
     { name = "pandas", specifier = "==2.1.4" },
     { name = "pydantic", specifier = ">=2.10.4" },
+    { name = "pydantic-settings", specifier = ">=2.7.1" },
     { name = "pypdf", specifier = ">=5.1.0,<6.0.0" },
     { name = "python-docx", specifier = "==1.0.1" },
     { name = "python-dotenv", specifier = "==1.0.0" },
@@ -2096,6 +2121,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "coverage", specifier = ">=7.6.10" },
+    { name = "hypothesis", specifier = ">=6.123.13" },
     { name = "mypy", specifier = ">=1.14.1" },
     { name = "pre-commit", specifier = ">=4.0.1" },
     { name = "pytest", specifier = ">=7.4.3" },
