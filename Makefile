@@ -16,10 +16,10 @@ bootstrap:  ## How to install the `uv` project managent tool
 	@echo
 	@echo "Or go container:  docker run ghcr.io/astral-sh/uv ..."
 
-python: ## Install project local Python managed by uv
+python/insll: ## Install project local Python managed by uv
 	uv python install
 
-list-python: ## Show Python versions available with uv
+python/liw5: ## Show Python versions available with uv
 	uv python list
 
 install: python  ## Install runtime dependencies
@@ -37,23 +37,23 @@ format:  ## Format and fix code with ruff
 lint:  ## Lint code with ruff
 	uv run ruff check
 
-type-check:  ## Run MyPy
+typecheck:  ## Run MyPy
 	uv run mypy
 
-test-unit: ## Run unit tests only
+test/unit: ## Run unit tests only
 	uv run pytest tests/unit
 
-test-integration: ## Run integration tests only
+test/integration: ## Run integration tests only
 	uv run pytest tests/integration -m integration
 
-test-all: ## Run all tests (unit and integration)
+test/all: ## Run all tests (unit and integration)
 	uv run pytest tests
 
-test-cov: ## Run unit tests with coverage
+test/cov: ## Run unit tests with coverage
 	uv run pytest tests/unit --cov=src --cov-report=term --cov-report=html
 	@echo "Coverage report available at htmlcov/index.html"
 
-test-cov-all: ## Run all tests with coverage
+test/cov-all: ## Run all tests with coverage
 	uv run pytest tests --cov=src --cov-report=term --cov-report=html
 	@echo "Coverage report available at htmlcov/index.html"
 
@@ -84,6 +84,9 @@ dev-clean: clean  ## Clean everything including development artifacts
 	rm -rf .mypy_cache/
 	rm -rf .ruff_cache/
 	rm -rf .pre-commit-cache/
+
+supabase/install:  ## Install Supabase CLI
+	brew install supabase/tap/supabase
 
 help:  ## Show this help
 	@grep -E '^[a-z/:A-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
