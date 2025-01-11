@@ -1,12 +1,13 @@
+---
 name: Security audit
 
 on:
   schedule:
-    - cron: "0 0 * * 0" # Run weekly on Sunday at midnight
+    - cron: '0 0 * * 0' # Run weekly on Sunday at midnight
   push:
     paths:
-      - "pyproject.toml"
-      - ".github/workflows/security.yml"
+      - 'pyproject.toml'
+      - '.github/workflows/security.yml'
 
 jobs:
   audit:
@@ -14,16 +15,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: "Set up Python"
+      - name: 'Set up Python'
         uses: actions/setup-python@v5
         with:
-          python-version-file: ".python-version"
-          cache: "pip"
+          python-version-file: '.python-version'
+          cache: pip
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
-          version: "0.1.19"
+          version: ${{ env.UV_VERSION }}
 
       - name: Install security tools
         run: |
@@ -38,4 +39,4 @@ jobs:
       - name: Run Ruff security checks
         continue-on-error: true
         run: |
-          uv run ruff check --select=S --statistics .
+          uv run ruff check --select=S --statistics
