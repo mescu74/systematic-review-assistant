@@ -15,10 +15,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: 'Set up Python'
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version-file: '.python-version'
+          python-version-file: .python-version
           cache: pip
 
       - name: Install uv
@@ -27,14 +27,11 @@ jobs:
           version: ${{ env.UV_VERSION }}
 
       - name: Install security tools
-        run: |
-          uv pip install pip-audit safety pysa-flow ruff
+        run: uv sync --group security
 
       - name: Run dependency security audit
         continue-on-error: true # Don't block on vulnerabilities during development
-        run: |
-          uv pip freeze | uv run pip-audit --requirement -
-          uv pip freeze | uv run safety check --stdin
+        run: uv run pip-audit
 
       - name: Run Ruff security checks
         continue-on-error: true
