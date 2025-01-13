@@ -9,21 +9,22 @@ tl;dr:
 ```sh
 ❯ make
 bootstrap                      How to install the `uv` project managent tool
-python/insll                   Install project local Python managed by uv
-install                        Install runtime dependencies
-dev-install                    Install all dependencies for development
+python.insall                  Install project local Python managed by uv
+python.list                    Show Python versions available with uv
+install.prod                   Install runtime dependencies
+install                        Install all dependencies for development
 format                         Format and fix code with ruff
 lint                           Lint code with ruff
 typecheck                      Run MyPy
-test/unit                      Run unit tests only
-test/integration               Run integration tests only
-test/all                       Run all tests (unit and integration)
-test/cov                       Run unit tests with coverage
-test/cov-all                   Run all tests with coverage
+test.unit                      Run unit tests with coverage
+test.integration               Run integration tests only
+test.all                       Run all tests with coverage
 pre-commit                     Run pre-commit on all files
 clean                          Clean Python build artifacts
-dev-clean                      Clean everything including development artifacts
-supabase/install               Install Supabase CLI
+clean.dev                      Clean everything including development artifacts
+supabase.cli                   Install Supabase CLI
+supabase.dbdev                 Install dbdev DB package manager
+submodules                     Sync git submodules (database-build, etc.)
 help                           Show this help
 ```
 

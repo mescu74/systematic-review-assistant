@@ -1,4 +1,4 @@
-.PHONY: help bootstrap python show-python install dev-install format lint type-check test-unit test-integration test-all test-cov test-cov-all clean dev-clean
+.PHONY: help bootstrap python python.list install install.prod format lint ruff.fix typecheck test.unit test.integration test.all clean clean.lean security supabase.cli supabase.dbdev submodules
 
 .DEFAULT_GOAL := help
 
@@ -16,23 +16,26 @@ bootstrap:  ## How to install the `uv` project managent tool
 	@echo
 	@echo "Or go container:  docker run ghcr.io/astral-sh/uv ..."
 
-python/insll: ## Install project local Python managed by uv
+python.insall: ## Install project local Python managed by uv
 	uv python install
 
-python/liw5: ## Show Python versions available with uv
+python.list: ## Show Python versions available with uv
 	uv python list
 
-install: python  ## Install runtime dependencies
-	uv sync --no-group dev
+install.prod: python  ## Install runtime dependencies
+	uv sync --no-dev
 
-dev-install: python  ## Install all dependencies for development
+install: python  ## Install all dependencies for development
 	uv sync
-	pre-commit install
-	pre-commit install --hook-type pre-push
+	uv run pre-commit install
+	uv run pre-commit install --hook-type pre-push
 
 format:  ## Format and fix code with ruff
 	uv run ruff format
 	uv run ruff check --fix
+
+ruff.fix:
+	uv run check --fix
 
 lint:  ## Lint code with ruff
 	uv run ruff check
@@ -40,27 +43,26 @@ lint:  ## Lint code with ruff
 typecheck:  ## Run MyPy
 	uv run mypy
 
-test/unit: ## Run unit tests only
-	uv run pytest tests/unit
+security:
+	uv sync --group security
+	uv run pip-audit
+	uv run ruff --select="S"
 
-test/integration: ## Run integration tests only
-	uv run pytest tests/integration -m integration
-
-test/all: ## Run all tests (unit and integration)
-	uv run pytest tests
-
-test/cov: ## Run unit tests with coverage
+test.unit: ## Run unit tests with coverage
 	uv run pytest tests/unit --cov=src --cov-report=term --cov-report=html
 	@echo "Coverage report available at htmlcov/index.html"
 
-test/cov-all: ## Run all tests with coverage
+test.integration: ## Run integration tests only
+	uv run pytest tests/integration -m integration
+
+test.all: ## Run all tests with coverage
 	uv run pytest tests --cov=src --cov-report=term --cov-report=html
 	@echo "Coverage report available at htmlcov/index.html"
 
 pre-commit:  ## Run pre-commit on all files
-	pre-commit run --all-files
+	uv run pre-commit run --all-files
 
-clean:  ## Clean Python build artifacts
+clean: clean.dev  ## Clean Python build artifacts
 	rm -rf build/
 	rm -rf dist/
 	rm -rf *.egg-info
@@ -76,7 +78,7 @@ clean:  ## Clean Python build artifacts
 	find . -type d -name ".mypy_cache" -exec rm -rf {} +
 
 
-dev-clean: clean  ## Clean everything including development artifacts
+clean.dev: clean  ## Clean everything including development artifacts
 	rm -rf .venv/
 	rm -rf htmlcov/
 	rm -rf .coverage*
@@ -85,8 +87,15 @@ dev-clean: clean  ## Clean everything including development artifacts
 	rm -rf .ruff_cache/
 	rm -rf .pre-commit-cache/
 
-supabase/install:  ## Install Supabase CLI
+supabase.cli:  ## Install Supabase CLI
 	brew install supabase/tap/supabase
 
+supabase.dbdev: ## Install dbdev DB package manager
+	brew install supabase/tap/dbdev
+
+submodules:  ## Sync git submodules (database-build, etc.)
+	git submodule update --init --recursive
+	@echo ">> tools/database-build synced: in-browser WASM AI assisted Postgres IDE"
+
 help:  ## Show this help
-	@grep -E '^[a-z/:A-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-z/.:A-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
