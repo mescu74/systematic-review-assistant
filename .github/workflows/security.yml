@@ -12,13 +12,22 @@ on:
 jobs:
   audit:
     runs-on: ubuntu-latest
+    environment: prototype
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
+<<<<<<< Updated upstream
           python-version-file: .python-version
+||||||| constructed merge base
+          python-version-file: '.python-version'
+          cache: pip
+=======
+          python-version-file: .python-version
+          cache: pip
+>>>>>>> Stashed changes
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
@@ -28,7 +37,7 @@ jobs:
       - name: Install security tools
         run: uv sync --group security
 
-      - name: Run dependency security audit
+      - name: pip-audit dependencies
         continue-on-error: true # Don't block on vulnerabilities during development
         run: uv run pip-audit
 
