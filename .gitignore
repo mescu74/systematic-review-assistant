@@ -250,3 +250,5 @@ tags
 [._]*.un~
 
 # End of https://www.toptal.com/developers/gitignore/api/vim
+3rdparty/
+!3rdparty/.gitkeep
