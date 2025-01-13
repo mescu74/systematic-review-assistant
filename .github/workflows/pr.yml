@@ -13,6 +13,9 @@ jobs:
     environment: prototype
     # Allow failing during development
     continue-on-error: true
+    env:
+      NCBI_EMAIL: ${{ secrets.NCBI_EMAIL }}
+      NCBI_API_KEY: ${{ secrets.NCBI_API_KEY }}
     steps:
       - uses: actions/checkout@v4
 
@@ -29,9 +32,6 @@ jobs:
       - name: Install dependencies
         run: |
           uv sync
-          # These are not used but there's a check for them
-          #echo 'NCBI_EMAIL=${{ secrets.NCBI_EMAIL }}' >> .env
-          #echo 'NCBI_API_KEY=${{ secrets.NCBI_API_KEY }}' >> .env
 
       - name: Unit Test
         run: |
