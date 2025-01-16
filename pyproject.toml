@@ -3,7 +3,11 @@ name = "systematic-review-assistant"
 version = "0.1.0"
 description = "SR assistant prototype"
 readme = { file = "README.md", content-type = "text/markdown" }
-requires-python = ">=3.12"
+# langraph-checkpointer-postges requires <3.12.4 (for some reason)
+# This project is pinned to 3.12.3, and Python is managed by uv and
+# is installed with `make install` (project local, doesn't change
+# your system. Only used when calling via `uv` in the project dir.)
+requires-python = ">=3.12,<3.12.4"
 dependencies = [
   "langchain>=0.3.14",
   "langchain-community>=0.3.14",
@@ -22,6 +26,16 @@ dependencies = [
   "langgraph>=0.2.61",
   "loguru>=0.7.3",
   "pydantic-settings>=2.7.1",
+  "sqlalchemy>=2.0.36",
+  "uuid6>=2024.7.10",
+  "sqlmodel>=0.0.22",
+  "fastapi>=0.115.6",
+  "dependency-injector>=4.45.0",
+  "langchain-anthropic>=0.3.1",
+  "streamlit-extras>=0.5.0",
+  "psycopg[binary,pool]>=3.2.4",
+  "psycopg-pool>=3.2.4",
+  "langgraph-checkpoint-postgres>=2.0.12",
 ]
 
 [dependency-groups]
@@ -37,24 +51,30 @@ dev = [
   "pre-commit>=4.0.1",
   "hypothesis>=6.123.13",
 ]
-security = [
-    "pip-audit>=2.7.3",
-    "ruff>=0.8.6",
-]
+security = ["pip-audit>=2.7.3", "ruff>=0.8.6"]
 
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/step1", "src/step2", "src/step3", "src/step4", "src/core"]
+packages = ["src/sr_assistant"]
 
 [tool.pyright]
 stubPath = "typings"
 useLibraryCodeForTypes = true
 venvPath = "."
 venv = ".venv"
-extraPaths = ["src/step1", "src/step2", "src/step3", "src/step4", "src/core"]
+extraPaths = [
+  "src/sr_assistant/step1",
+  "src/sr_assistant/step2",
+  "src/sr_assistant/step3",
+  "src/sr_assistant/step4",
+  "src/sr_assistant/core",
+  "src/sr_assistant/app",
+  "src/sr_assistant/agents",
+  "src/sr_assistant",
+]
 pythonVersion = "3.12"
 typeCheckingMode = "strict"
-include = ["src/**", "tests/**"]
+include = ["src/sr_assistant/**", "tests/**"]
 reportImportCycles = true
 analyzeUnannotatedFunctions = true
 reportMatchNotExhaustive = "warning"
@@ -84,14 +104,14 @@ show_column_numbers = true
 show_error_codes = true
 show_error_context = true
 ignore_missing_imports = true
-mypy_path = "./src:./tests"
-files = ["src", "tests"]
+mypy_path = "./src/sr_assistant/:./tests"
+files = ["src/sr_assistant", "tests"]
 exclude = ["typings"]
 
 [tool.ruff]
 line-length = 88
 
-src = ["src", "tests"]
+src = ["src/sr_assistant", "tests"]
 namespace-packages = []
 target-version = "py312"
 respect-gitignore = true
@@ -202,18 +222,18 @@ ignore-overlong-task-comments = true
 
 [tool.pytest.ini_options]
 addopts = "-vvv -ra -q --import-mode=importlib"
-pythonpath = ["src"]
+pythonpath = ["src/sr_assistant"]
 testpaths = ["tests/unit"] # Default to unit tests
 markers = [
   "integration: marks tests as integration tests",
   "unit: marks tests as unit tests (default)",
 ]
-filterwarnings = ["ignore::DeprecationWarning", "ignore::UserWarning"]
+filterwarnings = ["ignore::UserWarning"]
 
 [tool.coverage.run]
-source = ["src"]
+source = ["src/sr_assistant"]
 branch = true
-omit = ["tests/*", "**/__init__.py"]
+omit = ["tests/*", "**/__init__.py", "**/_*.py"]
 
 [tool.coverage.report]
 exclude_lines = [
