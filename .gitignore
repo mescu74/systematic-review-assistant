@@ -16,7 +16,6 @@ htmlcov/
 .env.*
 
 # IDE specific files
-.vscode/
 .idea/
 
 # Data files
@@ -252,5 +251,9 @@ tags
 # End of https://www.toptal.com/developers/gitignore/api/vim
 3rdparty/
 !3rdparty/.gitkeep
+
 *.wip.*
 *.bak*
+
+# edge func suffix for dev and local testing
+*-nogit
