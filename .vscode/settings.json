@@ -1,0 +1,22 @@
+{
+  "ruff.enable": true,
+  "ruff.codeAction.fixViolation": {
+    "enable": true
+  },
+  "ruff.fixAll": true,
+  "ruff.lint.enable": true,
+  "ruff.organizeImports": true,
+  "ruff.showNotifications": "always",
+  "ruff.importStrategy": "fromEnvironment",
+  "ruff.nativeServer": true,
+  "ruff.configurationPreference": "filesystemFirst",
+  "ruff.lineLength": 88,
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.organizeImports.ruff": "always",
+      "source.fixAll.ruff": "always"
+    }
+  }
+}
