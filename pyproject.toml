@@ -125,23 +125,24 @@ fix = true
 logger-objects = ["loguru.logger"]
 select = ["ALL"]
 ignore = [
-  "ISC001",  # Implicit string concatenation
-  "PLR",     # Design related pylint codes
-  "E501",    # Line too long
-  "UP017",   # datetime.UTC instead of datetime.timezone.utc. Don't think so.
-  "PLE1205", # too many arguments for `logging` format string, not for loguru
-  "D100",    # Missing docstring in public module
-  "D103",    # Missing docstring
-  "D400",    # First line should end with a period
-  "TRY300",  # Use else in try except
   "ANN401",  # Can't use Any for *args or **kwargs
   "BLE001",  # except Exception
   "COM812",  # Trailing comma
-  "PT011",   # `pytest.raises(ValueError)` is too broad, set the `match` parameter or use a more specific exception"
-  "PGH003",  # type: ignore
+  "D100",    # Missing docstring in public module
+  "D103",    # Missing docstring
+  "D104",    # Missing docstring in public package
+  "D400",    # First line should end with a period TODO: enable this
+  "D412",    # newline after docstring section: to create a note admonition in mkdocstrings docs, a blank line is needed
+  "E501",    # Line too long, formatting will handle and sometimes it's fine
   "ERA001",  # Commented-out code
   "G004",    # Logging statement uses f-string
-  "D104",    # Missing docstring in public package
+  "ISC001",  # Implicit string concatenation
+  "PGH003",  # type: ignore
+  "PLE1205", # too many arguments for `logging` format string, not for loguru
+  "PLR",     # Design related pylint codes
+  "PT011",   # `pytest.raises(ValueError)` is too broad, set the `match` parameter or use a more specific exception"
+  "TRY300",  # Use else in try except
+  "UP017",   # datetime.UTC instead of datetime.timezone.utc. Don't think so.
 ]
 fixable = ["ALL"]
 unfixable = [
