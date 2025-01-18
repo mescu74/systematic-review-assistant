@@ -25,10 +25,18 @@ python.list: ## Show Python versions available with uv
 install.prod: python  ## Install runtime dependencies
 	uv sync --no-dev
 
-install: python  ## Install all dependencies for development
+deno.cli: ## Install Deno CLI, required by the VSCode extension used to develop edge function
+	# Goes in $DXG_DATA_HOME/deno/bin, add to path, let the installer do it, or
+	# symlink to $HOME/.local/bin or whatever it's on macoS.
+	curl -fsSL https://deno.land/install.sh | sh
+	deno --version
+	@echo "Install the deno vscode extension (canary), use the egde-functions workspace"
+
+install: python ## Install all dependencies for development
 	uv sync
 	uv run pre-commit install
 	uv run pre-commit install --hook-type pre-push
+	@echo "If needed, also run 'make deno.cli' if developing edge functions"
 
 format:  ## Format and fix code with ruff
 	uv run ruff format
