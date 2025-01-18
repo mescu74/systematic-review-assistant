@@ -254,6 +254,9 @@ tags
 
 *.wip.*
 *.bak*
+*.bak
 
 # edge func suffix for dev and local testing
 *-nogit
+# browser client for db design, wasm, a submodule
+toosl/database-build/
