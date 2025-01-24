@@ -1,19 +1,19 @@
 from __future__ import annotations
 
-import uuid
 import json
-from datetime import datetime, timezone
+import uuid
 from typing import cast
 
 import streamlit as st
-from supabase import Client
 from dotenv import find_dotenv, load_dotenv
 from langchain_core.runnables import RunnableConfig
+from supabase import Client
 
 from sr_assistant.core.models.base import Review
 from sr_assistant.step1.suggestion_agent import SuggestionAgent
 
 load_dotenv(find_dotenv())
+
 
 def init_agent_config() -> RunnableConfig:
     if "agent_config" in st.session_state:
@@ -62,38 +62,38 @@ with col1:
         label="Brief introduction to the subject of the review, including rationale for undertaking the review and overall aim.",
         value=st.session_state.background,
         height=200,
-        #key="background",
+        # key="background",
     )
-    #st.markdown(
+    # st.markdown(
     #    "> The most common pitfalls when developing research questions are that the questions incorporate the methods or the study’s expected outcomes ([Mayo, Asano, and Pamela Barbic 2013](https://ehsanx.github.io/Scientific-Writing-for-Health-Research/research-question.html#ref-mayo2013research)). Furthermore, the clarity of the research question can be impeded by the lack of a clear parameter to assess the relationship or association between exposure and outcome ([Mayo, Asano, and Pamela Barbic 2013](https://ehsanx.github.io/Scientific-Writing-for-Health-Research/research-question.html#ref-mayo2013research))."
-    #)
+    # )
 
     # NOTE: In order for the text fields to retain content when navigating between pages,
     # we can't set the key but have to assing the widget to state (for some reason).
     st.session_state.question = st.text_area(
         label="Research Question",
         value=st.session_state.question,
-        #key="question",
+        # key="question",
         placeholder="E.g. 'Does intervention X improve outcome Y in population Z?'",
     )
     st.session_state.inclusion_criteria = st.text_area(
         label="Inclusion Criteria",
         value=st.session_state.inclusion_criteria,
-        #key="inclusion_criteria",
+        # key="inclusion_criteria",
         placeholder="E.g. Adults >18, Intervention X, Outcome Y, RCTs, English",
     )
     st.session_state.exclusion_criteria = st.text_area(
         label="Exclusion Criteria",
         value=st.session_state.exclusion_criteria,
-        #key="exclusion_criteria",
+        # key="exclusion_criteria",
         placeholder="E.g. Children <18, Non-human studies, Case reports",
     )
-    #keywords_input = st.text_input("Search Keywords (separated by commas)")
+    # keywords_input = st.text_input("Search Keywords (separated by commas)")
 
     ## Split the input string into a list and store in session state
-    #if keywords_input:
+    # if keywords_input:
     #    st.session_state.keywords = [kw.strip() for kw in keywords_input.split(",")]
-    #else:
+    # else:
     #    st.session_state.keywords = []
 
     validate_button = st.button("Validate & Suggest Improvements")
@@ -121,7 +121,9 @@ if validate_button:
     st.rerun()
 
 st.subheader("Finalize & Save")
-st.write("Once you are happy with the question and criteria, click the 'Save Protocol' button.")
+st.write(
+    "Once you are happy with the question and criteria, click the 'Save Protocol' button."
+)
 
 save_button = st.button("Save Protocol")
 if save_button:

@@ -60,7 +60,9 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = Field(validation_alias="openai_api_key")
     ANTHROPIC_API_KEY: str = Field(validation_alias="anthropic_api_key")
     SUPABASE_URL: str = Field(validation_alias="sra_supabase_url")
-    SUPABASE_KEY: str = Field(validation_alias="sra_supabase_service_role_key")  # TODO: only for local proto, this should never be exposed client side
+    SUPABASE_KEY: str = Field(
+        validation_alias="sra_supabase_service_role_key"
+    )  # TODO: only for local proto, this should never be exposed client side
     SUPABASE_DIRECT_URL: PostgresDsn = Field(
         default="postgresql://postgres:postgres@127.0.0.1:54322/postgres",  # pyright: ignore
         validation_alias="sra_supabase_direct_url",

@@ -16,7 +16,6 @@ from langgraph.graph import START
 from langgraph.graph.message import MessagesState
 from langgraph.graph.state import CompiledStateGraph, StateGraph
 from loguru import logger
-from pydantic import BaseModel, Field
 
 from sr_assistant.core.models.base import Review
 

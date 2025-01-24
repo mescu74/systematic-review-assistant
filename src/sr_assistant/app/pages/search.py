@@ -38,7 +38,7 @@ def search_page(review_id: UUID | None = None) -> None:
 
                 # Fetch details
                 records = pubmed_fetch_details(pmids)
-                st.write(f"Fetched {len(records["PubmedArticle"])} study details")
+                st.write(f"Fetched {len(records['PubmedArticle'])} study details")
 
                 # Store in Supabase
                 results = repo.store_results(review_id, query, records)
@@ -57,13 +57,16 @@ def search_page(review_id: UUID | None = None) -> None:
         return
 
     st.divider()
-    df_data = [{
-        "PMID": r.pmid,
-        "Title": r.title,
-        "Journal": r.journal,
-        "Year": r.year,
-        "Query": r.query,
-    } for r in existing]
+    df_data = [
+        {
+            "PMID": r.pmid,
+            "Title": r.title,
+            "Journal": r.journal,
+            "Year": r.year,
+            "Query": r.query,
+        }
+        for r in existing
+    ]
     st.dataframe(df_data, use_container_width=True)
 
     if pmid := st.selectbox("Select article:", [r.pmid for r in existing]):
@@ -71,6 +74,7 @@ def search_page(review_id: UUID | None = None) -> None:
         st.subheader(article.title)
         st.text(f"{article.journal} ({article.year})")
         st.write(article.abstract)
+
 
 if "review_id" not in st.session_state:
     st.error("Please create a review first")

@@ -3,17 +3,14 @@
 from __future__ import annotations
 
 import json
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
-import streamlit as st
 from loguru import logger
 
 from sr_assistant.core.models.base import PubMedResult
 from sr_assistant.step2.pubmed_integration import (
     extract_article_info,
-    pubmed_fetch_details,
-    pubmed_search,
 )
 
 if TYPE_CHECKING:
@@ -22,11 +19,14 @@ if TYPE_CHECKING:
 
 class PubMedRepository:
     """PubMed repository."""
+
     def __init__(self, supabase: Client) -> None:
-        #self.supabase: Client = st.session_state.supabase
+        # self.supabase: Client = st.session_state.supabase
         self.supabase = supabase
 
-    def store_results(self, review_id: UUID, query: str, records: dict[str, Any]) -> list[PubMedResult]:
+    def store_results(
+        self, review_id: UUID, query: str, records: dict[str, Any]
+    ) -> list[PubMedResult]:
         """Store PubMed search results."""
         try:
             results = []
@@ -49,7 +49,7 @@ class PubMedRepository:
                     logger.info(f"Storing PubMed result: {result}")
                     results.append(result)
                 except Exception as e:
-                    #logger.warning(f"Failed to extract article info: {e!r}")
+                    # logger.warning(f"Failed to extract article info: {e!r}")
                     msg = f"Failed to extract article info from record: {record}"
                     logger.opt(exception=True).warning(msg)
                     continue
@@ -68,9 +68,9 @@ class PubMedRepository:
 
             # Supabase returns UUID as string
             return [
-                #PubMedResult(
+                # PubMedResult(
                 #    **{**r, "review_id": UUID(r["review_id"]), "id": UUID(r["id"])}
-                #)
+                # )
                 PubMedResult.model_validate(r)
                 for r in ret.data
             ]
