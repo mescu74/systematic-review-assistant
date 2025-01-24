@@ -5,9 +5,12 @@ import re
 from logging.config import fileConfig
 from typing import NoReturn
 
-from alembic import context
 from sqlalchemy import engine_from_config, pool
 from sqlmodel import SQLModel
+from sr_assistant.core.models.base import *
+from sr_assistant.core.models.uuid_test import *
+
+from alembic import context
 
 
 def die(msg: str) -> NoReturn:
@@ -16,19 +19,20 @@ def die(msg: str) -> NoReturn:
 
 
 # Safety checks
-env = os.environ.get("ENVIRONMENT")
+env = os.getenv("ENVIRONMENT")
 # note that prototype code uses "prod" for hosted Supabase, while GHA has a "prototype"
 # environment.
-valid_envs = ["CI", "local", "dev", "staging", "prod"]
-direct_url = os.environ.get("SUPABASE_SR_DIRECT_URL")
+valid_envs = ["CI", "local", "prototype", "dev", "staging", "prod"]
+direct_url: str = os.getenv("SRA_SUPABASE_DIRECT_URL", "")
+direct_url = direct_url.replace("%", "%%")
 
 if not direct_url:
-    die("SUPABASE_SR_DIRECT_URL environment variable is required")
+    die("SRA_SUPABASE_DIRECT_URL environment variable is required")
 
 if env not in valid_envs:
     die(f"Unknown ENVIRONMENT: got {env!r}, want {valid_envs!r}")
 
-if env != "prod":
+if env not in ["prod", "prototype"]:
     # Matches Supabase production database URL pattern
     prod_pattern = r"db\.[a-z0-9-]+\.supabase\.co"
     if re.search(prod_pattern, direct_url):
@@ -57,6 +61,26 @@ target_metadata = SQLModel.metadata
 # can be acquired:
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
+
+
+IGNORE_TABLES = [
+    # LangGraph Postgres Checkpointer tables, ideally in separate schema
+    "checkpoint_blobs",
+    "checkpoints",
+    "checkpoint_writes",
+    "checkpoint_migrations",
+]
+
+
+def include_object(object, name, type_, reflected, compare_to) -> bool:
+    """Whether to include an object in the schema diff."""
+    return not (
+        (
+            type_ == "table"
+            and (name in IGNORE_TABLES or object.info.get("skip_autogenerate", False))
+        )
+        or (type_ == "column" and object.info.get("skip_autogenerate", False))
+    )
 
 
 def run_migrations_offline() -> None:
@@ -97,7 +121,11 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            include_object=include_object,
+        )
 
         with context.begin_transaction():
             context.run_migrations()
