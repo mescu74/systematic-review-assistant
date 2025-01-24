@@ -36,6 +36,7 @@ dependencies = [
   "psycopg[binary,pool]>=3.2.4",
   "langgraph-checkpoint-postgres>=2.0.12",
   "supabase>=2.11.0",
+  "psycopg2-binary>=2.9.10",
 ]
 
 [dependency-groups]

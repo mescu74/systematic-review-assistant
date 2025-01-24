@@ -1,11 +1,13 @@
-"""Suggestion agent for systematic review criteria."""
+"""Suggestion agent for systematic review criteria.
+
+Needs a rewrite.
+"""
 
 from __future__ import annotations
 
-import uuid
-from dataclasses import dataclass
 from typing import cast
 
+import uuid6
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
@@ -14,34 +16,9 @@ from langgraph.graph import START
 from langgraph.graph.message import MessagesState
 from langgraph.graph.state import CompiledStateGraph, StateGraph
 from loguru import logger
+from pydantic import BaseModel, Field
 
-
-@dataclass
-class ReviewCriteria:
-    """Data class for systematic review criteria."""
-
-    research_question: str
-    inclusion_criteria: str
-    exclusion_criteria: str
-
-    def to_prompt(self) -> str:
-        """Convert criteria to a prompt for the agent."""
-        user_input_summary = f"""\
-        Research Question: {self.research_question}
-        Inclusion Criteria: {self.inclusion_criteria}
-        Exclusion Criteria: {self.exclusion_criteria}
-        """
-
-        return f"""\
-        The user provided the following systematic review setup:
-
-        {user_input_summary}
-
-        Please:
-        1. Check if the criteria are clear and unambiguous.
-        2. Suggest any improvements or additional details that might help during the screening process.
-        3. Identify any contradictions or points needing clarification.
-        """
+from sr_assistant.core.models.base import Review
 
 
 class SuggestionAgent:
@@ -51,8 +28,13 @@ class SuggestionAgent:
         """Initialize the agent with model configuration."""
         self.llm = ChatOpenAI(model=model, temperature=temperature)
         self.workflow = self._create_workflow()
-        self.memory = MemorySaver()
+        self.memory = MemorySaver()  # TODO: postgres checkpointer
         self.agent = self._compile_agent()
+        # if st.session_state.criteria_messages:
+        #     self.messages: list[BaseMessage] = st.session_state.criteria_messages
+        # else:
+        #     st.session_state.criteria_messages: list[BaseMessage] = []
+        #     self.messages: list[BaseMessage] = []
         self.messages: list[BaseMessage] = []
         self.config = self._create_config()
 
@@ -62,6 +44,7 @@ class SuggestionAgent:
 
         def call_model(state: MessagesState) -> dict[str, AIMessage]:
             """Call the model with the current state."""
+            # FIXME: not AIMessage, MessaagesState?
             response = cast(AIMessage, self.llm.invoke(state["messages"]))
             return {"messages": response}
 
@@ -71,19 +54,31 @@ class SuggestionAgent:
 
     def _compile_agent(self) -> CompiledStateGraph:
         """Compile the agent with memory."""
+        # TODO: postgres
         return self.workflow.compile(checkpointer=self.memory)
 
     def _create_config(self) -> RunnableConfig:
         """Create agent configuration."""
+        criteria_agent_thread_id = str(uuid6.uuid7())
         return RunnableConfig(
-            recursion_limit=1000, configurable={"thread_id": str(uuid.uuid4().hex)}
+            recursion_limit=1000, configurable={"thread_id": criteria_agent_thread_id}
         )
 
-    def get_suggestions(self, criteria: ReviewCriteria) -> str:
+    def get_suggestions(self, review: Review) -> str:
         """Get suggestions for the given criteria."""
-        # Create prompt from criteria
-        prompt = criteria.to_prompt()
+        prompt = f"""\
+        The user provided the following systematic review protocol:
 
+        Background: {review.background}
+        Research Question: {review.question}
+        Inclusion Criteria: {review.inclusion_criteria}
+        Exclusion Criteria: {review.exclusion_criteria}
+
+        Please:
+        1. Check if the criteria are clear and unambiguous.
+        2. Suggest any improvements or additional details that might help during the screening process.
+        3. Identify any contradictions or points needing clarification.
+        """
         # Add message to history
         self.messages.append(HumanMessage(content=prompt))
 

@@ -21,6 +21,7 @@ def sample_criteria() -> ReviewCriteria:
         research_question="Does cognitive behavioral therapy (CBT) improve anxiety symptoms in adults with generalized anxiety disorder?",
         inclusion_criteria="Adults >18, Diagnosed GAD, CBT intervention, RCTs, English language",
         exclusion_criteria="Children <18, Non-human studies, Case reports, Studies without control groups",
+        keywords=["CBT", "GAD", "anxiety", "anxiety disorders"],
     )
 
 
@@ -63,6 +64,7 @@ def test_agent_multiple_interactions(
         inclusion_criteria=sample_criteria.inclusion_criteria
         + ", Published after 2010",
         exclusion_criteria=sample_criteria.exclusion_criteria,
+        keywords=sample_criteria.keywords,
     )
     second_response = agent.get_suggestions(modified_criteria)
     assert second_response, "Second response should not be empty"

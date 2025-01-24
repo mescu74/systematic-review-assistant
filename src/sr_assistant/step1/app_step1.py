@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import json
 import uuid
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import cast
 
 import streamlit as st
@@ -101,21 +99,23 @@ if save_button:
         "exclusion_criteria": st.session_state["exclusion_criteria"],
         "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
+    st.session_state.supabase.table("question_criteria").insert(criteria_data).execute()
 
+    # TODO: persist in supabase
     # Create directories if they don't exist
-    Path("criteria").mkdir(parents=True, exist_ok=True)
-    Path("logs").mkdir(parents=True, exist_ok=True)
+    # Path("criteria").mkdir(parents=True, exist_ok=True)
+    # Path("logs").mkdir(parents=True, exist_ok=True)
 
-    filename = f"criteria/criteria_{datetime.now(tz=timezone.utc).strftime('%Y%m%d_%H%M%S')}.json"
-    with open(filename, "w") as f:
-        json.dump(criteria_data, f, indent=2)
+    # filename = f"criteria/criteria_{datetime.now(tz=timezone.utc).strftime('%Y%m%d_%H%M%S')}.json"
+    # with open(filename, "w") as f:
+    #    json.dump(criteria_data, f, indent=2)
 
-    # Log the event
-    with open("logs/criteria_setup_log.txt", "a") as log_file:
-        log_file.write(f"---\n{datetime.datetime.now().isoformat()}\n")
-        log_file.write(f"Final Criteria:\n{json.dumps(criteria_data, indent=2)}\n")
-        if st.session_state["llm_suggestions"]:
-            log_file.write("LLM Suggestions:\n")
-            log_file.write(st.session_state["llm_suggestions"] + "\n")
+    ## Log the event
+    # with Path("logs/criteria_setup_log.txt", "a").open("a") as log_file:
+    #    log_file.write(f"---\n{datetime.datetime.now().isoformat()}\n")
+    #    log_file.write(f"Final Criteria:\n{json.dumps(criteria_data, indent=2)}\n")
+    #    if st.session_state["llm_suggestions"]:
+    #        log_file.write("LLM Suggestions:\n")
+    #        log_file.write(st.session_state["llm_suggestions"] + "\n")
 
     st.success(f"Criteria saved to {filename}")
