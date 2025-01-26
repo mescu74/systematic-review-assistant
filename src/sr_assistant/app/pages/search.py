@@ -60,6 +60,8 @@ def search_page(review_id: UUID | None = None) -> None:
     df_data = [
         {
             "PMID": r.pmid,
+            "DOI": r.doi,
+            "PMC": r.pmc,
             "Title": r.title,
             "Journal": r.journal,
             "Year": r.year,
