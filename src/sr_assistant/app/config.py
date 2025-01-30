@@ -58,7 +58,7 @@ class Settings(BaseSettings):
 
     # TODO: SecretStr or st.secrets
     OPENAI_API_KEY: str = Field(validation_alias="openai_api_key")
-    ANTHROPIC_API_KEY: str = Field(validation_alias="anthropic_api_key")
+    ANTHROPIC_API_KEY: str = Field(default="", validation_alias="anthropic_api_key", description="Optional Anthropic API key, not used in proto ATM")
     SUPABASE_URL: str = Field(validation_alias="sra_supabase_url")
     SUPABASE_KEY: str = Field(
         validation_alias="sra_supabase_service_role_key"
