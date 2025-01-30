@@ -17,12 +17,14 @@ Examples:
 
 from __future__ import annotations
 
+import typing as t
 import uuid
 from datetime import datetime  # noqa: TC003
 
 import sqlalchemy as sa
 from sqlmodel import Field, SQLModel  # type: ignore
 
+from sr_assistant.core.types.screening import ExclusionReasonType
 
 class IdMixin(SQLModel):
     """Adds ``id`` UUIDv4 primary key field to the model."""
@@ -138,3 +140,53 @@ class PubMedResult(IdMixin, CreatedAtMixin, table=True):
     # review: Mapped[Review] = Relationship(back_populates="pubmed_results")
     # review: Mapped[Review] = Relationship(back_populates="pubmed_results", sa_relationship_kwargs={"lazy": "joined"})
     # review: Mapped["Review"] = Relationship(back_populates="pubmed_results")
+
+
+# a separate schema sr_assistant.core.schemas.screening.ScreeningResponse is used to
+# coerce the model response to schema. These responses must be mapped to this model.
+# TODO: how to?
+class AbstractScreeningResult(CreatedUpdatedAtMixin, IdMixin, table=True):
+    """Abstract screening decision model.
+
+    Tracks the screening decisions for each paper in the review.
+    """
+
+    __tablename__ = "abstract_screening_results" # type: ignore pyright: ignore
+
+    review_id: uuid.UUID = Field(
+        title="Review ID", foreign_key="reviews.id", index=True
+    )
+    search_result_id: uuid.UUID = Field(
+        description="This is what we're screening",
+        title="PubMed Result ID", foreign_key="pubmed_results.id", index=True
+    )
+    decision: t.Literal["include", "exclude", "uncertain"] = Field(
+        title="Screening Decision",
+        description="Whether to include or exclude the paper, or mark as uncertain",
+    )
+    confidence_score: float = Field(
+        ge=0.0,
+        le=1.0,
+        description="The confidence score for the decision. [0.0, 1.0].",
+    )
+    rationale: str | None = Field(
+        default=None,
+        title="Decision Rationale",
+        description="Rationale for the screening decision",
+    )
+    extracted_quotes: list[str] | None = Field(
+        default=None,
+        description="Supporting quotes from the title/abstract. Can be omitted if uncertain.",
+    )
+    exclusion_reason_categories: list[ExclusionReasonType] | None = Field(
+        default=None,
+        description="Omit if the decision is 'include'. If the decision is 'exclude' or 'uncertain', The PRISMA exclusion reason categories for the decision. This complements the 'rationale' field.",
+    )
+
+
+class UuidTest(IdMixin, CreatedAtMixin, SQLModel, table=True):
+    """Test model for UUID handling."""
+
+    __tablename__ = "uuid_test"  # type: ignore pyright: ignore
+
+    data: str = Field(...)

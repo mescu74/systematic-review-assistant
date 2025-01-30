@@ -4,7 +4,7 @@ from uuid import UUID
 
 import streamlit as st
 
-from sr_assistant.core.repositories.pubmed import PubMedRepository
+from sr_assistant.core.repositories import PubMedRepository
 from sr_assistant.step2.pubmed_integration import pubmed_fetch_details, pubmed_search
 
 
@@ -52,7 +52,7 @@ def search_page(review_id: UUID | None = None) -> None:
                 return
 
     # Show existing results
-    existing = repo.get_review_results(review_id)
+    existing = repo.get_search_results(review_id)
     if not existing:
         return
 
@@ -79,6 +79,6 @@ def search_page(review_id: UUID | None = None) -> None:
 
 
 if "review_id" not in st.session_state:
-    st.error("Please create a review first")
+    st.error("Please define a systematic review protocol first")
 else:
     search_page(review_id=st.session_state.review_id)

@@ -25,10 +25,9 @@ parallel and batching capabilities, which use a threadpool executor under the ho
 
 from __future__ import annotations
 
-import streamlit as st
-from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableParallel
+from langchain_openai import ChatOpenAI
 
 from sr_assistant.core.schemas.screening import ScreeningResponse
 
@@ -104,7 +103,13 @@ comprehensive_reviewer_prompt = ChatPromptTemplate.from_messages([
     ("human", task_prompt_text)
 ])
 
-# abstract_screening_chain.batch([{"research_question": "question", "inclusion_criteria": "criteria", "exclusion_criteria": "criteria", "title": "title", "year": "year", "abstract": "abstract"}])
+# In [2]: b = [{"research_question": "test question", "inclusion_criteria": "test criteria", "exclusion_criteria": "test criteria", "title": "test title", "year": "test year", "abstract": "test abstract"}]
+# In [3]: res = abstract_screening_chain.batch(b)
+# In [4]: res
+# Out[4]:
+# {'llm1_response': ScreeningResponse(decision='uncertain', confidence_score=0.5, rationale='The abstract provided does not contain any specific information that can be directly matched to the inclusion or exclusion criteria. Without explicit details on the population, intervention, comparison, outcomes, or study design, it is impossible to determine if the study meets the criteria. Additional information on these aspects would be necessary to make a confident decision.', exclusion_reason_categories=None),
+# 'llm2_response': ScreeningResponse(decision='uncertain', confidence_score=0.5, rationale="The abstract provided is a placeholder ('test abstract') and does not contain any specific information about the study's population, intervention, comparison, outcomes, or study design. Without this information, it is impossible to determine whether the study meets the inclusion or exclusion criteria. Additional information about the study's methodology, results, and relevance to the research question is needed to make a confident decision.", exclusion_reason_categories=None)}]
+
 abstract_screening_chain = RunnableParallel(
     llm1_response=(conservative_reviewer_prompt | llm1_with_structured_output),
     llm2_response=(comprehensive_reviewer_prompt | llm2_with_structured_output)

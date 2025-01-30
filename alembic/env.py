@@ -7,8 +7,8 @@ from typing import NoReturn
 
 from sqlalchemy import engine_from_config, pool
 from sqlmodel import SQLModel
-from sr_assistant.core.models.base import *
-from sr_assistant.core.models.uuid_test import *
+
+from sr_assistant.core.models import *
 
 from alembic import context
 

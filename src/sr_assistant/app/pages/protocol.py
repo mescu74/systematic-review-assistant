@@ -9,7 +9,7 @@ from dotenv import find_dotenv, load_dotenv
 from langchain_core.runnables import RunnableConfig
 from supabase import Client
 
-from sr_assistant.core.models.base import Review
+from sr_assistant.core.models import Review
 from sr_assistant.step1.suggestion_agent import SuggestionAgent
 
 load_dotenv(find_dotenv())
@@ -126,6 +126,7 @@ st.write(
 )
 
 save_button = st.button("Save Protocol")
+# TODO: support updates
 if save_button:
     if "review" not in st.session_state:
         st.session_state.review = Review(
@@ -138,6 +139,7 @@ if save_button:
     review = st.session_state.review
     supabase: Client = st.session_state.supabase
     # handle UUIDs, let Supabase be source for time
+    # TODO: this should be a repository concern
     payload = json.loads(review.model_dump_json(exclude={"created_at", "updated_at"}))
     # TODO: handle updates/upsert
     ret = supabase.table("reviews").insert(payload).execute()
