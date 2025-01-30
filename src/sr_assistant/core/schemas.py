@@ -4,10 +4,9 @@ import typing as t
 
 from pydantic import BaseModel, Field
 
-if t.TYPE_CHECKING:
-    from pydantic.types import PositiveInt
+from pydantic.types import PositiveInt
 
-    from sr_assistant.core.types import ExclusionReasonType
+from sr_assistant.core.types import ExclusionReasonType
 
 
 class EventDetailBase(BaseModel):
