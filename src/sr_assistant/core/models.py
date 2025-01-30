@@ -24,7 +24,7 @@ from datetime import datetime  # noqa: TC003
 import sqlalchemy as sa
 from sqlmodel import Field, SQLModel  # type: ignore
 
-from sr_assistant.core.types.screening import ExclusionReasonType
+from sr_assistant.core.types import ExclusionReasonType
 
 class IdMixin(SQLModel):
     """Adds ``id`` UUIDv4 primary key field to the model."""
