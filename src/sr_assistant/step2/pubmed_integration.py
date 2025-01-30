@@ -228,7 +228,7 @@ def extract_article_info(article: dict[str, Any]) -> dict[str, str]:
             "AbstractText", ["No abstract"]
         )
         if isinstance(abstract_text, list):
-            abstract = " ".join(str(text) for text in abstract_text)
+            abstract = "".join(str(text) for text in abstract_text)
         else:
             abstract = str(abstract_text)
 
@@ -240,8 +240,7 @@ def extract_article_info(article: dict[str, Any]) -> dict[str, str]:
             "abstract": abstract,
             "journal": str(article_info.get("Journal", {}).get("Title", "No journal")),
             "year": str(
-                article_info.get("Journal", {})
-                .get("JournalIssue", {})
+                article_info.get("JournalIssue", {})
                 .get("PubDate", {})
                 .get("Year", "No year")
             ),
