@@ -5,7 +5,7 @@ Needs a rewrite.
 
 from __future__ import annotations
 
-from typing import cast
+from typing import cast, TYPE_CHECKING
 
 import uuid6
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
@@ -17,7 +17,9 @@ from langgraph.graph.message import MessagesState
 from langgraph.graph.state import CompiledStateGraph, StateGraph
 from loguru import logger
 
-from sr_assistant.core.models.base import Review
+
+if TYPE_CHECKING:
+    from sr_assistant.core.models import Review
 
 
 class SuggestionAgent:

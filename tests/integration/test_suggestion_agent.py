@@ -5,7 +5,8 @@ from __future__ import annotations
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
-from step1.suggestion_agent import ReviewCriteria, SuggestionAgent
+from sr_assistant.core.models import Review
+from sr_assistant.step1.suggestion_agent import SuggestionAgent
 
 
 @pytest.fixture
@@ -15,19 +16,19 @@ def agent() -> SuggestionAgent:
 
 
 @pytest.fixture
-def sample_criteria() -> ReviewCriteria:
+def sample_criteria() -> Review:
     """Create sample review criteria for testing."""
-    return ReviewCriteria(
-        research_question="Does cognitive behavioral therapy (CBT) improve anxiety symptoms in adults with generalized anxiety disorder?",
+    return Review(
+        background="This is a sample background for a systematic review.",
+        question="Does cognitive behavioral therapy (CBT) improve anxiety symptoms in adults with generalized anxiety disorder?",
         inclusion_criteria="Adults >18, Diagnosed GAD, CBT intervention, RCTs, English language",
         exclusion_criteria="Children <18, Non-human studies, Case reports, Studies without control groups",
-        keywords=["CBT", "GAD", "anxiety", "anxiety disorders"],
     )
 
 
 @pytest.mark.integration
 def test_agent_suggestions(
-    agent: SuggestionAgent, sample_criteria: ReviewCriteria
+    agent: SuggestionAgent, sample_criteria: Review
 ) -> None:
     """Test that the agent provides suggestions and maintains message history."""
     # Get suggestions
@@ -51,7 +52,7 @@ def test_agent_suggestions(
 
 @pytest.mark.integration
 def test_agent_multiple_interactions(
-    agent: SuggestionAgent, sample_criteria: ReviewCriteria
+    agent: SuggestionAgent, sample_criteria: Review
 ) -> None:
     """Test that the agent maintains history across multiple interactions."""
     # First interaction
@@ -59,12 +60,11 @@ def test_agent_multiple_interactions(
     assert first_response, "First response should not be empty"
 
     # Second interaction with modified criteria
-    modified_criteria = ReviewCriteria(
-        research_question=sample_criteria.research_question,
+    modified_criteria = Review(
+        question=sample_criteria.question,
         inclusion_criteria=sample_criteria.inclusion_criteria
         + ", Published after 2010",
         exclusion_criteria=sample_criteria.exclusion_criteria,
-        keywords=sample_criteria.keywords,
     )
     second_response = agent.get_suggestions(modified_criteria)
     assert second_response, "Second response should not be empty"
@@ -83,7 +83,7 @@ def test_agent_multiple_interactions(
 
 @pytest.mark.integration
 def test_agent_clear_history(
-    agent: SuggestionAgent, sample_criteria: ReviewCriteria
+    agent: SuggestionAgent, sample_criteria: Review
 ) -> None:
     """Test that the agent can clear its message history."""
     # Get initial suggestions
