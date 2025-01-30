@@ -92,7 +92,7 @@ reportCallInDefaultInitializer = true
 reportImplicitOverride = true
 reportImplicitStringConcatenation = true
 reportMissingSuperCall = "warning"
-reportShadowedImports = true
+reportShadowedImports = false # too annoying
 reportUninitializedInstanceVariable = true
 # Library code causing these all the time
 reportUnknownMemberType = false
