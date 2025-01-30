@@ -22,9 +22,9 @@ import uuid
 from datetime import datetime  # noqa: TC003
 
 import sqlalchemy as sa
-from sqlmodel import Field, SQLModel  # type: ignore
+from sqlalchemy.dialects import postgresql as sa_pg
+from sqlmodel import Field, SQLModel, String  # type: ignore
 
-from sr_assistant.core.types import ExclusionReasonType
 
 class IdMixin(SQLModel):
     """Adds ``id`` UUIDv4 primary key field to the model."""
@@ -141,7 +141,13 @@ class PubMedResult(IdMixin, CreatedAtMixin, table=True):
     # review: Mapped[Review] = Relationship(back_populates="pubmed_results", sa_relationship_kwargs={"lazy": "joined"})
     # review: Mapped["Review"] = Relationship(back_populates="pubmed_results")
 
+from enum import StrEnum
+class ScreeningDecisionType(StrEnum):
+    """Screening decision type."""
 
+    INCLUDE = "include"
+    EXCLUDE = "exclude"
+    UNCERTAIN = "uncertain"
 # a separate schema sr_assistant.core.schemas.screening.ScreeningResponse is used to
 # coerce the model response to schema. These responses must be mapped to this model.
 # TODO: how to?
@@ -160,7 +166,7 @@ class AbstractScreeningResult(CreatedUpdatedAtMixin, IdMixin, table=True):
         description="This is what we're screening",
         title="PubMed Result ID", foreign_key="pubmed_results.id", index=True
     )
-    decision: t.Literal["include", "exclude", "uncertain"] = Field(
+    decision: ScreeningDecisionType = Field(
         title="Screening Decision",
         description="Whether to include or exclude the paper, or mark as uncertain",
     )
@@ -177,10 +183,12 @@ class AbstractScreeningResult(CreatedUpdatedAtMixin, IdMixin, table=True):
     extracted_quotes: list[str] | None = Field(
         default=None,
         description="Supporting quotes from the title/abstract. Can be omitted if uncertain.",
+        sa_column=sa.Column(sa_pg.ARRAY(String())),
     )
-    exclusion_reason_categories: list[ExclusionReasonType] | None = Field(
+    exclusion_reason_categories: list[str] | None = Field(
         default=None,
         description="Omit if the decision is 'include'. If the decision is 'exclude' or 'uncertain', The PRISMA exclusion reason categories for the decision. This complements the 'rationale' field.",
+        sa_column=sa.Column(sa_pg.ARRAY(String())),
     )
 
 
