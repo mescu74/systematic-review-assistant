@@ -5,7 +5,8 @@ import re
 from logging.config import fileConfig
 from typing import NoReturn
 
-from sqlalchemy import engine_from_config, pool
+import sqlalchemy as sa
+from sqlalchemy import engine_from_config, pool, MetaData
 from sqlmodel import SQLModel
 
 from sr_assistant.core.models import *
