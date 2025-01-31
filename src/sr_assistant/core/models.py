@@ -17,63 +17,25 @@ Examples:
 
 from __future__ import annotations
 
-import typing as t
 import uuid
-from enum import StrEnum
 from datetime import datetime  # noqa: TC003
 
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql as sa_pg
-from sqlmodel import Field, SQLModel, String, Enum  # type: ignore
+import sqlalchemy.dialects.postgresql as sa_pg
+from pydantic import ConfigDict
+from sqlmodel import Field, SQLModel, String  # type: ignore
 
 from sr_assistant.core.types import ScreeningDecisionType
 
-class IdMixin(SQLModel):
-    """Adds ``id`` UUIDv4 primary key field to the model."""
 
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-
-
-class CreatedAtMixin(SQLModel):
-    """Adds DB generated ``created_at`` field to the model.
-
-    Attributes:
-        created_at (datetime): Generated field. UTC but not timezone aware.
-            TODO: make tz aware
-    """
-
-    created_at: datetime | None = Field(
-        default=None,
-        description="Database generated UTC timestamp",
-        title="Created At",
-        sa_column_kwargs={
-            "server_default": sa.func.timezone("utc", sa.func.current_timestamp()),
-            # cannot set type like this, both positional and kwagars not supported:  "type_": sa_pg.TIMESTAMP(timezone=True, precision=3),
-            "nullable": True,
-        },
+class SQLModelBase(SQLModel):
+    model_config = ConfigDict( # type: ignore
+        from_attributes=True,
+        validate_assignment=True,
     )
 
 
-class CreatedUpdatedAtMixin(CreatedAtMixin):
-    """Model created and updated timestamp field mixin.
-
-    Attributes:
-        created_at (datetime | None): When this entry was created, :class:`datetime.datetime` with UTC timezone.
-        updated_at (datetime | None): When this entry was updated, :class:`datetime.datetime` with UTC timezone.
-    """
-
-    updated_at: datetime | None = Field(
-        default=None,
-        sa_column_kwargs={
-            "server_default": sa.func.timezone("utc", sa.func.current_timestamp()),
-            "onupdate": sa.func.timezone("utc", sa.func.current_timestamp()),
-            # "type_": sa_pg.TIMESTAMP(timezone=True, precision=3),
-            "nullable": True,
-        },
-    )
-
-
-class Review(IdMixin, CreatedUpdatedAtMixin, table=True):
+class Review(SQLModelBase, table=True):
     """Systematic review model.
 
     A systematic review project containing the research question, background,
@@ -82,6 +44,27 @@ class Review(IdMixin, CreatedUpdatedAtMixin, table=True):
 
     __tablename__ = "reviews"  # type: ignore pyright: ignore
 
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    created_at: datetime | None = Field(
+        default=None,
+        description="Database generated UTC timestamp",
+        title="Created At",
+        sa_column=sa.Column(
+            sa.DateTime(timezone=True),
+            server_default=sa.func.utcnow(),
+            nullable=True,
+            name="created_at",
+        ),
+    )
+    updated_at: datetime | None = Field(
+        default=None,
+        sa_column=sa.Column(
+            sa.DateTime(timezone=True),
+            server_default=sa.func.utcnow(),
+            onupdate=sa.func.utcnow(),
+            nullable=True,
+        )
+    )
     background: str = Field(
         default="",
         description="Background context for the systematic review",
@@ -107,7 +90,7 @@ class Review(IdMixin, CreatedUpdatedAtMixin, table=True):
     # )
 
 
-class PubMedResult(IdMixin, CreatedAtMixin, table=True):
+class PubMedResult(SQLModelBase, table=True):
     """PubMed search result.
 
     Stores both search info and result in one table for prototype simplicity.
@@ -115,6 +98,18 @@ class PubMedResult(IdMixin, CreatedAtMixin, table=True):
 
     __tablename__ = "pubmed_results"  # type: ignore pyright: ignore
 
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    created_at: datetime | None = Field(
+        default=None,
+        description="Database generated UTC timestamp",
+        title="Created At",
+        sa_column=sa.Column(
+            sa.DateTime(timezone=True),
+            server_default=sa.func.utcnow(),
+            nullable=True,
+            name="created_at",
+        ),
+    )
     review_id: uuid.UUID = Field(
         title="Review ID", foreign_key="reviews.id", index=True
     )
@@ -151,7 +146,7 @@ def enum_values(enum_class: type[StrEnum]) -> list:
 # a separate schema sr_assistant.core.schemas.screening.ScreeningResponse is used to
 # coerce the model response to schema. These responses must be mapped to this model.
 # TODO: how to?
-class AbstractScreeningResult(CreatedUpdatedAtMixin, IdMixin, table=True):
+class AbstractScreeningResult(SQLModelBase, table=True):
     """Abstract screening decision model.
 
     Tracks the screening decisions for each paper in the review.
@@ -159,6 +154,27 @@ class AbstractScreeningResult(CreatedUpdatedAtMixin, IdMixin, table=True):
 
     __tablename__ = "abstract_screening_results" # type: ignore pyright: ignore
 
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    created_at: datetime | None = Field(
+        default=None,
+        description="Database generated UTC timestamp",
+        title="Created At",
+        sa_column=sa.Column(
+            sa.DateTime(timezone=True),
+            server_default=sa.func.utcnow(),
+            nullable=True,
+            name="created_at",
+        ),
+    )
+    updated_at: datetime | None = Field(
+        default=None,
+        sa_column=sa.Column(
+            sa.DateTime(timezone=True),
+            server_default=sa.func.utcnow(),
+            onupdate=sa.func.utcnow(),
+            nullable=True,
+        )
+    )
     review_id: uuid.UUID = Field(
         title="Review ID", foreign_key="reviews.id", index=True
     )
@@ -196,9 +212,21 @@ class AbstractScreeningResult(CreatedUpdatedAtMixin, IdMixin, table=True):
     )
 
 
-class UuidTest(IdMixin, CreatedAtMixin, SQLModel, table=True):
+class UuidTest(SQLModelBase, table=True):
     """Test model for UUID handling."""
 
     __tablename__ = "uuid_test"  # type: ignore pyright: ignore
 
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    created_at: datetime | None = Field(
+        default=None,
+        description="Database generated UTC timestamp",
+        title="Created At",
+        sa_column=sa.Column(
+            sa.DateTime(timezone=True),
+            server_default=sa.func.utcnow(),
+            nullable=True,
+        ),
+    )
     data: str = Field(...)
+
