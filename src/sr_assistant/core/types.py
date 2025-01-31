@@ -5,6 +5,14 @@ import typing as t
 from enum import StrEnum, auto
 
 
+class ScreeningDecisionType(StrEnum):
+    """Screening decision type."""
+
+    INCLUDE = "include"
+    EXCLUDE = "exclude"
+    UNCERTAIN = "uncertain"
+
+
 class CitationFormat(StrEnum):
     """Standardized citation formats supported by academic databases.
 

@@ -19,12 +19,14 @@ from __future__ import annotations
 
 import typing as t
 import uuid
+from enum import StrEnum
 from datetime import datetime  # noqa: TC003
 
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql as sa_pg
-from sqlmodel import Field, SQLModel, String  # type: ignore
+from sqlmodel import Field, SQLModel, String, Enum  # type: ignore
 
+from sr_assistant.core.types import ScreeningDecisionType
 
 class IdMixin(SQLModel):
     """Adds ``id`` UUIDv4 primary key field to the model."""
@@ -141,13 +143,11 @@ class PubMedResult(IdMixin, CreatedAtMixin, table=True):
     # review: Mapped[Review] = Relationship(back_populates="pubmed_results", sa_relationship_kwargs={"lazy": "joined"})
     # review: Mapped["Review"] = Relationship(back_populates="pubmed_results")
 
-from enum import StrEnum
-class ScreeningDecisionType(StrEnum):
-    """Screening decision type."""
 
-    INCLUDE = "include"
-    EXCLUDE = "exclude"
-    UNCERTAIN = "uncertain"
+def enum_values(enum_class: type[StrEnum]) -> list:
+    """Get values for enum."""
+    return [status.value for status in enum_class]
+
 # a separate schema sr_assistant.core.schemas.screening.ScreeningResponse is used to
 # coerce the model response to schema. These responses must be mapped to this model.
 # TODO: how to?
@@ -169,6 +169,10 @@ class AbstractScreeningResult(CreatedUpdatedAtMixin, IdMixin, table=True):
     decision: ScreeningDecisionType = Field(
         title="Screening Decision",
         description="Whether to include or exclude the paper, or mark as uncertain",
+        sa_column=sa.Column(
+            type_=sa_pg.ENUM(ScreeningDecisionType, values_callable=enum_values),
+            nullable=False,
+        ),
     )
     confidence_score: float = Field(
         ge=0.0,
