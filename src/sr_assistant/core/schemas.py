@@ -3,10 +3,9 @@ from __future__ import annotations
 import typing as t
 
 from pydantic import BaseModel, Field
-
 from pydantic.types import PositiveInt
 
-from sr_assistant.core.types import ExclusionReasonType
+from sr_assistant.core.types import ExclusionReasonType, ScreeningDecisionType
 
 
 class EventDetailBase(BaseModel):
@@ -73,7 +72,7 @@ class ScreeningResponse(BaseModel):
     Consider the given context from the protocol carefully. Screening abstracts can be
     tricky, so assign confidence score and decision accordingly.
     """
-    decision: t.Literal["include", "exclude", "uncertain"] = Field(
+    decision: ScreeningDecisionType = Field(
         ...,
         description="The systematic review abstracts screening decision. Should this study be included or not? Or are you uncertain? If your confidence score is below 0.8, assign 'uncertain'.",
     )
