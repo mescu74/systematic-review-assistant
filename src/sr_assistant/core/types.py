@@ -1,15 +1,42 @@
+"""Core types for SR assistant.
+
+Anything used as a SQLModel field type cannot be Literal, SQLAlchemy requires column
+types to be classes. So use StrEnum/IntEnum/... instead. Literal is fine nested in
+values/schemas.
+
+Notes:
+    - Any Enum is `Iterable` by default, Literal types need typing.get_args().
+    - ``Literal["a", "b", None]`` is a union, i.e., either "a", "b", or None.
+      To allow more than one value use ``list[Literal["a", "b", None]]``.
+    - Enums can have JSONSchema (TypeAdapter cls method) and property methods, value
+      aliases, etc. But a Pydantic RootModel can be very similar to an enum.
+"""
+
 from __future__ import annotations
 
 import typing as t
 from enum import StrEnum, auto
+from typing import Annotated, Literal
 
+from pydantic import TypeAdapter
+
+from sr_assistant.core.schemas import ScreeningResult
 
 class ScreeningDecisionType(StrEnum):
-    """Screening decision type."""
+    """Screening decision enum type.
 
-    INCLUDE = "include"
-    EXCLUDE = "exclude"
-    UNCERTAIN = "uncertain"
+    Attributes:
+        include: Include the study in the systematic review.
+        exclude: Exclude the study from the systematic review.
+        uncertain: Mark the study as uncertain.
+    """
+
+    INCLUDE = auto()
+    """Include the study in the systematic review."""
+    EXCLUDE = auto()
+    """Exclude the study from the systematic review."""
+    UNCERTAIN = auto()
+    """Mark the study as uncertain."""
 
 
 class CitationFormat(StrEnum):
@@ -141,11 +168,13 @@ class CitationFormat(StrEnum):
         }
         return examples[self]
 
+
 """SR search strategy and searching related types.
 
 AI generated types for search strategy and searching. Not in use in the prototype yet
 and needs refactoring. E.g., study designs missing, etc.
 """
+
 
 class DatabaseType(StrEnum):
     """Classifies academic and scientific databases by their primary content type.
@@ -2636,61 +2665,65 @@ class SearchPrecision(StrEnum):
         }
         return docs[self]
 
+
 """Exclusion categories."""
 
-class PopulationExclusion(StrEnum):
-    AGE_RANGE = "Wrong age range for inclusion criteria"
-    SPECIES = "Non-human subjects"
-    CONDITION = "Condition or disease mismatch"
-    COMORBIDITY = "Excluded comorbidity present"
-    DEMOGRAPHIC = "Demographics outside criteria"
-    SETTING = "Inappropriate study setting"
+type ComparisonExclusionReason = Literal[
+        "Inappropriate control group",
+        "Missing baseline data",
+        "Incorrect comparator",
+        "Inadequate randomization method",
+        "Insufficient blinding procedure",
+        "Inappropriate crossover design",
+    ]
 
-class InterventionExclusion(StrEnum):
-    TIMING = "Intervention timing does not match criteria"
-    DOSAGE = "Dosage outside specified range"
-    DELIVERY = "Incorrect delivery or administration method"
-    PROTOCOL = "Protocol deviation from inclusion criteria"
-    COMBINATION = "Excluded intervention combination"
-    DURATION = "Intervention duration outside criteria"
+type InterventionExclusionReason = Literal[
+        "Intervention timing does not match criteria",
+        "Dosage outside specified range",
+        "Incorrect delivery or administration method",
+        "Protocol deviation from inclusion criteria",
+        "Excluded intervention combination",
+        "Intervention duration outside criteria",
+    ]
 
-class ComparisonExclusion(StrEnum):
-    CONTROL_TYPE = "Inappropriate control group"
-    BASELINE = "Missing baseline data"
-    COMPARATOR = "Incorrect comparator"
-    RANDOMIZATION = "Inadequate randomization method"
-    BLINDING = "Insufficient blinding procedure"
-    CROSSOVER = "Inappropriate crossover design"
+type OutcomeExclusionReason = Literal[
+        "Invalid outcome measurement method",
+        "Incorrect measurement timepoint",
+        "Inappropriate outcome metric",
+        "Incomplete outcome reporting",
+        "Invalid surrogate endpoint",
+        "Insufficient follow-up period",
+    ]
 
-class OutcomeExclusion(StrEnum):
-    MEASUREMENT = "Invalid outcome measurement method"
-    TIMEPOINT = "Incorrect measurement timepoint"
-    METRIC = "Inappropriate outcome metric"
-    REPORTING = "Incomplete outcome reporting"
-    SURROGATE = "Invalid surrogate endpoint"
-    FOLLOWUP = "Insufficient follow-up period"
+type PopulationExclusionReason = Literal[
+        "Wrong age range for inclusion criteria",
+        "Non-human subjects",
+        "Condition or disease mismatch",
+        "Excluded comorbidity present",
+        "Demographics outside criteria",
+        "Inappropriate study setting",
+    ]
 
-class StudyDesignExclusion(StrEnum):
-    STUDY_TYPE = "Wrong study design type"
-    SAMPLE_SIZE = "Sample size below requirement"
-    DURATION = "Study duration too short"
-    ETHICS = "Ethical concerns identified"
-    PROTOCOL = "Major protocol violations"
-    REGISTRATION = "Study not pre-registered"
+type ReportingExclusionReason = Literal[
+        "Non-included language",
+        "Duplicate publication",
+        "Outside date range",
+        "Not peer-reviewed",
+        "Retracted publication",
+        "Pre-print publication",
+    ]
 
-class ReportingExclusion(StrEnum):
-    LANGUAGE = "Non-included language"
-    DUPLICATE = "Duplicate publication"
-    DATE_RANGE = "Outside date range"
-    PEER_REVIEW = "Not peer-reviewed"
-    #ABSTRACT_ONLY = "Abstract only available"
-    RETRACTION = "Retracted publication"
 
-type ExclusionReasonType = (
-    PopulationExclusion |
-    InterventionExclusion |
-    ComparisonExclusion |
-    OutcomeExclusion |
-    StudyDesignExclusion |
-    ReportingExclusion
-)
+type StudyDesignExclusionReason = Literal[
+        "Wrong study design type",
+        "Sample size below requirement",
+        "Study duration too short",
+        "Ethical concerns identified",
+        "Major protocol violations",
+        "Study not pre-registered",
+    ]
+
+class ScreeningStrategyType(StrEnum):
+    """Maps to the type of prompt used. See app/agents.py comments."""
+    CONSERVATIVE = auto()
+    COMPREHENSIVE = auto()
