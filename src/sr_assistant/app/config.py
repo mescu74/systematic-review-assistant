@@ -58,7 +58,11 @@ class Settings(BaseSettings):
 
     # TODO: SecretStr or st.secrets
     OPENAI_API_KEY: str = Field(validation_alias="openai_api_key")
-    ANTHROPIC_API_KEY: str = Field(default="", validation_alias="anthropic_api_key", description="Optional Anthropic API key, not used in proto ATM")
+    ANTHROPIC_API_KEY: str = Field(
+        default="",
+        validation_alias="anthropic_api_key",
+        description="Optional Anthropic API key, not used in proto ATM",
+    )
     SUPABASE_URL: str = Field(validation_alias="sra_supabase_url")
     SUPABASE_KEY: str = Field(
         validation_alias="sra_supabase_service_role_key"
@@ -66,6 +70,10 @@ class Settings(BaseSettings):
     SUPABASE_DIRECT_URL: PostgresDsn = Field(
         default="postgresql://postgres:postgres@127.0.0.1:54322/postgres",  # pyright: ignore
         validation_alias="sra_supabase_direct_url",
+    )
+    DATABASE_URL: PostgresDsn = Field(
+        default="postgresql://postgres:postgres@127.0.0.1:54322/postgres",  # pyright: ignore
+        validation_alias="sra_database_url",
     )
     NCBI_EMAIL: str = Field(validation_alias="ncbi_email")
     NCBI_API_KEY: str = Field(validation_alias="ncbi_api_key")

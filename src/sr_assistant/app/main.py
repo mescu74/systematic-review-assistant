@@ -10,7 +10,10 @@ sys.path.append(str(Path(__file__).parent.parent))
 # fmt: on
 
 import streamlit as st
-from supabase import Client, create_client
+from sqlalchemy.orm import sessionmaker
+from sqlmodel import Session as SQLModelSession
+from sqlmodel import create_engine
+from supabase import create_client
 
 # If done properly, the DI container would assemble and wire everything together
 from app.config import get_settings
@@ -53,12 +56,12 @@ def main() -> None:
     )
     search_page = st.Page(
         "pages/search.py",
-        title="Search & Results",
+        title="PubMed Search",
         icon=":material/search:",
     )
     abstracts_page = st.Page(
         "pages/screening_abstracts.py",
-        title="Abstracts",
+        title="Abstracts Screening",
         icon=":material/preview:",
     )
 
@@ -67,15 +70,24 @@ def main() -> None:
             {
                 "Account": [logout_page],
                 "Protocol": [protocol_page],
-                "Search": [search_page],
+                "Search Strategy": [search_page],
                 "Screening": [abstracts_page],
             }
         )
         st.session_state.config = get_settings()
-        st.session_state.supabase: Client = create_client(
-            supabase_url=st.session_state.config.SUPABASE_URL,
-            supabase_key=st.session_state.config.SUPABASE_KEY,
-        )
+        if "supabase" not in st.session_state:
+            st.session_state.supabase = create_client(
+                supabase_url=st.session_state.config.SUPABASE_URL,
+                supabase_key=st.session_state.config.SUPABASE_KEY,
+            )
+        if "engine" not in st.session_state:
+            st.session_state.engine = create_engine(
+                str(st.session_state.config.DATABASE_URL)
+            )
+        if "session_factory" not in st.session_state:
+            st.session_state.session_factory = sessionmaker(
+                class_=SQLModelSession, autoflush=False, bind=st.session_state.engine
+            )
     else:
         pg = st.navigation([login_page])
 
