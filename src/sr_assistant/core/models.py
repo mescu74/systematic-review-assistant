@@ -66,7 +66,7 @@ class SystematicReview(SQLModelBase, table=True):
         description="Database generated UTC timestamp",
         sa_column=sa.Column(
             sa.DateTime(timezone=True),
-            server_default=sa.func.utcnow(),
+            server_default=sa.text("TIMEZONE('UTC', CURRENT_TIMESTAMP)"),
             nullable=True,
         ),
     )
@@ -75,17 +75,19 @@ class SystematicReview(SQLModelBase, table=True):
         description="Database generated UTC timestamp",
         sa_column=sa.Column(
             sa.DateTime(timezone=True),
-            server_default=sa.func.utcnow(),
-            onupdate=sa.func.utcnow(),
+            server_default=sa.text("TIMEZONE('UTC', CURRENT_TIMESTAMP)"),
+            onupdate=sa.text("TIMEZONE('UTC', CURRENT_TIMESTAMP)"),
             nullable=True,
         ),
     )
     background: str | None = Field(
         default=None,
         description="Background context for the systematic review",
+        sa_column=sa.Column(sa.Text(), nullable=False),
     )
     research_question: str = Field(
         description="The research question",
+        sa_column=sa.Column(sa.Text(), nullable=False),
     )
     # TODO: sort this out, update ui
     #criteria_framework: str = Field(
@@ -98,9 +100,11 @@ class SystematicReview(SQLModelBase, table=True):
     #)
     inclusion_criteria: str = Field(
         description="Inclusion criteria",
+        sa_column=sa.Column(sa.Text(), nullable=False),
     )
     exclusion_criteria: str = Field(
         description="The exclusion criteria for studies",
+        sa_column=sa.Column(sa.Text(), nullable=False),
     )
     # One review has many PubMedResults
     pubmed_results: list[PubMedResult] | None = Relationship(
@@ -123,7 +127,7 @@ class PubMedResult(SQLModelBase, table=True):
         description="Database generated UTC timestamp",
         sa_column=sa.Column(
             sa.DateTime(timezone=True),
-            server_default=sa.func.utcnow(),
+            server_default=sa.text("TIMEZONE('UTC', CURRENT_TIMESTAMP)"),
             nullable=True,
         ),
     )
@@ -132,14 +136,15 @@ class PubMedResult(SQLModelBase, table=True):
         description="Database generated UTC timestamp",
         sa_column=sa.Column(
             sa.DateTime(timezone=True),
-            server_default=sa.func.utcnow(),
-            onupdate=sa.func.utcnow(),
+            server_default=sa.text("TIMEZONE('UTC', CURRENT_TIMESTAMP)"),
+            onupdate=sa.text("TIMEZONE('UTC', CURRENT_TIMESTAMP)"),
             nullable=True,
         ),
     )
     query: str = Field(
         description="PubMed search query",
         title="Query",
+        sa_column=sa.Column(sa.Text(), nullable=False),
         schema_extra={"example": "(cancer) AND (immunotherapy) AND (clinical trial)"},
     )
     # Article info
@@ -159,7 +164,10 @@ class PubMedResult(SQLModelBase, table=True):
         schema_extra={"example": "10.1155/jimr/5845167"},
     )
     title: str = Field(title="Title")
-    abstract: str = Field(title="Abstract")
+    abstract: str = Field(
+        title="Abstract",
+        sa_column=sa.Column(sa.Text(), nullable=False),
+    )
     journal: str = Field(title="Journal")
     year: str = Field(title="Publishing Year")
 
@@ -228,7 +236,7 @@ class ScreenAbstractResultModel(SQLModelBase, table=True):
         description="Database generated UTC timestamp",
         sa_column=sa.Column(
             sa.DateTime(timezone=True),
-            server_default=sa.func.utcnow(),
+            server_default=sa.text("TIMEZONE('UTC', CURRENT_TIMESTAMP)"),
             nullable=True,
         ),
     )
@@ -237,8 +245,8 @@ class ScreenAbstractResultModel(SQLModelBase, table=True):
         description="Database generated UTC timestamp",
         sa_column=sa.Column(
             sa.DateTime(timezone=True),
-            server_default=sa.func.utcnow(),
-            onupdate=sa.func.utcnow(),
+            server_default=sa.text("TIMEZONE('UTC', CURRENT_TIMESTAMP)"),
+            onupdate=sa.text("TIMEZONE('UTC', CURRENT_TIMESTAMP)"),
             nullable=True,
         ),
     )
@@ -257,11 +265,12 @@ class ScreenAbstractResultModel(SQLModelBase, table=True):
     )
     rationale: str = Field(
         description="Rationale for the screening decision",
+        sa_column=sa.Column(sa.Text(), nullable=False),
     )
     extracted_quotes: list[str] | None = Field(
         default=None,
         description="Supporting quotes from the title/abstract. Can be omitted if uncertain.",
-        sa_column=sa.Column(sa_pg.ARRAY(String()), nullable=True),
+        sa_column=sa.Column(sa_pg.ARRAY(sa.Text()), nullable=True),
     )
     exclusion_reason_categories: ExclusionReasons | None = Field(
         default=None,
