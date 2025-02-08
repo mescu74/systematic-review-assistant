@@ -15,12 +15,84 @@ Notes:
 from __future__ import annotations
 
 import typing as t
+from datetime import datetime, timezone
 from enum import StrEnum, auto
-from typing import Annotated, Literal
+from typing import Literal
 
-from pydantic import TypeAdapter
+import annotated_types as at
+import uuid6
+from pydantic import GetPydanticSchema, WithJsonSchema
+from pydantic_core import core_schema
 
-from sr_assistant.core.schemas import ScreeningResult
+from sr_assistant.app import utils as u
+
+type PMID = t.Annotated[
+    str,
+    at.Predicate(u.is_pmid),
+    at.MinLen(1),
+    at.MaxLen(8),
+    WithJsonSchema({
+        "type": "string",
+        "pattern": r"^\d{1,8}$",
+        "description": "PubMed ID (PMID) - 1 to 8 digits",
+        "examples": ["123456", "12345678"]
+    })
+]
+"""PubMed ID (PMID) - 1 to 8 digits."""
+
+type PMCID = t.Annotated[
+    str,
+    at.Predicate(u.is_pmcid),
+    at.MinLen(4),
+    at.MaxLen(11),
+    WithJsonSchema({
+        "type": "string",
+        "pattern": r"^PMC\d{1,8}$",
+        "description": "PubMed Central ID (PMCID) - PMC followed by 1 to 8 digits",
+        "examples": ["PMC123456", "PMC12345678"]
+    })
+]
+"""PubMed Central ID (PMCID) - PMC followed by 1 to 8 digits."""
+
+
+type UtcDatetime = t.Annotated[
+    datetime,
+    at.Predicate(u.is_utc_datetime),
+    at.Timezone(timezone.utc),
+    WithJsonSchema(
+        {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC datetime",
+            "examples": ["2024-02-07T12:00:00Z"],
+        }
+    ),
+]
+
+type UUID7 = t.Annotated[
+    uuid6.UUID,
+    GetPydanticSchema(
+        get_pydantic_core_schema=lambda _,
+        handler: core_schema.with_info_plain_validator_function(
+            lambda val, info: u.validate_uuid(
+                uuid6.UUID(val) if info.mode == "json" else val, version=7
+            ),
+            serialization=core_schema.plain_serializer_function_ser_schema(
+                lambda val, info: str(val) if info.mode == "json" else val,
+                info_arg=True,
+            ),
+        ),
+        get_pydantic_json_schema=lambda _, handler: {
+            **handler(core_schema.str_schema()),
+            "format": "uuid7",
+        },
+    ),
+]
+"""Pydatic/SQLModel/SQLAlchemy compatible UUID7 type.
+
+Don't remember where this is from. A GitHub issue comment.
+- Could be improved with validators and maybe using TypeAdapter:
+``TypeAdapter(UUID7).validate_python(input)"""
 
 class ScreeningDecisionType(StrEnum):
     """Screening decision enum type.
@@ -2722,8 +2794,47 @@ type StudyDesignExclusionReason = Literal[
         "Major protocol violations",
         "Study not pre-registered",
     ]
+import enum
+
 
 class ScreeningStrategyType(StrEnum):
     """Maps to the type of prompt used. See app/agents.py comments."""
     CONSERVATIVE = auto()
     COMPREHENSIVE = auto()
+
+
+class LogLevel(StrEnum):
+    """Loguru log levels.
+
+    Attributes:
+        TRACE | trace (str|int): TRACE | 10
+        DEBUG | debug (str|int): DEBUG | 20
+        INFO | info (str|int): INFO | 30
+        SUCCESS | success (str|int): SUCCESS | 25
+        WARNING | warning (str|int): WARNING | 30
+        ERROR | error (str|int): ERROR | 40
+        CRITICAL | critical (str|int): CRITICAL | 50
+
+    Examples:
+        >>> LogLevel.INFO).int
+        ... 30
+        >>> Logger.error("...")
+        >>> list(Logger)
+        ... ['TRACE', 'DEBUG', 'INFO', 'SUCCESS', 'WARNING', 'ERROR', 'CRITICAL']
+    """
+    def __new__(cls, value: str, level: int, *args: t.Any) -> t.Self:
+        self = str.__new__(cls, [value])
+        self._value_ = value.upper()
+        self.num = level
+        return self
+
+    def __init__(self, *args: t.Any) -> None:
+        self.__class__.to_list = list(self.__class__.__members__)
+
+    TRACE = auto(), 10
+    DEBUG = auto(), 20
+    INFO = auto(), 30
+    SUCCESS = auto(), 25
+    WARNING = auto(), 30
+    ERROR = auto(), 40
+    CRITICAL = auto(), 50

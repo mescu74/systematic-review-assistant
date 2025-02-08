@@ -1,14 +1,133 @@
-"""Utility functions for working with UUIDv7 timestamps and other common operations."""
+"""Utility functions for working with UUIDv7 timestamps and other common operations.
+
+The UUID7 type is defined in `sr_assistant.core.types`.
+"""
+
+# ruff: noqa: F401 # unused import
 
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Literal
+from zoneinfo import ZoneInfo
+import typing as t
+import uuid
 
+import regex as re
+from pydantic import GetPydanticSchema
+from pydantic_core import core_schema
+from loguru import logger
 import uuid6
+from langchain_core.runnables.config import (
+    ContextThreadPoolExecutor,
+    acall_func_with_variable_args,
+    call_func_with_variable_args,
+    ensure_config,
+    get_async_callback_manager_for_config,
+    get_callback_manager_for_config,
+    get_executor_for_config,
+    merge_configs,
+    patch_config,
+    run_in_executor,
+)
+import asyncio
+from concurrent import futures as cf
 
 
-def id_to_timestamp(id_str: str, suffix: Literal["Z", "+00:00"] = "+00:00") -> str:
+"""ContextThreadPoolExecutor.
+
+ThreadPoolExecutor that copies the context to the child thread.
+
+Methods:
+    submit(func: Callable[..., T], *args: Any, **kwargs: Any) -> Future[T]:
+        Add a function to the executor.
+
+        Args:
+            func (Callable[..., T]): The function to submit.
+            *args (Any): The positional arguments to the function.
+            **kwargs (Any): The keyword arguments to the function.
+
+        Returns:
+            Future[T]: The future for the function.
+
+    map(fn: Callable[..., T], *iterables: Iterable[Any], timeout: float | None = None, chunksize: int = 1) -> Iterator[T]:
+        Map a function to multiple iterables.
+
+        Args:
+            fn (Callable[..., T]): The function to map.
+            *iterables (Iterable[Any]): The iterables to map over.
+            timeout (float | None, optional): The timeout for the map.
+                Defaults to None.
+            chunksize (int, optional): The chunksize for the map. Defaults to 1.
+
+        Returns:
+            Iterator[T]: The iterator for the mapped function.
+
+See `LangChain docs <https://python.langchain.com/api_reference/_modules/langchain_core/runnables/config.html#ContextThreadPoolExecutor>`_
+
+This is especially useful in Streamlit where the script thread is the only one supposed
+to invoke st APIs.
+"""
+
+def is_pmid(v: str) -> bool:
+    return bool(re.match(r"^\d{1,8}$", v))
+
+def is_pmcid(v: str) -> bool:
+    return bool(re.match(r"^PMC\d{1,8}$", v))
+
+def is_utc_datetime(dt: datetime) -> bool:
+    return dt.tzinfo in (timezone.utc, ZoneInfo("UTC"))
+
+def utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+def is_uuid(u: str | uuid.UUID | uuid6.UUID) -> bool:
+    """Check if input is a valid UUID."""
+    for c in (uuid.UUID, uuid6.UUID):
+        try:
+            c(u)
+            return True
+        except ValueError:
+            continue
+    return False
+
+
+def validate_uuid(val: t.Any, version: t.Literal[1, 3, 4, 5, 6, 7, 8]) -> uuid6.UUID|uuid.UUID:
+    """Validate a UUID against given version: 1, 3, 4, 5, 6, 7, 8.
+
+    Args:
+        val: UUID to validate
+        version: UUID version to validate against
+
+    Returns:
+        UUID object
+
+    Raises:
+        TypeError: if val is not a uuid.UUID or uuid6.UUID
+        ValueError: if val is not a UUID{version}
+    """
+    if isinstance(val, str):
+        try:
+            return uuid.UUID(val)
+        except Exception as e:
+            logger.opt(exception=True).warning(
+                f"Failed to convert {val!r} to uuid.UUID: {e!r}"
+            )
+            try:
+                return uuid6.UUID(val)
+            except Exception as e:
+                logger.opt(exception=True).warning(
+                    f"Failed to convert {val!r} to uuid6.UUID: {e!r}"
+                )
+    if not isinstance(val, uuid6.UUID) and not isinstance(val, uuid.UUID):
+        msg = f"Expected a uuid.UUID or uuid6.UUID, got {type(val)}"
+        raise TypeError(msg)
+    if val.version != version:
+        msg = f"Expected a UUID{version}, got UUID{val.version}"
+        raise ValueError(msg)
+    return val
+
+
+def id_to_timestamp(id_str: str, suffix: t.Literal["Z", "+00:00"] = "+00:00") -> str:
     """Convert a UUIDv7 string to an ISO 8601 timestamp.
 
     Args:
