@@ -26,7 +26,7 @@ dependencies = [
   "langgraph>=0.2.61",
   "loguru>=0.7.3",
   "pydantic-settings>=2.7.1",
-  "sqlalchemy>=2.0.36",
+  "sqlalchemy[asyncio]>=2.0.36",
   "uuid6>=2024.7.10",
   "sqlmodel>=0.0.22",
   "fastapi>=0.115.6",
@@ -37,6 +37,19 @@ dependencies = [
   "langgraph-checkpoint-postgres>=2.0.12",
   "supabase>=2.11.0",
   "psycopg2-binary>=2.9.10",
+  "pydantic-extra-types>=2.10.2",
+  "streamlit-elements>=0.1.0",
+  "streamlit-antd-components>=0.3.2",
+  "streamlit-pydantic",
+  "streamlit-aggrid>=1.1.0",
+  "pandera[io]>=0.22.1",
+  "annotated-types>=0.7.0",
+  "devtools>=0.12.2",
+  "orjson>=3.10.15",
+  "langsmith>=0.3.6",
+  "more-itertools>=10.6.0",
+  "logfire>=3.5.3",
+  "typer>=0.15.1",
 ]
 
 [dependency-groups]
@@ -54,8 +67,25 @@ dev = [
   "ipython>=8.31.0",
   "alembic[tz]>=1.14.0",
   "line-profiler>=4.2.0",
+  "datamodel-code-generator[graphql,http]>=0.26.5",
+  "devtools>=0.12.2",
+  "jsonref>=1.1.0",
 ]
 security = ["pip-audit>=2.7.3", "ruff>=0.8.6"]
+observability = [
+    "logfire>=3.5.3",
+    "opentelemetry-instrumentation-aiohttp-client>=0.51b0",
+    "opentelemetry-instrumentation-fastapi>=0.51b0",
+    "opentelemetry-instrumentation-httpx>=0.51b0",
+    "opentelemetry-instrumentation-jinja2>=0.51b0",
+    "opentelemetry-instrumentation-psycopg>=0.51b0",
+    "opentelemetry-instrumentation-psycopg2>=0.51b0",
+    "opentelemetry-instrumentation-requests>=0.51b0",
+    "opentelemetry-instrumentation-sqlalchemy>=0.51b0",
+    "opentelemetry-instrumentation-sqlite3>=0.51b0",
+    "opentelemetry-instrumentation-tornado>=0.51b0",
+    "opentelemetry-instrumentation-urllib>=0.51b0",
+]
 
 
 [tool.hatch.build.targets.wheel]
@@ -191,6 +221,7 @@ extend-immutable-calls = [
 [tool.ruff.lint.pyupgrade]
 keep-runtime-typing = true
 
+
 [tool.ruff.lint.flake8-builtins]
 builtins-ignorelist = ["id", "type", "input"]
 
@@ -205,7 +236,7 @@ staticmethod-decorators = [
 
 [tool.ruff.lint.isort]
 known-first-party = ["step1", "step2", "step3", "step4", "core"]
-required-imports = ["from __future__ import annotations"]
+required-imports = []
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = [
@@ -226,6 +257,10 @@ required-imports = ["from __future__ import annotations"]
   "S603", # `subprocess` call: check for execution of untrusted input (false positive)
   "S607", # Starting a process with a partial executable path (don't care)
 ]
+"src/sr_assistant/core/models.py" = [
+  "UP037",
+  "TC008",
+] # from __future__ import annotations break sqlmodel/alchemy, and seems quoted types are neeeded in relationships
 [tool.ruff.lint.flake8-quotes]
 docstring-quotes = "double"
 inline-quotes = "double"
@@ -261,6 +296,9 @@ exclude_lines = [
 ]
 show_missing = true
 fail_under = 0 # Set minimum coverage percentage when ready
+
+[tool.uv.sources]
+streamlit-pydantic = { git = "https://github.com/lukasmasuch/streamlit-pydantic.git" }
 
 [build-system]
 requires = ["hatchling"]
