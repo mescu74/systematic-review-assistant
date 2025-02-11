@@ -73,18 +73,18 @@ dev = [
 ]
 security = ["pip-audit>=2.7.3", "ruff>=0.8.6"]
 observability = [
-    "logfire>=3.5.3",
-    "opentelemetry-instrumentation-aiohttp-client>=0.51b0",
-    "opentelemetry-instrumentation-fastapi>=0.51b0",
-    "opentelemetry-instrumentation-httpx>=0.51b0",
-    "opentelemetry-instrumentation-jinja2>=0.51b0",
-    "opentelemetry-instrumentation-psycopg>=0.51b0",
-    "opentelemetry-instrumentation-psycopg2>=0.51b0",
-    "opentelemetry-instrumentation-requests>=0.51b0",
-    "opentelemetry-instrumentation-sqlalchemy>=0.51b0",
-    "opentelemetry-instrumentation-sqlite3>=0.51b0",
-    "opentelemetry-instrumentation-tornado>=0.51b0",
-    "opentelemetry-instrumentation-urllib>=0.51b0",
+  "logfire>=3.5.3",
+  "opentelemetry-instrumentation-aiohttp-client>=0.51b0",
+  "opentelemetry-instrumentation-fastapi>=0.51b0",
+  "opentelemetry-instrumentation-httpx>=0.51b0",
+  "opentelemetry-instrumentation-jinja2>=0.51b0",
+  "opentelemetry-instrumentation-psycopg>=0.51b0",
+  "opentelemetry-instrumentation-psycopg2>=0.51b0",
+  "opentelemetry-instrumentation-requests>=0.51b0",
+  "opentelemetry-instrumentation-sqlalchemy>=0.51b0",
+  "opentelemetry-instrumentation-sqlite3>=0.51b0",
+  "opentelemetry-instrumentation-tornado>=0.51b0",
+  "opentelemetry-instrumentation-urllib>=0.51b0",
 ]
 
 
@@ -181,6 +181,8 @@ ignore = [
   "PLR",     # Design related pylint codes
   "PT011",   # `pytest.raises(ValueError)` is too broad, set the `match` parameter or use a more specific exception"
   "T201",    # Use of print
+  "TD002",
+  "TD003",
   "TRY300",  # Use else in try except
   "UP017",   # datetime.UTC instead of datetime.timezone.utc. Don't think so.
 ]
@@ -259,7 +261,7 @@ required-imports = []
 ]
 "src/sr_assistant/core/models.py" = [
   "UP037",
-  "TC008",
+  # "TC008", quoted type alias, documented but current vscode extension doesn't support
 ] # from __future__ import annotations break sqlmodel/alchemy, and seems quoted types are neeeded in relationships
 [tool.ruff.lint.flake8-quotes]
 docstring-quotes = "double"
