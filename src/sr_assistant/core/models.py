@@ -1,45 +1,71 @@
 # src/sr_assistant/core/models/base.py
-"""Common models and mixins.
+"""SQLModel/Alchemy models for SRA.
 
-In the prototype we just use one module for all models. Moving forward,
-we may want to split these into separate modules.
-
-Examples:
-    >>> ret = (
-    ...     supabase.table("reviews")
-    ...     .insert(
-    ...         json.loads(review.model_dump_json(exclude=["created_at", "updated_at"]))
-    ...     )
-    ...     .execute()
-    ... )
-    >>> review = Review.model_validate(ret.data[0])
+These are mostly for DB R/W and abstracted away from the
+application layer which uses Pydantic schemas. SQLModel
+has limitations and moving forward we'll switch to
+SQLAlchemy and fully separate data and schema/validation/
+serialization.
 """
 
-from __future__ import annotations
-
 import enum
+import typing as t
 import uuid
-from datetime import datetime  # noqa: TC003
+from collections.abc import Mapping, MutableMapping, Sequence
+from datetime import datetime
 
 import sqlalchemy as sa
 import sqlalchemy.dialects.postgresql as sa_pg
-from pydantic import ConfigDict, JsonValue
-from sqlmodel import Field, Relationship, SQLModel, String  # type: ignore
+import streamlit as st
+import uuid6
+from loguru import logger
+from pydantic import ConfigDict, JsonValue, model_validator
+from pydantic.types import PositiveInt
+from sqlalchemy.ext.asyncio import AsyncAttrs
+from sqlalchemy.orm import Mapped
+from sqlmodel import Field, Relationship, SQLModel  # type: ignore
 
+import sr_assistant.app.utils as ut
 from sr_assistant.core.schemas import ExclusionReasons
-from sr_assistant.core.types import ScreeningDecisionType, ScreeningStrategyType
+from sr_assistant.core.types import (
+    CriteriaFramework,
+    LogLevel,
+    ScreeningDecisionType,
+    ScreeningStrategyType,
+    UtcDatetime,
+)
 
 
-def enum_values(enum_class: type[enum.StrEnum]) -> list[str]:
+def add_gin_index(table_name: str, column_name: str) -> sa.Index:
+    """Add a GIN index to a JSONB column."""
+    return sa.Index(
+        f"ix_{table_name}_on_{column_name}_gin",
+        sa.text(column_name),
+        postgresql_using="gin",
+    )
+
+
+def enum_values(enum_class: type[enum.Enum]) -> list[str]:
     """Get values for enum."""
     return [member.value for member in enum_class]
 
 
-class SQLModelBase(SQLModel):
+class SQLModelBase(AsyncAttrs, SQLModel):
+    """Base SQLModel with ``awaitable_attrs`` mixin attribute.
+
+    Attributes:
+        awaitable_attrs: SQLAlchemy proxy mixin that makes all attributes awaitable.
+    """
+
     model_config = ConfigDict(  # type: ignore
         from_attributes=True,
         validate_assignment=True,
+        arbitrary_types_allowed=True,
+        use_attribute_docstrings=True,
     )
+
+
+Base = SQLModelBase
 
 
 class SystematicReview(SQLModelBase, table=True):
@@ -54,11 +80,18 @@ class SystematicReview(SQLModelBase, table=True):
           have conservative_result and comprehensive_result fields pointing to the
           abstracts screening results table.
 
-    TODO:
+    Todo:
         - PICO, etc., need to figure out UI updating by agent ...
     """
 
-    __tablename__ = "systematic_reviews"  # type: ignore pyright: ignore
+    _table_name: t.ClassVar[t.Literal["systematic_reviews"]] = "systematic_reviews"
+
+    __tablename__ = _table_name  # pyright: ignore # type: ignore
+
+    __table_args__ = (
+        add_gin_index(_table_name, "criteria_framework_answers"),
+        add_gin_index(_table_name, "review_metadata"),
+    )
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     created_at: datetime | None = Field(
@@ -83,34 +116,70 @@ class SystematicReview(SQLModelBase, table=True):
     background: str | None = Field(
         default=None,
         description="Background context for the systematic review",
-        sa_column=sa.Column(sa.Text(), nullable=False),
+        sa_column=sa.Column(sa.Text(), nullable=True),
     )
     research_question: str = Field(
         description="The research question",
         sa_column=sa.Column(sa.Text(), nullable=False),
     )
-    # TODO: sort this out, update ui
-    #criteria_framework: str = Field(
-    #    description="The inclusion/exclusion criteria framework",
-    #)
-    #criteria_framework_answers: dict | None = Field(
-    #    default=None,
-    #    description="The answers to the inclusion/exclusion criteria framework",
-    #    sa_column=sa.Column(sa_pg.JSONB(), nullable=True),
-    #)
+    # TODO: sort this out, update ui, these replace inclusion_criteria
+    # This enum should have properties returning UI values and descriptions such that
+    # a tabbed/selectbox form can be created dynamically, and preferably drafted by AI
+    criteria_framework: CriteriaFramework | None = Field(
+        default=None,
+        description="The inclusion/exclusion criteria framework",
+        sa_column=sa.Column(
+            type_=sa_pg.ENUM(
+                CriteriaFramework,
+                name="criteriaframework_enum",
+                values_callable=enum_values,
+            ),
+            nullable=True,
+            index=True,
+        ),
+    )
+    criteria_framework_answers: MutableMapping[str, JsonValue] = Field(
+        default_factory=dict,
+        sa_column=sa.Column(sa_pg.JSONB(none_as_null=True), nullable=False),
+    )
+    """The answers to the inclusion/exclusion criteria framework"""
+
     inclusion_criteria: str = Field(
-        description="Inclusion criteria",
+        description="Inclusion criteria. To be replaced by above framework fields.",
         sa_column=sa.Column(sa.Text(), nullable=False),
     )
+    """Inclusion criteria."""
+
     exclusion_criteria: str = Field(
         description="The exclusion criteria for studies",
         sa_column=sa.Column(sa.Text(), nullable=False),
     )
+    """The exclusion criteria for studies."""
+
     # One review has many PubMedResults
-    pubmed_results: list[PubMedResult] | None = Relationship(
+    pubmed_results: Mapped[list["PubMedResult"]] = Relationship(
         back_populates="review",
         sa_relationship_kwargs={"lazy": "selectin"},
     )
+    """PubMed search results for the review."""
+
+    screen_abstract_results: Mapped[list["ScreenAbstractResultModel"]] = Relationship(
+        back_populates="review",
+        sa_relationship_kwargs={"lazy": "selectin"},
+    )
+    """Screening results for the review."""
+
+    log_records: Mapped[list["LogRecord"]] = Relationship(
+        back_populates="review",
+        sa_relationship_kwargs={"lazy": "selectin"},
+    )
+    """Log records for the review."""
+
+    review_metadata: MutableMapping[str, JsonValue] = Field(
+        default_factory=dict,
+        sa_column=sa.Column(sa_pg.JSONB(none_as_null=True), nullable=False),
+    )
+    """Any metadata associated with the review."""
 
 
 class PubMedResult(SQLModelBase, table=True):
@@ -119,7 +188,9 @@ class PubMedResult(SQLModelBase, table=True):
     Stores both search info and result in one table for prototype simplicity.
     """
 
-    __tablename__ = "pubmed_results"  # type: ignore pyright: ignore
+    _table_name: t.ClassVar[t.Literal["pubmed_results"]] = "pubmed_results"
+
+    __tablename__ = _table_name  # pyright: ignore # type: ignore
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     created_at: datetime | None = Field(
@@ -175,61 +246,74 @@ class PubMedResult(SQLModelBase, table=True):
     review_id: uuid.UUID = Field(
         foreign_key="systematic_reviews.id", ondelete="CASCADE", index=True
     )
-    review: SystematicReview = Relationship(
+    review: Mapped["SystematicReview"] = Relationship(
         back_populates="pubmed_results",
-        cascade_delete=True,
         sa_relationship_kwargs={"lazy": "selectin"},
     )
 
     # One PubMedResult has two ScreenAbstractResults (conservative and comprehensive)
+    # Circular relationship that causes Alembic warnings. AI says can be ignored since
+    # valid business reason, but who trusts AI?
     conservative_result_id: uuid.UUID | None = Field(
-        default=None, foreign_key="screen_abstract_results.id", index=True
+        default=None,
+        foreign_key="screen_abstract_results.id",
+        index=True,
+        # sa_column=sa.Column(sa.UUID, sa.ForeignKey("screen_abstract_results.id"), index=True, nullable=True),
     )
     comprehensive_result_id: uuid.UUID | None = Field(
-        default=None, foreign_key="screen_abstract_results.id", index=True
+        default=None,
+        foreign_key="screen_abstract_results.id",
+        index=True,
+        # sa_column=sa.Column(sa.UUID, sa.ForeignKey("screen_abstract_results.id"), index=True, nullable=True),
     )
-    conservative_result: ScreenAbstractResultModel = Relationship(
+    conservative_result: Mapped["ScreenAbstractResultModel"] = Relationship(
         sa_relationship_kwargs={
-            "foreign_keys": "[PubMedResult.conservative_result_id]",
+            "foreign_keys": "PubMedResult.conservative_result_id",
             "lazy": "selectin",
+            "post_update": True,  # break the cycle
         }
     )
-    comprehensive_result: ScreenAbstractResultModel = Relationship(
+    comprehensive_result: Mapped["ScreenAbstractResultModel"] = Relationship(
         sa_relationship_kwargs={
-            "foreign_keys": "[PubMedResult.comprehensive_result_id]",
+            "foreign_keys": "PubMedResult.comprehensive_result_id",
             "lazy": "selectin",
+            "post_update": True,  # break the cycle
         }
     )
 
-# ScreeningResult schema
-# response fields:
-# From model:
-# - decision ScreeningDecisionType
-# - confidence_score float
-# - rationale str
-# - extracted_quotes list[str]
-# - exclusion_reason_categories ExclusionReasons
-# Injected:
-# - id uuid.UUID (run id)
-# - review_id uuid.UUID
-# - pubmed_result_id uuid.UUID
-# - trace_id uuid.UUID
-# - screening_strategy ScreeningStrategyType (comprehensive/conservative)
-# - model_name str
-# - start_time datetime (UTC)
-# - end_time datetime (UTC)
-# - response_metadata dict[str, JsonValue], JSONB in postgres
+
 class ScreenAbstractResultModel(SQLModelBase, table=True):
     """Abstract screening decision model.
 
     Tracks the screening decisions for each paper in the review.
+
+    Attributes:
+        decision: ScreeningDecisionType
+        confidence_score: float
+        rationale: str
+        extracted_quotes: list[str]
+        exclusion_reason_categories: ExclusionReasons
+        id: uuid.UUID (run id)
+        review_id: uuid.UUID
+        pubmed_result_id: uuid.UUID
+        trace_id: uuid.UUID
+        model_name: str
+        start_time: datetime (UTC)
+        end_time: datetime (UTC)
+        response_metadata: dict[str, JsonValue]
     """
 
-    __tablename__ = "screen_abstract_results"  # type: ignore pyright: ignore
+    _table_name: t.ClassVar[t.Literal["screen_abstract_results"]] = (
+        "screen_abstract_results"
+    )
 
-    id: uuid.UUID | None = Field(
-        default_factory=uuid.uuid4, primary_key=True,
-        description="Should be the run_id of the child-child `langsmith.RunTree`, populated by the chain `on_end` listener."
+    __tablename__ = _table_name  # pyright: ignore # type: ignore
+
+    __table_args__ = (add_gin_index(_table_name, "exclusion_reason_categories"),)
+
+    id: uuid.UUID = Field(
+        primary_key=True,
+        description="Should be the run_id of the child-child `langsmith.RunTree`, populated by the chain `on_end` listener.",
     )
     created_at: datetime | None = Field(
         default=None,
@@ -256,6 +340,7 @@ class ScreenAbstractResultModel(SQLModelBase, table=True):
         sa_column=sa.Column(
             type_=sa_pg.ENUM(ScreeningDecisionType, values_callable=enum_values),
             nullable=False,
+            index=True,
         ),
     )
     confidence_score: float = Field(
@@ -267,7 +352,7 @@ class ScreenAbstractResultModel(SQLModelBase, table=True):
         description="Rationale for the screening decision",
         sa_column=sa.Column(sa.Text(), nullable=False),
     )
-    extracted_quotes: list[str] | None = Field(
+    extracted_quotes: Sequence[str] | None = Field(
         default=None,
         description="Supporting quotes from the title/abstract. Can be omitted if uncertain.",
         sa_column=sa.Column(sa_pg.ARRAY(sa.Text()), nullable=True),
@@ -275,11 +360,17 @@ class ScreenAbstractResultModel(SQLModelBase, table=True):
     exclusion_reason_categories: ExclusionReasons | None = Field(
         default=None,
         description="The PRISMA exclusion reason categories for the decision. This complements the 'rationale' field.",
-        sa_column=sa.Column(sa_pg.JSONB(), nullable=True),
+        sa_column=sa.Column(sa_pg.JSONB(none_as_null=True), nullable=True, index=True),
     )
     # Injected fields
+    trace_id: uuid.UUID | None = Field(
+        default=None,
+        description="trace_id of the `RunTree` with which the listener was invoked. Populated by the chain `on_end` listener.",
+        index=True,
+    )
     # Screening decision fields
     start_time: datetime | None = Field(
+        default=None,
         description="Chain/graph invocation start time.",
         sa_column=sa.Column(
             sa.DateTime(timezone=True),
@@ -287,6 +378,7 @@ class ScreenAbstractResultModel(SQLModelBase, table=True):
         ),
     )
     end_time: datetime | None = Field(
+        default=None,
         description="Chain/graph invocation end time.",
         sa_column=sa.Column(
             sa.DateTime(timezone=True),
@@ -298,32 +390,153 @@ class ScreenAbstractResultModel(SQLModelBase, table=True):
         sa_column=sa.Column(
             type_=sa_pg.ENUM(ScreeningStrategyType, values_callable=enum_values),
             nullable=False,
+            index=True,
         ),
     )
     model_name: str = Field(
         description="The LangChain model name that generated this response.",
     )
-    response_metadata: dict[str, JsonValue] | None = Field(
-        default=None,
+    response_metadata: Mapping[str, JsonValue] | None = Field(
+        default_factory=dict,
         description="Metadata from the chain/graph invocation.",
-        sa_column=sa.Column(sa_pg.JSONB(), nullable=True),
+        sa_column=sa.Column(sa_pg.JSONB(none_as_null=True), nullable=True),
     )
 
     # Screening Result is associated with one review
     review_id: uuid.UUID = Field(foreign_key="systematic_reviews.id", index=True)
     # Each ScreenAbstractResult belongs to one Review
-    review: SystematicReview = Relationship(
+    review: Mapped["SystematicReview"] = Relationship(
         back_populates="screen_abstract_results",
         sa_relationship_kwargs={"lazy": "selectin"},
     )
     # Screening Result is associated with one PubMedResult
     pubmed_result_id: uuid.UUID = Field(
-        description="The PubMed result being screened",
+        description="The PubMed result associated with this result",
         foreign_key="pubmed_results.id",
         index=True,
     )
     # Each ScreenAbstractResult belongs to one PubMedResult. Relationship other way is
-    # configured in PubMedResult.
-    pubmed_result: PubMedResult = Relationship(
+    # configured in PubMedResult. Key must be fully qualified string, bare field works
+    # in SA with mapped columns but not supported by SQLModel.
+    #
+    # Note: This creates a circular reference, SA post_update is supposed to help with
+    # that but Alembic still warns about it. These relationships are needed both ways
+    # so not much to do about it?
+    pubmed_result: Mapped["PubMedResult"] = Relationship(
+        sa_relationship_kwargs={
+            "lazy": "selectin",
+            "foreign_keys": "ScreenAbstractResultModel.pubmed_result_id",
+        },
+    )
+    # as_conservative: Mapped["PubMedResult"] = Relationship(
+    #     back_populates="conservative_result",
+    #     sa_relationship_kwargs={
+    #         "lazy": "selectin",
+    #         "primaryjoin": ("and_(PubMedResult.conservative_result_id==ScreenAbstractResultModel.id, "
+    #                       "PubMedResult.id==ScreenAbstractResultModel.pubmed_result_id)")
+    #     }
+    # )
+
+    # as_comprehensive: Mapped["PubMedResult"] = Relationship(
+    #     back_populates="comprehensive_result",
+    #     sa_relationship_kwargs={
+    #         "lazy": "selectin",
+    #         "primaryjoin": ("and_(PubMedResult.comprehensive_result_id==ScreenAbstractResultModel.id, "
+    #                       "PubMedResult.id==ScreenAbstractResultModel.pubmed_result_id)")
+    #     }
+    # )
+
+
+class LogRecord(SQLModel, table=True):
+    """Model for storing app log records."""
+
+    _table_name: t.ClassVar[t.Literal["log_records"]] = "log_records"
+
+    __tablename__ = _table_name  # pyright: ignore # type: ignore
+
+    __table_args__ = (
+        add_gin_index(_table_name, "extra"),
+        add_gin_index(_table_name, "exception"),
+    )
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    timestamp: UtcDatetime = Field(
+        sa_column=sa.Column(sa_pg.TIMESTAMP(timezone=True), nullable=False, index=True)
+    )
+    level: LogLevel = Field(
+        sa_column=sa.Column(
+            type_=sa_pg.ENUM(
+                LogLevel, name="loglevel_enum", values_callable=enum_values
+            ),
+            nullable=False,
+            index=True,
+        ),
+    )
+    message: str = Field(sa_column=sa.Column(sa.Text(), nullable=False, index=True))
+    module: str | None = Field(
+        default=None, sa_column=sa.Column(sa.String(100), default=None, nullable=True)
+    )
+    name: str | None = Field(
+        default=None, sa_column=sa.Column(sa.String(100), default=None, nullable=True)
+    )
+    function: str | None = Field(
+        default=None, sa_column=sa.Column(sa.String(200), default=None, nullable=True)
+    )
+    line: PositiveInt | None = Field(
+        default=None, sa_column=sa.Column(sa.Integer(), default=None, nullable=True)
+    )
+    thread: str | None = Field(default=None, description="{thread.name}:{thread.id}")
+    process: str | None = Field(default=None, description="{process.name}:{process.id}")
+    extra: Mapping[str, JsonValue] = Field(
+        default_factory=dict,
+        description="User provided extra context. Has a GIN index.",
+        sa_column=sa.Column(sa_pg.JSONB(none_as_null=True)),
+    )
+    exception: Mapping[str, JsonValue] | None = Field(
+        default_factory=dict,
+        description="Exception information. Has a GIN index",
+        sa_column=sa.Column(sa_pg.JSONB(none_as_null=True), nullable=True),
+    )
+    record: Mapping[str, JsonValue] = Field(
+        default_factory=dict,
+        description="This is everything available in the record and context.",
+        sa_column=sa.Column(sa_pg.JSONB(none_as_null=True)),
+    )
+    review_id: uuid.UUID | None = Field(
+        default=None,
+        description="Read from extra by the model_validator or st state, or by sink. None if not related to a review.",
+        sa_column=sa.Column(
+            sa.UUID,
+            sa.ForeignKey("systematic_reviews.id"),
+            default=None,
+            index=True,
+            nullable=True,
+        ),
+    )
+    review: Mapped["SystematicReview"] = Relationship(
+        back_populates="log_records",
         sa_relationship_kwargs={"lazy": "selectin"},
     )
+
+    @model_validator(mode="after")
+    def _set_review_id(self) -> t.Self:  # noqa: PLW0211 (not a static method ...)
+        review_id = self.extra.get("review_id")
+        if not ut.is_uuid(review_id) and ut.in_streamlit():
+            st_review_id = st.session_state.review_id
+            if not ut.is_uuid(st_review_id):
+                review_obj = st.session_state.review
+                if isinstance(review_obj, SystematicReview):
+                    review_id = review_obj.id
+        if (version := ut.is_uuid(review_id)) and version > 0 and version < 6:
+            review_id = t.cast((str | uuid.UUID), review_id)
+            self.review_id = (
+                review_id if not isinstance(review_id, str) else uuid.UUID(review_id)
+            )
+            logger.info(f"Setting review_id: {self.review_id}")
+        elif version == 6 and version <= 8:
+            review_id = t.cast((str | uuid6.UUID), review_id)
+            self.review_id = (
+                review_id if not isinstance(review_id, str) else uuid6.UUID(review_id)
+            )
+            logger.info(f"Setting review_id: {self.review_id}")
+        return self
