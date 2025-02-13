@@ -1,8 +1,16 @@
 """Generate test data for systematic review database using SQLModel."""
-from datetime import UTC, datetime
-import uuid
 
-from sqlmodel import Session, SQLModel, create_engine, select
+import os
+import sys
+from datetime import UTC, datetime
+import typing as t
+import uuid
+import argparse
+
+from sqlmodel import Session, SQLModel, create_engine, select, col
+import sqlalchemy as sa
+import sqlalchemy.dialects.postgresql as sa_pg
+from dotenv import load_dotenv
 
 from sr_assistant.core.models import (
     SystematicReview,
@@ -11,13 +19,86 @@ from sr_assistant.core.models import (
 )
 from sr_assistant.core.types import ScreeningDecisionType, ScreeningStrategyType
 
-def create_test_data(db_url: str) -> None:
+from sqlalchemy.schema import DropTable
+from sqlalchemy.ext.compiler import compiles
+
+cleanup = False
+
+def confirm_database_drop(engine: sa.Engine) -> bool:
+    """Confirm database drop with user."""
+    url = engine.url
+    print(f"\nWARNING: About to drop all tables in database:")
+    print(f"Database: {url.database}")
+    print(f"Host: {url.host}")
+    print(f"User: {url.username}")
+
+    while True:
+        response = input("\nDo you want to proceed? [y/N] ").lower().strip()
+        if response in {'y', 'yes'}:
+            return True
+        if response in {'n', 'no', ''}:  # Empty response counts as no
+            return False
+        print("Please answer 'y' or 'n'")
+
+@compiles(DropTable, "postgresql")
+def _compile_drop_table(element: DropTable, compiler: t.Any, **kwargs: t.Any) -> str:
+    if cleanup:
+        return compiler.visit_drop_table(element) + " CASCADE"
+    return compiler.visit_drop_table(element)
+
+def cleanup_database(engine: sa.Engine, cleanup: bool = False) -> None:
+    """Drop all tables and custom types from the database."""
+    print(f"Dropping public schema with engine {engine!r}")
+    if not cleanup:
+        print("ERROR: cleanup_database called with cleanup=False, aborting")
+        return
+
+    with engine.connect() as conn:
+        conn.execute(sa.text("""
+            DROP SCHEMA public CASCADE;
+            CREATE SCHEMA public;
+            GRANT ALL ON SCHEMA public TO postgres;
+            GRANT ALL ON SCHEMA public TO public;
+        """))
+        conn.commit()
+        SQLModel.metadata.drop_all(engine) # make sqlmodel/sa aware of drops
+        #else:
+        #    try:
+        #        # Disable foreign key checks
+        #        conn.execute(text("SET session_replication_role = 'replica';"))
+
+        #        # Regular SQLModel cleanup
+        #        SQLModel.metadata.drop_all(engine)
+
+        #        # Find and drop custom types
+        #        custom_types_query = text("""
+        #            SELECT t.typname
+        #            FROM pg_type t
+        #            JOIN pg_catalog.pg_namespace n ON n.oid = t.typnamespace
+        #            WHERE n.nspname = 'public'
+        #            AND t.typtype = 'e';  -- 'e' for enum types
+        #        """)
+
+        #        result = conn.execute(custom_types_query)
+        #        custom_types = result.fetchall()
+
+        #        for type_row in custom_types:
+        #            type_name = type_row[0]
+        #            conn.execute(text(f'DROP TYPE IF EXISTS "{type_name}" CASCADE;'))
+
+        #        conn.commit()
+        #    finally:
+        #        # Always re-enable foreign key checks
+        #        conn.execute(text("SET session_replication_role = 'origin';"))
+        #        conn.commit()
+
+def create_test_data(engine: sa.Engine) -> None:
     """Create test data in database.
 
     Creates reviews, PubMed results, and screening results with proper relationships.
     Uses SQLModel for clean, type-safe database operations.
     """
-    engine = create_engine(db_url, echo=True)
+
     SQLModel.metadata.create_all(engine)
 
     with Session(engine) as session:
@@ -124,19 +205,36 @@ def create_test_data(db_url: str) -> None:
         session.commit()
 
         # Verify results using SQLModel select
-        stmt = select(ScreenAbstractResultModel).order_by(ScreenAbstractResultModel.created_at)
+        stmt = select(ScreenAbstractResultModel).order_by(col(ScreenAbstractResultModel.created_at))
         results = session.exec(stmt).all()
         print(f"Created {len(results)} screening results")
         for result in results:
-            print(f"- {result.screening_strategy}: {result.decision} ({result.confidence_score})")
+            print(f"- {result.created_at} {result.screening_strategy}: {result.decision} ({result.confidence_score})")
 
 if __name__ == "__main__":
-    import os
-    from dotenv import load_dotenv
+    load_dotenv(".env.test", override=True)
 
-    load_dotenv(".env.test")
-    dburl = os.getenv("SRA_DATABASE_URL", "")
-    if "sra_integration_test" not in dburl:
-        print("Error: SRA_DATABASE_URL must be set to integration test database")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--cleanup", action="store_true", help="Drop all tables and enum types before creating test data")
+    args = parser.parse_args()
+
+    # Set the global flag based on the argument
+    cleanup = args.cleanup
+
+    db_url = os.getenv("SRA_DATABASE_URL", os.getenv("DATABASE_URL", ""))
+    if "sra_integration_test" not in db_url:
+        print("Error: (SRA_)|DATABASE_URL must be set to integration test database")
         exit(1)
-    create_test_data(dburl)
+
+    engine = create_engine(db_url, echo=True)
+
+    if cleanup := confirm_database_drop(engine=engine):
+        print("Running in cleanup mode")
+        cleanup_database(engine, cleanup)
+    else:
+        print("Running in non-cleanup mode")
+
+    if sys.argv[1] == "cleanup":
+        cleanup_database(engine)
+
+    create_test_data(engine)
