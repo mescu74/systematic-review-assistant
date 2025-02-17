@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Literal  # pyright: ignore [reportShadowedImports]
+import typing as t
+from functools import cache
 
 import streamlit as st
 from pydantic import (
@@ -11,7 +12,8 @@ from pydantic import (
 from pydantic.networks import PostgresDsn  # noqa: TC002
 from pydantic_settings import BaseSettings
 
-from core.constants import ModelId
+import sr_assistant.app.utils as ut
+from sr_assistant.core.constants import ModelId
 
 
 class ScreeningTemperature(BaseModel):
@@ -28,23 +30,26 @@ class ScreeningTemperature(BaseModel):
 class Settings(BaseSettings):
     """Application settings.
 
-    These are loaded from environment variables.
+    These are loaded from environment variables. Can be prefixed with SRA_ or sra_.
 
     # TODO: add types and defaults
     Attributes:
         OPENAI_API_KEY (str): OpenAI API key, from OPENAI_API_KEY env var or APIKEY
-        ANTHROPIC_API_KEY (str): Anthropic API key, from ANTHROPIC_API_KEY env var
-        SUPABASE_URL: Supabase URL, from SRA_SUPABASE_URL env var
-        SUPABASE_KEY: Supabase key (for local prototype we abuse role key)
-        SUPABASE_DIRECT_URL: Supabase direct URL
-        NCBI_EMAIL: NCBI email
-        NCBI_API_KEY: NCBI API key
-        debug: Debug mode
-        env: Environment
-        llm_1: First LLM model
-        llm_2: Second LLM model
-        llm_3: Third LLM model
-        data_extraction_llm: LLM for data extraction (out of scope for prototype)
+        ANTHROPIC_API_KEY (str): Anthropic API key
+        SUPABASE_URL (str): Supabase URL
+        SUPABASE_KEY (str): Supabase service role key
+        DATABASE_URL (PostgresDsn): Database URL
+        IN_STREAMLIT (bool, optional): Whether we're executed via streamlit run or not.
+            Defaults to checking st context of main thread.
+        NCBI_EMAIL (str): NCBI email
+        NCBI_API_KEY (str): NCBI API key
+        LOG_LEVEL (str): Log level
+        env: (Literal["local", "test", "prototype"], optional): Environment to run in.
+            ``test`` is for integration tests and uses ``sra_integration_test``
+            SupaBase DB. Defaults to ``prototype``.
+            Loaded from env vars ``env`` or ``environment`` also with ``sra_`` prefix,
+            case insensitive.
+        debug (bool): Enable debug mode
     """
 
     model_config: ConfigDict = {  # pyright: ignore
@@ -58,11 +63,14 @@ class Settings(BaseSettings):
 
     # TODO: SecretStr or st.secrets
     OPENAI_API_KEY: str = Field(validation_alias="openai_api_key")
+
     ANTHROPIC_API_KEY: str = Field(
         default="",
         validation_alias="anthropic_api_key",
         description="Optional Anthropic API key, not used in proto ATM",
     )
+    """Not used."""
+
     SUPABASE_URL: str = Field(validation_alias="sra_supabase_url")
     SUPABASE_KEY: str = Field(
         validation_alias="sra_supabase_service_role_key"
@@ -73,16 +81,33 @@ class Settings(BaseSettings):
     )
     DATABASE_URL: PostgresDsn = Field(
         default="postgresql://postgres:postgres@127.0.0.1:54322/postgres",  # pyright: ignore
+        description="For test and prototype envs this should be a `postgresql+psycopg:// useing pooled SupaBase DSN.",
         validation_alias="sra_database_url",
     )
+    """For test and prototype envs this should be a `postgresql+psycopg:// useing pooled SupaBase DSN."""
     NCBI_EMAIL: str = Field(validation_alias="ncbi_email")
     NCBI_API_KEY: str = Field(validation_alias="ncbi_api_key")
-
-    debug: bool = Field(default=False)
-    env: Literal["local", "prototype"] = Field(
-        default="local", validation_alias="environment"
+    IN_STREAMLIT: bool = Field(
+        description="Whether we're executed via streamlit run or not.",
+        default_factory=ut.in_streamlit,
+        validation_alias="in_streamlit",
     )
 
+    # TODO: implement debug logging
+    debug: bool = Field(
+        default=False,
+        description="Enable debug mode in app and asyncio, LangChain, etc. NOTE: logs variable values, do not use in production.",
+    )
+    """Currently doesn't do anything, just a placeholder for future use."""
+    # TODO: use level enum
+    log_level: str = Field(default="INFO")
+    env: t.Literal["local", "test", "prototype"] = Field(
+        default="prototype",
+        validation_alias="environment",
+        description="Environment to run in (local, test, prototype). test is for integration tests and uses test SupaBase DB.",
+    )
+
+    # TODO: remove these, not used
     llm_1: str = Field(default=ModelId.gpt_4o, min_length=2)
     llm_2: str = Field(default=ModelId.chatgpt, min_length=2)
     llm_3: str = Field(default=ModelId.sonnet_35, min_length=2)
@@ -93,6 +118,9 @@ class Settings(BaseSettings):
     llm_3_temperature: float = Field(default=0.0, ge=0.0, le=1.0)
 
 
-@st.cache_data
+_cache_fn = st.cache_data if ut.in_streamlit() else cache
+
+
+@_cache_fn
 def get_settings() -> Settings:
     return Settings()  # pyright: ignore [reportCallIssue]

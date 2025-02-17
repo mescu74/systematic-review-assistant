@@ -4,7 +4,6 @@ import pandas as pd
 import streamlit as st
 
 from sr_assistant.app.agents import abstract_screening_chain
-from sr_assistant.core.models import PubMedResult, AbstractScreeningResult
 from sr_assistant.core.repositories import (
     PubMedRepository,
     ScreeningAbstractRepository,
@@ -12,7 +11,7 @@ from sr_assistant.core.repositories import (
 from sr_assistant.core.schemas import ScreeningResponse
 
 
-def screening_abstracts_page() -> None:
+def screening_abstracts_page(review_id: UUID) -> None:
     """Abstract screening page."""
     if "abstract_screening_chain" not in st.session_state:
         st.session_state.abstract_screening_chain = abstract_screening_chain
@@ -24,7 +23,9 @@ def screening_abstracts_page() -> None:
     if "pubmed_repository" not in st.session_state:
         st.session_state.pubmed_repository = PubMedRepository(st.session_state.supabase)
     if "screening_abstract_repository" not in st.session_state:
-        st.session_state.screening_abstract_repository = ScreeningAbstractRepository(st.session_state.supabase)
+        st.session_state.screening_abstract_repository = ScreeningAbstractRepository(
+            st.session_state.supabase
+        )
 
     # Initialize session state for screening results
     if "screening_results" not in st.session_state:
@@ -32,7 +33,9 @@ def screening_abstracts_page() -> None:
 
     # Get search results and existing screening decisions
     search_results = st.session_state.pubmed_repository.get_review_results(review_id)
-    screening_results = st.session_state.screening_abstract_repository.get_screening_results(review_id)
+    screening_results = (
+        st.session_state.screening_abstract_repository.get_screening_results(review_id)
+    )
 
     # Create a mapping of search_result_id to screening result
     screened_results = {str(r.search_result_id): r for r in screening_results}
@@ -41,14 +44,20 @@ def screening_abstracts_page() -> None:
     results_data = []
     for result in search_results:
         screening_result = screened_results.get(str(result.id))
-        results_data.append({
-            "ID": result.i,
-            "Title": result.title,
-            "Year": result.year,
-            "Status": "Screened" if screening_result else "Pending",
-            "Decision": screening_result.decision.value if screening_result else None,
-            "Confidence": f"{screening_result.confidence_score:.2f}" if screening_result else None,
-        })
+        results_data.append(
+            {
+                "ID": result.i,
+                "Title": result.title,
+                "Year": result.year,
+                "Status": "Screened" if screening_result else "Pending",
+                "Decision": screening_result.decision.value
+                if screening_result
+                else None,
+                "Confidence": f"{screening_result.confidence_score:.2f}"
+                if screening_result
+                else None,
+            }
+        )
 
     df = pd.DataFrame(results_data)
 
@@ -62,8 +71,12 @@ def screening_abstracts_page() -> None:
         st.metric("Pending", len(search_results) - len(screening_results))
 
     # Add a button to screen pending papers
-    if st.button("Screen Pending Papers", disabled=len(search_results) == len(screening_results)):
-        pending_results = [r for r in search_results if str(r.id) not in screened_results]
+    if st.button(
+        "Screen Pending Papers", disabled=len(search_results) == len(screening_results)
+    ):
+        pending_results = [
+            r for r in search_results if str(r.id) not in screened_results
+        ]
 
         # Process in batches of 10
         batch_size = 10
@@ -71,8 +84,10 @@ def screening_abstracts_page() -> None:
         status_text = st.empty()
 
         for i in range(0, len(pending_results), batch_size):
-            batch = pending_results[i:i+batch_size]
-            status_text.text(f"Screening papers {i+1}-{min(i+batch_size, len(pending_results))} of {len(pending_results)}...")
+            batch = pending_results[i : i + batch_size]
+            status_text.text(
+                f"Screening papers {i+1}-{min(i+batch_size, len(pending_results))} of {len(pending_results)}..."
+            )
 
             # Prepare batch inputs
             batch_inputs = [
@@ -88,37 +103,56 @@ def screening_abstracts_page() -> None:
             ]
 
             # Get screening decisions
-            batch_results = st.session_state.abstract_screening_chain.batch(batch_inputs)
+            batch_results = st.session_state.abstract_screening_chain.batch(
+                batch_inputs
+            )
 
             # Store results
-            for paper, result in zip(batch, batch_results):
+            for paper, result in zip(batch, batch_results, strict=False):
                 # Use the more conservative decision
                 llm1_response: ScreeningResponse = result["llm1_response"]
                 llm2_response: ScreeningResponse = result["llm2_response"]
 
                 # If either reviewer is uncertain, use that decision
-                if llm1_response.decision == "uncertain" or llm2_response.decision == "uncertain":
-                    final_response = llm1_response if llm1_response.decision == "uncertain" else llm2_response
+                if (
+                    llm1_response.decision == "uncertain"
+                    or llm2_response.decision == "uncertain"
+                ):
+                    final_response = (
+                        llm1_response
+                        if llm1_response.decision == "uncertain"
+                        else llm2_response
+                    )
                 # If they disagree (include vs exclude), mark as uncertain
                 elif llm1_response.decision != llm2_response.decision:
                     final_response = ScreeningResponse(
                         decision="uncertain",
-                        confidence_score=min(llm1_response.confidence_score, llm2_response.confidence_score),
-                        rationale="Reviewers disagree on decision. Conservative reviewer: " +
-                                llm1_response.rationale + "\nComprehensive reviewer: " +
-                                llm2_response.rationale,
-                        extracted_quotes=llm1_response.extracted_quotes + llm2_response.extracted_quotes,
-                        exclusion_reason_categories=None
+                        confidence_score=min(
+                            llm1_response.confidence_score,
+                            llm2_response.confidence_score,
+                        ),
+                        rationale="Reviewers disagree on decision. Conservative reviewer: "
+                        + llm1_response.rationale
+                        + "\nComprehensive reviewer: "
+                        + llm2_response.rationale,
+                        extracted_quotes=llm1_response.extracted_quotes
+                        + llm2_response.extracted_quotes,
+                        exclusion_reason_categories=None,
                     )
                 # Otherwise use the more conservative response
                 else:
-                    final_response = llm1_response if llm1_response.confidence_score < llm2_response.confidence_score else llm2_response
+                    final_response = (
+                        llm1_response
+                        if llm1_response.confidence_score
+                        < llm2_response.confidence_score
+                        else llm2_response
+                    )
 
                 # Store in database
                 screening_result = st.session_state.screening_abstract_repository.create_screening_result(
                     review_id=review_id,
                     search_result_id=paper.id,
-                    response=final_response
+                    response=final_response,
                 )
 
                 # Update session state
@@ -140,7 +174,9 @@ def screening_abstracts_page() -> None:
         status_filter = st.selectbox("Filter by Status", ["All", "Pending", "Screened"])
     with col2:
         if status_filter == "Screened":
-            decision_filter = st.selectbox("Filter by Decision", ["All", "Include", "Exclude", "Uncertain"])
+            decision_filter = st.selectbox(
+                "Filter by Decision", ["All", "Include", "Exclude", "Uncertain"]
+            )
 
     # Apply filters
     filtered_df = df.copy()

@@ -4,15 +4,15 @@ from uuid import UUID
 
 import streamlit as st
 
-from sr_assistant.core.repositories import PubMedRepository
+from sr_assistant.core.repositories_old import PubMedRepository
 from sr_assistant.step2.pubmed_integration import pubmed_fetch_details, pubmed_search
 
 
 def search_page(review_id: UUID | None = None) -> None:
     """PubMed search page."""
     if not review_id:
-        st.error("Please select a review first")
-        return
+        st.error("Please select a review protocol first")
+        st.stop()
 
     repo = PubMedRepository(st.session_state.supabase)
 
@@ -42,7 +42,6 @@ def search_page(review_id: UUID | None = None) -> None:
 
                 # Store in Supabase
                 results = repo.store_results(review_id, query, records)
-
                 st.success(f"Stored {len(results)} articles")
                 status.update(label="Search complete", state="complete")
 
@@ -55,6 +54,8 @@ def search_page(review_id: UUID | None = None) -> None:
     existing = repo.get_search_results(review_id)
     if not existing:
         return
+
+    st.session_state.pubmed_results = existing
 
     st.divider()
     df_data = [
@@ -78,7 +79,7 @@ def search_page(review_id: UUID | None = None) -> None:
         st.write(article.abstract)
 
 
-if "review_id" not in st.session_state:
+if "review" not in st.session_state:
     st.error("Please define a systematic review protocol first")
 else:
-    search_page(review_id=st.session_state.review_id)
+    search_page(review_id=st.session_state.review.id)

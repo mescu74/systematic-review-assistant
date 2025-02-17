@@ -38,43 +38,48 @@ def test_extract_article_info() -> None:
     """Test article info extraction."""
     # Mock article data
     article = {
-         "MedlineCitation": {
-             "PMID": "39826015",
-             "Article": {
-                 "ArticleTitle": "Progress report on multiple endocrine neoplasia type 1.",
-                 "Abstract": {
-                     "AbstractText": [
-                         "Multiple endocrine neoplasia type 1 (MEN1) syndrome is an ",
-                         "autosomal dominant disorder caused by a germline pathogenic ",
-                         "variant in the MEN1 tumor suppressor gene. Patients with MEN1 ",
-                         "have a high risk for primary hyperparathyroidism (PHPT) with a ",
-                         "penetrance of nearly 100%, pituitary adenomas (PitAd) in 40% of ",
-                         "patients, and neuroendocrine neoplasms (NEN) of the pancreas ",
-                         "with a mainline mortality of 40%...",
-                     ]
-                 },
-                 "Journal": {
-                     "Title": "Familial cancer",
-                 },
-                 "JournalIssue": {
-                     "PubDate": {
-                         "Year": "2024",
-                     },
-                 },
-             },
-         },
-         "PubmedData": {
-             "ArticleIdList": [ ],
-         },
-     }
+        "MedlineCitation": {
+            "PMID": "39826015",
+            "Article": {
+                "ArticleTitle": "Progress report on multiple endocrine neoplasia type 1.",
+                "Abstract": {
+                    "AbstractText": [
+                        "Multiple endocrine neoplasia type 1 (MEN1) syndrome is an ",
+                        "autosomal dominant disorder caused by a germline pathogenic ",
+                        "variant in the MEN1 tumor suppressor gene. Patients with MEN1 ",
+                        "have a high risk for primary hyperparathyroidism (PHPT) with a ",
+                        "penetrance of nearly 100%, pituitary adenomas (PitAd) in 40% of ",
+                        "patients, and neuroendocrine neoplasms (NEN) of the pancreas ",
+                        "with a mainline mortality of 40%...",
+                    ]
+                },
+                "Journal": {
+                    "Title": "Familial cancer",
+                },
+                "JournalIssue": {
+                    "PubDate": {
+                        "Year": "2024",
+                    },
+                },
+            },
+        },
+        "PubmedData": {
+            "ArticleIdList": [],
+        },
+    }
     info = extract_article_info(article)
 
     assert isinstance(info, dict)
     assert info["pmid"] == article["MedlineCitation"]["PMID"]
     assert info["title"] == article["MedlineCitation"]["Article"]["ArticleTitle"]
-    assert info["abstract"] == "".join(article["MedlineCitation"]["Article"]["Abstract"]["AbstractText"])
+    assert info["abstract"] == "".join(
+        article["MedlineCitation"]["Article"]["Abstract"]["AbstractText"]
+    )
     assert info["journal"] == article["MedlineCitation"]["Article"]["Journal"]["Title"]
-    assert info["year"] == article["MedlineCitation"]["Article"]["JournalIssue"]["PubDate"]["Year"]
+    assert (
+        info["year"]
+        == article["MedlineCitation"]["Article"]["JournalIssue"]["PubDate"]["Year"]
+    )
 
 
 @pytest.mark.integration

@@ -17,7 +17,12 @@ from sr_assistant.core.models import (
     PubMedResult,
     ScreenAbstractResultModel,
 )
-from sr_assistant.core.types import ScreeningDecisionType, ScreeningStrategyType
+from sr_assistant.core.types import (
+    ScreeningDecisionType,
+    ScreeningStrategyType
+)
+#from sr_assistant.app.database import session_factory # TODO: test this here?
+from sr_assistant.core.schemas import ExclusionReasons
 
 from sqlalchemy.schema import DropTable
 from sqlalchemy.ext.compiler import compiles
@@ -47,7 +52,16 @@ def _compile_drop_table(element: DropTable, compiler: t.Any, **kwargs: t.Any) ->
     return compiler.visit_drop_table(element)
 
 def cleanup_database(engine: sa.Engine, cleanup: bool = False) -> None:
-    """Drop all tables and custom types from the database."""
+    """Drop all tables and custom types from the database.
+
+    SQLmodel/SA doesn't seem to drop `sa.ENUM` types contrary to documentation, so we
+    just drop the ``public`` schema altogether.
+
+    Args:
+        engine (sa.Engine): SQLAlchemy engine to use for database operations.
+        cleanup (bool, optional): If True, drop and re-create 'public' schema. Defaults
+            to False which is a no-op.
+    """
     print(f"Dropping public schema with engine {engine!r}")
     if not cleanup:
         print("ERROR: cleanup_database called with cleanup=False, aborting")
@@ -187,11 +201,7 @@ def create_test_data(engine: sa.Engine) -> None:
             )
             screening_results.append(comprehensive)
 
-            # Store screening result IDs in PubMed result
-            #result.conservative_result_id = conservative.id
-            #result.comprehensive_result_id = comprehensive.id
-
-            screening_results.extend([conservative, comprehensive])
+            #screening_results.extend([conservative, comprehensive])
             screening_pairs.append((result, conservative.id, comprehensive.id))
 
         # Add screening results first
@@ -233,8 +243,5 @@ if __name__ == "__main__":
         cleanup_database(engine, cleanup)
     else:
         print("Running in non-cleanup mode")
-
-    if sys.argv[1] == "cleanup":
-        cleanup_database(engine)
 
     create_test_data(engine)

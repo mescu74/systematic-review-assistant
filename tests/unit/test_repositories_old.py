@@ -53,7 +53,9 @@ class MockSupabaseTable:
                 filtered_data = self.data
                 for field, value in self.conditions:
                     filtered_data = [
-                        item for item in filtered_data if str(item.get(field)) == str(value)
+                        item
+                        for item in filtered_data
+                        if str(item.get(field)) == str(value)
                     ]
                 if filtered_data:
                     for item in filtered_data:
@@ -201,4 +203,7 @@ def test_update_screening_result(repository):
     assert updated_result.confidence_score == updated_response.confidence_score
     assert updated_result.rationale == updated_response.rationale
     assert updated_result.extracted_quotes == updated_response.extracted_quotes
-    assert updated_result.exclusion_reason_categories == updated_response.exclusion_reason_categories
+    assert (
+        updated_result.exclusion_reason_categories
+        == updated_response.exclusion_reason_categories
+    )

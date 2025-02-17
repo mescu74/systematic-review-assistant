@@ -4,14 +4,69 @@ import os
 import re
 from logging.config import fileConfig
 from typing import NoReturn
+from urllib.parse import parse_qs, urlparse
 
 import sqlalchemy as sa
-from sqlalchemy import engine_from_config, pool, MetaData
+from dotenv import find_dotenv, load_dotenv
+from sqlalchemy import MetaData, engine_from_config, pool
 from sqlmodel import SQLModel
-
 from sr_assistant.core.models import *
 
 from alembic import context
+
+ENV_TO_DOTENV = {
+    "local": ".env.local",
+    "test": ".env.test",
+    "prototype": ".env",
+}
+
+
+def mask_pg_dsn(dsn: str) -> str:
+    """Mask sensitive parts of a PostgreSQL DSN.
+
+    Examples:
+        postgresql://user:pass@host/db?sslmode=verify-full
+        -> postgresql://****:****@host/db?sslmode=verify-full
+
+        postgresql://user:pass@host/db?password=secret&sslmode=verify-full
+        -> postgresql://****:****@host/db?password=****&sslmode=verify-full
+    """
+    if "://" in dsn:
+        parsed = urlparse(dsn)
+        # Start with scheme
+        masked = f"{parsed.scheme}://"
+
+        # Add masked credentials if present
+        if parsed.username or parsed.password:
+            masked += "****:****"
+        masked += f"@{parsed.hostname}"
+
+        # Add port if present
+        if parsed.port:
+            masked += f":{parsed.port}"
+
+        # Add path
+        masked += parsed.path
+
+        # Handle query params - mask sensitive ones
+        if parsed.query:
+            params = parse_qs(parsed.query)
+            masked_params = []
+            for k, v in params.items():
+                # Mask values of sensitive parameters
+                if k.lower() in {"password", "user", "username", "credentials"}:
+                    masked_params.append(f"{k}=****")
+                else:
+                    masked_params.append(f"{k}={v[0]}")
+            masked += "?" + "&".join(masked_params)
+
+        return masked
+    else:
+        # Handle key=value format
+        return re.sub(r"(user|password|username|credentials)=[^'\s&]+", r"\1=****", dsn)
+
+
+valid_envs = ENV_TO_DOTENV.keys()
 
 
 def die(msg: str) -> NoReturn:
@@ -19,31 +74,58 @@ def die(msg: str) -> NoReturn:
     raise SystemExit(msg)
 
 
-# Safety checks
-env = os.getenv("ENVIRONMENT")
-# note that prototype code uses "prod" for hosted Supabase, while GHA has a "prototype"
-# environment.
-valid_envs = ["CI", "local", "prototype", "dev", "staging", "prod"]
-direct_url: str = os.getenv("SRA_SUPABASE_DIRECT_URL", "")
-direct_url = direct_url.replace("%", "%%")
-
-if not direct_url:
-    die("SRA_SUPABASE_DIRECT_URL environment variable is required")
-
+env = os.getenv(
+    "ENVIRONMENT",
+    os.getenv("SRA_ENVIRONMENT", os.getenv("SRA_ENV", os.getenv("ENV", ""))),
+)
 if env not in valid_envs:
-    die(f"Unknown ENVIRONMENT: got {env!r}, want {valid_envs!r}")
+    die(f"Unknown (SRA_)ENVIRONMENT|(SRA_)ENV: got {env!r}, want {valid_envs!r}")
 
-if env not in ["prod", "prototype"]:
+print(f"env: {env!r}")
+env_file = find_dotenv(f"{ENV_TO_DOTENV[env]}")
+
+if not env_file:
+    die(f"missing .env file for env {env!r} (expected: {ENV_TO_DOTENV[env]})")
+
+print(f"loading {env_file!r}")
+load_dotenv(env_file, override=True)
+
+# Safety checks
+pg_dsn: str = os.getenv("SRA_DATABASE_URL", os.getenv("DATABASE_URL", ""))
+if not pg_dsn:
+    die("SRA_DATABASE_URL|DATABASE_URL environment variable is required")
+pg_dsn = pg_dsn.replace("%", "%%")
+masked_pg_dsn = mask_pg_dsn(pg_dsn)
+print(f"pg_dsn: {masked_pg_dsn}")
+
+if env in ["prototype"]:
     # Matches Supabase production database URL pattern
-    prod_pattern = r"db\.[a-z0-9-]+\.supabase\.co"
-    if re.search(prod_pattern, direct_url):
-        die(f"Production database URL detected but ENVIRONMENT is {env!r}")
+    prod_pattern = r"pooler.supabase\.com.*/postgres$"
+    if not re.search(prod_pattern, pg_dsn):
+        die(
+            f"ENVIRONMENT is {env!r} but production database URL not detected, got {masked_pg_dsn}, expected {prod_pattern}"
+        )
+    if not pg_dsn.startswith("postgresql+psycopg://"):
+        die(
+            f"env {env!r} pg_dsn does not start with 'postgresql+psycopg://', got {masked_pg_dsn}"
+        )
+elif env == "test":
+    # Matches Supabase test database URL pattern
+    test_pattern = r"pooler.supabase\.com.*/sra_integration_test.*"
+    if not re.search(test_pattern, pg_dsn):
+        die(
+            rf"ENVIRONMENT is '{env!r}' but test database URL not detected, got {masked_pg_dsn}, expected {test_pattern}"
+        )
+    if not pg_dsn.startswith("postgresql+psycopg://"):
+        die(
+            f"env {env!r} pg_dsn does not start with 'postgresql+psycopg://', got {masked_pg_dsn}"
+        )
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
 
-config.set_main_option("sqlalchemy.url", direct_url)
+config.set_main_option("sqlalchemy.url", pg_dsn)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

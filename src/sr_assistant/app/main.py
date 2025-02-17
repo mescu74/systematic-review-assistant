@@ -1,27 +1,38 @@
+# sr_assistant/app/main.py
 from __future__ import annotations
 
-import sys
-
-# HACK: streamlit hacks to make this work, otherwise the `app` pkg doesn't resolve
 # fmt: off
-from pathlib import Path
-
-sys.path.append(str(Path(__file__).parent.parent))
+#from pathlib import Path
+#
+#sys.path.append(str(Path(__file__).parent.parent))
 # fmt: on
-
 import streamlit as st
-from sqlalchemy.orm import sessionmaker
-from sqlmodel import Session as SQLModelSession
-from sqlmodel import create_engine
+from dotenv import find_dotenv, load_dotenv
+from loguru import logger
 from supabase import create_client
 
 # If done properly, the DI container would assemble and wire everything together
-from app.config import get_settings
+from sr_assistant.app.config import get_settings
 
 st.set_page_config(layout="wide")
 
+from sr_assistant.app.database import (  # noqa: E402 [page config has to come before]
+    asession_factory,
+    async_engine,
+    engine,
+    session_factory,
+)
+from sr_assistant.app.logging import configure_logging  # noqa: E402
 
-def main() -> None:
+load_dotenv(find_dotenv(), override=True)
+
+
+def main() -> None:  # noqa: C901
+    # this gets called on every rerun ...
+    if "logging_initialized" not in st.session_state:
+        configure_logging()
+        st.session_state.logging_initialized = True
+
     if "logged_in" not in st.session_state:
         st.session_state.logged_in = False
 
@@ -60,7 +71,7 @@ def main() -> None:
         icon=":material/search:",
     )
     abstracts_page = st.Page(
-        "pages/screening_abstracts.py",
+        "pages/screen_abstracts.py",
         title="Abstracts Screening",
         icon=":material/preview:",
     )
@@ -74,20 +85,22 @@ def main() -> None:
                 "Screening": [abstracts_page],
             }
         )
-        st.session_state.config = get_settings()
+        if "config" not in st.session_state:
+            st.session_state.config = get_settings()
         if "supabase" not in st.session_state:
             st.session_state.supabase = create_client(
                 supabase_url=st.session_state.config.SUPABASE_URL,
                 supabase_key=st.session_state.config.SUPABASE_KEY,
             )
         if "engine" not in st.session_state:
-            st.session_state.engine = create_engine(
-                str(st.session_state.config.DATABASE_URL)
-            )
+            st.session_state.engine = engine
+        if "async_engine" not in st.session_state:
+            st.session_state.async_engine = async_engine
         if "session_factory" not in st.session_state:
-            st.session_state.session_factory = sessionmaker(
-                class_=SQLModelSession, autoflush=False, bind=st.session_state.engine
-            )
+            st.session_state.session_factory = session_factory
+        if "asession_factory" not in st.session_state:
+            st.session_state.asession_factory = asession_factory
+        logger.info("main() initialized")
     else:
         pg = st.navigation([login_page])
 

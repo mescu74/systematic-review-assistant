@@ -96,16 +96,16 @@ class SystematicReview(SQLModelBase, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     created_at: datetime | None = Field(
         default=None,
-        description="Database generated UTC timestamp",
         sa_column=sa.Column(
             sa.DateTime(timezone=True),
             server_default=sa.text("TIMEZONE('UTC', CURRENT_TIMESTAMP)"),
             nullable=True,
         ),
     )
+    """Database generated UTC timestamp when `SystematicReview` was created."""
+
     updated_at: datetime | None = Field(
         default=None,
-        description="Database generated UTC timestamp",
         sa_column=sa.Column(
             sa.DateTime(timezone=True),
             server_default=sa.text("TIMEZONE('UTC', CURRENT_TIMESTAMP)"),
@@ -113,21 +113,25 @@ class SystematicReview(SQLModelBase, table=True):
             nullable=True,
         ),
     )
-    background: str | None = Field(
-        default=None,
-        description="Background context for the systematic review",
-        sa_column=sa.Column(sa.Text(), nullable=True),
+    """Database generated UTC timestamp when this `SystematicReview` was updated."""
+
+    background: str = Field(
+        default="",
+        sa_column=sa.Column(sa.Text()),
     )
+    """Background context for the systematic review."""
+
     research_question: str = Field(
-        description="The research question",
         sa_column=sa.Column(sa.Text(), nullable=False),
     )
+    """The research question."""
+
     # TODO: sort this out, update ui, these replace inclusion_criteria
     # This enum should have properties returning UI values and descriptions such that
     # a tabbed/selectbox form can be created dynamically, and preferably drafted by AI
     criteria_framework: CriteriaFramework | None = Field(
         default=None,
-        description="The inclusion/exclusion criteria framework",
+        description="The criteria framework.",
         sa_column=sa.Column(
             type_=sa_pg.ENUM(
                 CriteriaFramework,
@@ -135,14 +139,15 @@ class SystematicReview(SQLModelBase, table=True):
                 values_callable=enum_values,
             ),
             nullable=True,
-            index=True,
         ),
     )
+    """The criteria framework."""
+
     criteria_framework_answers: MutableMapping[str, JsonValue] = Field(
         default_factory=dict,
         sa_column=sa.Column(sa_pg.JSONB(none_as_null=True), nullable=False),
     )
-    """The answers to the inclusion/exclusion criteria framework"""
+    """Answers to the criteria framework."""
 
     inclusion_criteria: str = Field(
         description="Inclusion criteria. To be replaced by above framework fields.",
@@ -186,6 +191,9 @@ class PubMedResult(SQLModelBase, table=True):
     """PubMed search result.
 
     Stores both search info and result in one table for prototype simplicity.
+
+    Todo:
+        - Maybe strategies should be just enumrated to avoid hardcoding in schema?
     """
 
     _table_name: t.ClassVar[t.Literal["pubmed_results"]] = "pubmed_results"
@@ -195,16 +203,18 @@ class PubMedResult(SQLModelBase, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     created_at: datetime | None = Field(
         default=None,
-        description="Database generated UTC timestamp",
+        description="Database generated UTC timestamp when `PubMedResult` was created.",
         sa_column=sa.Column(
             sa.DateTime(timezone=True),
             server_default=sa.text("TIMEZONE('UTC', CURRENT_TIMESTAMP)"),
             nullable=True,
         ),
     )
+    """Database generated UTC timestamp when `PubMedResult` was created."""
+
     updated_at: datetime | None = Field(
         default=None,
-        description="Database generated UTC timestamp",
+        description="Database generated UTC timestamp when this `PubMedResult` was updated.",
         sa_column=sa.Column(
             sa.DateTime(timezone=True),
             server_default=sa.text("TIMEZONE('UTC', CURRENT_TIMESTAMP)"),
@@ -212,35 +222,50 @@ class PubMedResult(SQLModelBase, table=True):
             nullable=True,
         ),
     )
+    """Database generated UTC timestamp when this `PubMedResult` was updated."""
+
     query: str = Field(
         description="PubMed search query",
         title="Query",
         sa_column=sa.Column(sa.Text(), nullable=False),
         schema_extra={"example": "(cancer) AND (immunotherapy) AND (clinical trial)"},
     )
+    """PubMed search query."""
+
     # Article info
     pmid: str = Field(
         index=True,
         title="PMID",
         schema_extra={"example": "39844819"},
     )
+    """PubMed ID."""
+
     pmc: str | None = Field(
         default=None,
         title="PMC ID",
         schema_extra={"example": "PMC11753851"},
     )
+    """PubMed Central ID if available."""
+
     doi: str | None = Field(
         default=None,
         title="DOI",
         schema_extra={"example": "10.1155/jimr/5845167"},
     )
+    """Digital Object Identifier (DOI) if available."""
+
     title: str = Field(title="Title")
     abstract: str = Field(
         title="Abstract",
         sa_column=sa.Column(sa.Text(), nullable=False),
     )
+    """Abstract of the article."""
+
     journal: str = Field(title="Journal")
-    year: str = Field(title="Publishing Year")
+    """Journal of the article."""
+
+    year: str = Field(title="Year of publication")
+    """Year of publication."""
 
     # One PubMedResult belongs to one SystematicReview
     review_id: uuid.UUID = Field(
@@ -260,18 +285,19 @@ class PubMedResult(SQLModelBase, table=True):
         index=True,
         # sa_column=sa.Column(sa.UUID, sa.ForeignKey("screen_abstract_results.id"), index=True, nullable=True),
     )
-    comprehensive_result_id: uuid.UUID | None = Field(
-        default=None,
-        foreign_key="screen_abstract_results.id",
-        index=True,
-        # sa_column=sa.Column(sa.UUID, sa.ForeignKey("screen_abstract_results.id"), index=True, nullable=True),
-    )
     conservative_result: Mapped["ScreenAbstractResultModel"] = Relationship(
         sa_relationship_kwargs={
             "foreign_keys": "PubMedResult.conservative_result_id",
             "lazy": "selectin",
             "post_update": True,  # break the cycle
         }
+    )
+
+    comprehensive_result_id: uuid.UUID | None = Field(
+        default=None,
+        foreign_key="screen_abstract_results.id",
+        index=True,
+        # sa_column=sa.Column(sa.UUID, sa.ForeignKey("screen_abstract_results.id"), index=True, nullable=True),
     )
     comprehensive_result: Mapped["ScreenAbstractResultModel"] = Relationship(
         sa_relationship_kwargs={
@@ -338,7 +364,11 @@ class ScreenAbstractResultModel(SQLModelBase, table=True):
     decision: ScreeningDecisionType = Field(
         description="Whether to include or exclude the paper, or mark as uncertain",
         sa_column=sa.Column(
-            type_=sa_pg.ENUM(ScreeningDecisionType, values_callable=enum_values),
+            type_=sa_pg.ENUM(
+                ScreeningDecisionType,
+                name="screeningdecisiontype",
+                values_callable=enum_values,
+            ),
             nullable=False,
             index=True,
         ),
@@ -357,10 +387,10 @@ class ScreenAbstractResultModel(SQLModelBase, table=True):
         description="Supporting quotes from the title/abstract. Can be omitted if uncertain.",
         sa_column=sa.Column(sa_pg.ARRAY(sa.Text()), nullable=True),
     )
-    exclusion_reason_categories: ExclusionReasons | None = Field(
-        default=None,
+    exclusion_reason_categories: ExclusionReasons = Field(
+        default_factory=dict,
         description="The PRISMA exclusion reason categories for the decision. This complements the 'rationale' field.",
-        sa_column=sa.Column(sa_pg.JSONB(none_as_null=True), nullable=True, index=True),
+        sa_column=sa.Column(sa_pg.JSONB(none_as_null=True)),
     )
     # Injected fields
     trace_id: uuid.UUID | None = Field(
@@ -388,7 +418,11 @@ class ScreenAbstractResultModel(SQLModelBase, table=True):
     screening_strategy: ScreeningStrategyType = Field(
         description="Currently either 'compherensive' or 'conservative'. Maps to kind of prompt used.",
         sa_column=sa.Column(
-            type_=sa_pg.ENUM(ScreeningStrategyType, values_callable=enum_values),
+            type_=sa_pg.ENUM(
+                ScreeningStrategyType,
+                name="screeningstrategytype",
+                values_callable=enum_values,
+            ),
             nullable=False,
             index=True,
         ),
@@ -472,7 +506,7 @@ class LogRecord(SQLModel, table=True):
             index=True,
         ),
     )
-    message: str = Field(sa_column=sa.Column(sa.Text(), nullable=False, index=True))
+    message: str = Field(sa_column=sa.Column(sa.Text(), nullable=False))
     module: str | None = Field(
         default=None, sa_column=sa.Column(sa.String(100), default=None, nullable=True)
     )
@@ -518,25 +552,26 @@ class LogRecord(SQLModel, table=True):
         sa_relationship_kwargs={"lazy": "selectin"},
     )
 
-    @model_validator(mode="after")
-    def _set_review_id(self) -> t.Self:  # noqa: PLW0211 (not a static method ...)
-        review_id = self.extra.get("review_id")
-        if not ut.is_uuid(review_id) and ut.in_streamlit():
-            st_review_id = st.session_state.review_id
-            if not ut.is_uuid(st_review_id):
-                review_obj = st.session_state.review
-                if isinstance(review_obj, SystematicReview):
-                    review_id = review_obj.id
-        if (version := ut.is_uuid(review_id)) and version > 0 and version < 6:
-            review_id = t.cast((str | uuid.UUID), review_id)
-            self.review_id = (
-                review_id if not isinstance(review_id, str) else uuid.UUID(review_id)
-            )
-            logger.info(f"Setting review_id: {self.review_id}")
-        elif version == 6 and version <= 8:
-            review_id = t.cast((str | uuid6.UUID), review_id)
-            self.review_id = (
-                review_id if not isinstance(review_id, str) else uuid6.UUID(review_id)
-            )
-            logger.info(f"Setting review_id: {self.review_id}")
-        return self
+    # @model_validator(mode="after")
+    # def _set_review_id(self) -> t.Self:  # noqa: PLW0211 (not a static method ...)
+    #    if not self.review_id:
+    #        review_id = self.extra.get("review_id")
+    #        if not ut.is_uuid(review_id) and ut.in_streamlit():
+    #            st_review_id = st.session_state.review_id
+    #            if not ut.is_uuid(st_review_id):
+    #                review_obj = st.session_state.review
+    #                if isinstance(review_obj, SystematicReview):
+    #                    review_id = review_obj.id
+    #        if (version := ut.is_uuid(review_id)) and version > 0 and version < 6:
+    #            review_id = t.cast((str | uuid.UUID), review_id)
+    #            self.review_id = (
+    #                review_id if isinstance(review_id, uuid.UUID) else uuid.UUID(review_id)
+    #            )
+    #            logger.info(f"Setting review_id: {self.review_id}")
+    #        elif version == 6 and version <= 8:
+    #            review_id = t.cast((str | uuid6.UUID), review_id)
+    #            self.review_id = (
+    #                review_id if isinstance(review_id, uuid6.UUID) else uuid6.UUID(review_id)
+    #            )
+    #            logger.info(f"Setting review_id: {self.review_id}")
+    #    return self

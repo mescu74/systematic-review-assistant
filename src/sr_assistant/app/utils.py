@@ -7,15 +7,15 @@ The UUID7 type is defined in `sr_assistant.core.types`.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from zoneinfo import ZoneInfo
+import asyncio
 import typing as t
 import uuid
+from concurrent.futures.thread import ThreadPoolExecutor
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 import regex as re
-from pydantic import GetPydanticSchema
-from pydantic_core import core_schema
-from loguru import logger
+import streamlit as st
 import uuid6
 from langchain_core.runnables.config import (
     ContextThreadPoolExecutor,
@@ -24,74 +24,159 @@ from langchain_core.runnables.config import (
     ensure_config,
     get_async_callback_manager_for_config,
     get_callback_manager_for_config,
-    get_executor_for_config,
+    get_executor_for_config,  # TODO: reimplement with stconfig executor
     merge_configs,
     patch_config,
     run_in_executor,
 )
-import asyncio
-from concurrent import futures as cf
+from loguru import logger
+from pydantic import GetPydanticSchema
+from pydantic_core import core_schema
+from streamlit.runtime.scriptrunner_utils.script_run_context import (
+    ScriptRunContext,
+    add_script_run_ctx,
+    get_script_run_ctx,
+)
 
 
-"""ContextThreadPoolExecutor.
+class StContextThreadPoolExecutor(ContextThreadPoolExecutor):
+    """ThreadPoolExecutor that copies both contextvars and Streamlit context.
 
-ThreadPoolExecutor that copies the context to the child thread.
+    Wrapper around LangChain's ContextThreadPoolExecutor to add Streamlit context.
 
-Methods:
-    submit(func: Callable[..., T], *args: Any, **kwargs: Any) -> Future[T]:
-        Add a function to the executor.
+    See Also:
+        - `LangChain ContextThreadPoolExecutor <https://python.langchain.com/api_reference/_modules/langchain_core/runnables/config.html#ContextThreadPoolExecutor>`_
+        - `ThreadPoolExecutor https://docs.python.org/3/library/concurrent.futures.html#concurrent.futures.ThreadPoolExecutor`_
+        - `Executor <https://docs.python.org/3/library/concurrent.futures.html#concurrent.futures.Executor>`_
+    """
+
+    def __init__(
+        self,
+        max_workers: int | None = None,
+        thread_name_prefix: str = "",
+        *,
+        st_ctx: ScriptRunContext | None = None,
+    ) -> None:
+        """Initialize ThreadPoolExecutor with Streamlit context and contextvars.
 
         Args:
-            func (Callable[..., T]): The function to submit.
-            *args (Any): The positional arguments to the function.
-            **kwargs (Any): The keyword arguments to the function.
+            max_workers (int | None, optional): Maximum number of worker threads. Defaults to None.
+                If None, for >=3.8,<3.13 defaults to ``min(32, os.cpu_count() + 4)``,
+                for >=3.13 defaults to ``min(32, (os.process_cpu_count() or 1) + 4)``.
+            thread_name_prefix (str, optional): Prefix for thread names. Defaults to "".
+            st_ctx (st.ScriptRunContext | None, optional): Streamlit context.
+                Defaults to None. If None, uses the current thread's st context
+                (one running the executor) by invoking st helper get_script_run_ctx().
+        """
+        _st_ctx = st_ctx or get_script_run_ctx()
+        if _st_ctx is None:
+            logger.warning("No Streamlit context found")
+        super().__init__(
+            max_workers=max_workers,
+            thread_name_prefix=thread_name_prefix,
+            initializer=lambda: add_script_run_ctx(None, _st_ctx),
+        )
 
-        Returns:
-            Future[T]: The future for the function.
 
-    map(fn: Callable[..., T], *iterables: Iterable[Any], timeout: float | None = None, chunksize: int = 1) -> Iterator[T]:
-        Map a function to multiple iterables.
+class StThreadPoolExecutor(ThreadPoolExecutor):
+    """ThreadPoolExecutor that copies Streamlit context to threads.
+
+    To copy context vars as well, use `StContextThreadPoolExecutor`.
+
+    See Also:
+        - `ThreadPoolExecutor https://docs.python.org/3/library/concurrent.futures.html#concurrent.futures.ThreadPoolExecutor`_
+        - `Executor <https://docs.python.org/3/library/concurrent.futures.html#concurrent.futures.Executor>`_
+    """
+
+    def __init__(
+        self,
+        max_workers: int | None = None,
+        thread_name_prefix: str = "",
+        *,
+        st_ctx: ScriptRunContext | None = None,
+    ) -> None:
+        """Initialize ThreadPoolExecutor with Streamlit context.
 
         Args:
-            fn (Callable[..., T]): The function to map.
-            *iterables (Iterable[Any]): The iterables to map over.
-            timeout (float | None, optional): The timeout for the map.
+            max_workers (int | None, optional): Maximum number of worker threads.
                 Defaults to None.
-            chunksize (int, optional): The chunksize for the map. Defaults to 1.
+                If None, for >=3.8,<3.13 defaults to ``min(32, os.cpu_count() + 4)``,
+                for >=3.13 defaults to ``min(32, (os.process_cpu_count() or 1) + 4)``.
+            thread_name_prefix (str, optional): Prefix for thread names. Defaults to "".
+            st_ctx (st.ScriptRunContext | None, optional): Streamlit context.
+                Defaults to None. If None, uses the current thread's st context
+                (one running the executor) by invoking st helper get_script_run_ctx().
+        """
+        _st_ctx = st_ctx or get_script_run_ctx()
+        if _st_ctx is None:
+            logger.warning("No Streamlit context found")
+        super().__init__(
+            max_workers=max_workers,
+            thread_name_prefix=thread_name_prefix,
+            initializer=lambda: add_script_run_ctx(None, _st_ctx),
+        )
 
-        Returns:
-            Iterator[T]: The iterator for the mapped function.
-
-See `LangChain docs <https://python.langchain.com/api_reference/_modules/langchain_core/runnables/config.html#ContextThreadPoolExecutor>`_
-
-This is especially useful in Streamlit where the script thread is the only one supposed
-to invoke st APIs.
-"""
 
 def is_pmid(v: str) -> bool:
     return bool(re.match(r"^\d{1,8}$", v))
 
+
 def is_pmcid(v: str) -> bool:
     return bool(re.match(r"^PMC\d{1,8}$", v))
+
 
 def is_utc_datetime(dt: datetime) -> bool:
     return dt.tzinfo in (timezone.utc, ZoneInfo("UTC"))
 
+
 def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(tz=timezone.utc)
 
-def is_uuid(u: str | uuid.UUID | uuid6.UUID) -> bool:
-    """Check if input is a valid UUID."""
+
+def is_uuid(u: t.Any) -> uuid.UUID | uuid6.UUID | None:
+    """Check if input `u` is a valid UUID.
+
+    Supports v1-v8 UUIDs.
+
+    Args:
+        u (Any): The input to check.
+
+    Returns:
+        uuid.UUID | uuid6.UUID | None: UUID object if `u` is a valid UUID, None otherwise.
+    """
+    if isinstance(u, (uuid.UUID | uuid6.UUID)):
+        return u
     for c in (uuid.UUID, uuid6.UUID):
-        try:
-            c(u)
-            return True
-        except ValueError:
-            continue
-    return False
+        if isinstance(u, str):
+            try:
+                return c(hex=u)
+            except (ValueError, TypeError):
+                continue
+    return None
 
 
-def validate_uuid(val: t.Any, version: t.Literal[1, 3, 4, 5, 6, 7, 8]) -> uuid6.UUID|uuid.UUID:
+def in_streamlit() -> bool:
+    return bool(get_script_run_ctx(suppress_warning=True))
+
+
+def init_state_key(key: str, value: t.Any) -> t.Any:
+    """Initialize a session state key with the given value if it doesn't exist.
+
+    Args:
+        key: The key to initialize.
+        value: The value to initialize the key with.
+
+    Returns:
+        The value of st.session_state[key] regardless if it was initialized or not.
+    """
+    if key not in st.session_state:
+        st.session_state[key] = value
+    return st.session_state[key]
+
+
+def validate_uuid(
+    val: t.Any, version: t.Literal[1, 3, 4, 5, 6, 7, 8]
+) -> uuid6.UUID | uuid.UUID:
     """Validate a UUID against given version: 1, 3, 4, 5, 6, 7, 8.
 
     Args:

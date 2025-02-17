@@ -16,7 +16,7 @@ bootstrap:  ## How to install the `uv` project managent tool
 	@echo
 	@echo "Or go container:  docker run ghcr.io/astral-sh/uv ..."
 
-python.insall: ## Install project local Python managed by uv
+python.install: ## Install project local Python managed by uv
 	uv python install
 
 python.list: ## Show Python versions available with uv
@@ -32,11 +32,14 @@ deno.cli: ## Install Deno CLI, required by the VSCode extension used to develop 
 	deno --version
 	@echo "Install the deno vscode extension (canary), use the egde-functions workspace"
 
-install: python ## Install all dependencies for development
+install: python.install ## Install all dependencies for development
 	uv sync
 	uv run pre-commit install
 	uv run pre-commit install --hook-type pre-push
 	@echo "If needed, also run 'make deno.cli' if developing edge functions"
+
+run: install  ## Run the development server
+	uv run streamlit run ./src/sr_assistant/app/main.py
 
 format:  ## Format and fix code with ruff
 	uv run ruff format

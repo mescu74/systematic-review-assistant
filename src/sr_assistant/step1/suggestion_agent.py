@@ -5,7 +5,7 @@ Needs a rewrite.
 
 from __future__ import annotations
 
-from typing import cast, TYPE_CHECKING
+from typing import cast
 
 import uuid6
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
@@ -17,9 +17,7 @@ from langgraph.graph.message import MessagesState
 from langgraph.graph.state import CompiledStateGraph, StateGraph
 from loguru import logger
 
-
-if TYPE_CHECKING:
-    from sr_assistant.core.models import Review
+from sr_assistant.core.models import SystematicReview
 
 
 class SuggestionAgent:
@@ -65,13 +63,13 @@ class SuggestionAgent:
             recursion_limit=1000, configurable={"thread_id": criteria_agent_thread_id}
         )
 
-    def get_suggestions(self, review: Review) -> str:
+    def get_suggestions(self, review: SystematicReview) -> str:
         """Get suggestions for the given criteria."""
         prompt = f"""\
         The user provided the following systematic review protocol:
 
         Background: {review.background}
-        Research Question: {review.question}
+        Research Question: {review.research_question}
         Inclusion Criteria: {review.inclusion_criteria}
         Exclusion Criteria: {review.exclusion_criteria}
 

@@ -31,12 +31,14 @@ type PMID = t.Annotated[
     at.Predicate(u.is_pmid),
     at.MinLen(1),
     at.MaxLen(8),
-    WithJsonSchema({
-        "type": "string",
-        "pattern": r"^\d{1,8}$",
-        "description": "PubMed ID (PMID) - 1 to 8 digits",
-        "examples": ["123456", "12345678"]
-    })
+    WithJsonSchema(
+        {
+            "type": "string",
+            "pattern": r"^\d{1,8}$",
+            "description": "PubMed ID (PMID) - 1 to 8 digits",
+            "examples": ["123456", "12345678"],
+        }
+    ),
 ]
 """PubMed ID (PMID) - 1 to 8 digits."""
 
@@ -45,12 +47,14 @@ type PMCID = t.Annotated[
     at.Predicate(u.is_pmcid),
     at.MinLen(4),
     at.MaxLen(11),
-    WithJsonSchema({
-        "type": "string",
-        "pattern": r"^PMC\d{1,8}$",
-        "description": "PubMed Central ID (PMCID) - PMC followed by 1 to 8 digits",
-        "examples": ["PMC123456", "PMC12345678"]
-    })
+    WithJsonSchema(
+        {
+            "type": "string",
+            "pattern": r"^PMC\d{1,8}$",
+            "description": "PubMed Central ID (PMCID) - PMC followed by 1 to 8 digits",
+            "examples": ["PMC123456", "PMC12345678"],
+        }
+    ),
 ]
 """PubMed Central ID (PMCID) - PMC followed by 1 to 8 digits."""
 
@@ -93,6 +97,7 @@ type UUID7 = t.Annotated[
 Don't remember where this is from. A GitHub issue comment.
 - Could be improved with validators and maybe using TypeAdapter:
 ``TypeAdapter(UUID7).validate_python(input)"""
+
 
 class ScreeningDecisionType(StrEnum):
     """Screening decision enum type.
@@ -2738,67 +2743,101 @@ class SearchPrecision(StrEnum):
         return docs[self]
 
 
+class CriteriaFramework(StrEnum):
+    """Inclusion criteria framework type.
+
+    Todo:
+        - Gen descriptions, questions, etc. as properties
+
+    Attributes:
+        ECLIPSE (str): ECLIPSE
+        PEO (str): PEO
+        PICO (str): PICO
+        PICOS (str): PICOS
+        PICOT (str): PICOT
+        PICOS_T (str): PICOS/T
+        SPIDER (str): SPIDER
+        SPICE (str): SPICE
+    """
+
+    def __new__(cls, value: str) -> t.Self:  # noqa: D102 (missing docstring)
+        self = str.__new__(cls, value)
+        self._value_ = value.upper()
+        if value == "picos_t":
+            self._value_ = "PICOS/T"
+        return self
+
+    ECLIPSE = auto()
+    PEO = auto()
+    PICO = auto()
+    PICOS = auto()
+    PICOT = auto()
+    PICOS_T = auto()
+    SPIDER = auto()
+    SPICE = auto()
+
+
 """Exclusion categories."""
 
 type ComparisonExclusionReason = Literal[
-        "Inappropriate control group",
-        "Missing baseline data",
-        "Incorrect comparator",
-        "Inadequate randomization method",
-        "Insufficient blinding procedure",
-        "Inappropriate crossover design",
-    ]
+    "Inappropriate control group",
+    "Missing baseline data",
+    "Incorrect comparator",
+    "Inadequate randomization method",
+    "Insufficient blinding procedure",
+    "Inappropriate crossover design",
+]
 
 type InterventionExclusionReason = Literal[
-        "Intervention timing does not match criteria",
-        "Dosage outside specified range",
-        "Incorrect delivery or administration method",
-        "Protocol deviation from inclusion criteria",
-        "Excluded intervention combination",
-        "Intervention duration outside criteria",
-    ]
+    "Intervention timing does not match criteria",
+    "Dosage outside specified range",
+    "Incorrect delivery or administration method",
+    "Protocol deviation from inclusion criteria",
+    "Excluded intervention combination",
+    "Intervention duration outside criteria",
+]
 
 type OutcomeExclusionReason = Literal[
-        "Invalid outcome measurement method",
-        "Incorrect measurement timepoint",
-        "Inappropriate outcome metric",
-        "Incomplete outcome reporting",
-        "Invalid surrogate endpoint",
-        "Insufficient follow-up period",
-    ]
+    "Invalid outcome measurement method",
+    "Incorrect measurement timepoint",
+    "Inappropriate outcome metric",
+    "Incomplete outcome reporting",
+    "Invalid surrogate endpoint",
+    "Insufficient follow-up period",
+]
 
 type PopulationExclusionReason = Literal[
-        "Wrong age range for inclusion criteria",
-        "Non-human subjects",
-        "Condition or disease mismatch",
-        "Excluded comorbidity present",
-        "Demographics outside criteria",
-        "Inappropriate study setting",
-    ]
+    "Wrong age range for inclusion criteria",
+    "Non-human subjects",
+    "Condition or disease mismatch",
+    "Excluded comorbidity present",
+    "Demographics outside criteria",
+    "Inappropriate study setting",
+]
 
 type ReportingExclusionReason = Literal[
-        "Non-included language",
-        "Duplicate publication",
-        "Outside date range",
-        "Not peer-reviewed",
-        "Retracted publication",
-        "Pre-print publication",
-    ]
+    "Non-included language",
+    "Duplicate publication",
+    "Outside date range",
+    "Not peer-reviewed",
+    "Retracted publication",
+    "Pre-print publication",
+]
 
 
 type StudyDesignExclusionReason = Literal[
-        "Wrong study design type",
-        "Sample size below requirement",
-        "Study duration too short",
-        "Ethical concerns identified",
-        "Major protocol violations",
-        "Study not pre-registered",
-    ]
-import enum
+    "Wrong study design type",
+    "Sample size below requirement",
+    "Study duration too short",
+    "Ethical concerns identified",
+    "Major protocol violations",
+    "Study not pre-registered",
+]
 
 
 class ScreeningStrategyType(StrEnum):
     """Maps to the type of prompt used. See app/agents.py comments."""
+
     CONSERVATIVE = auto()
     COMPREHENSIVE = auto()
 
@@ -2816,16 +2855,16 @@ class LogLevel(StrEnum):
         CRITICAL | critical (str|int): CRITICAL | 50
 
     Examples:
-        >>> LogLevel.INFO).int
+        >>> LogLevel.INFO.int
         ... 30
-        >>> Logger.error("...")
-        >>> list(Logger)
-        ... ['TRACE', 'DEBUG', 'INFO', 'SUCCESS', 'WARNING', 'ERROR', 'CRITICAL']
+        >>> list(LogLevel.__members__)
+        ... ["TRACE", "DEBUG", "INFO", "SUCCESS", "WARNING", "ERROR", "CRITICAL"]
     """
-    def __new__(cls, value: str, level: int, *args: t.Any) -> t.Self:
+
+    def __new__(cls, value: str, level_int: int, *args: t.Any) -> t.Self:
         self = str.__new__(cls, [value])
         self._value_ = value.upper()
-        self.num = level
+        self.int = level_int
         return self
 
     def __init__(self, *args: t.Any) -> None:

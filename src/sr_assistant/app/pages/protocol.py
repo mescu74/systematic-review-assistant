@@ -1,15 +1,17 @@
 from __future__ import annotations
 
-import json
 import uuid
+from datetime import datetime, timezone
 from typing import cast
 
 import streamlit as st
 from dotenv import find_dotenv, load_dotenv
 from langchain_core.runnables import RunnableConfig
-from supabase import Client
+from loguru import logger
+from sqlmodel import select
+from streamlit.delta_generator import DeltaGenerator
 
-from sr_assistant.core.models import Review
+from sr_assistant.core.models import SystematicReview
 from sr_assistant.step1.suggestion_agent import SuggestionAgent
 
 load_dotenv(find_dotenv())
@@ -31,8 +33,48 @@ def init_suggestion_agent() -> SuggestionAgent:
     return SuggestionAgent(model="gpt-4o", temperature=0.0)
 
 
+@logger.catch(Exception, message="Error building review model")
+def build_review_model(response_widget: DeltaGenerator) -> SystematicReview:
+    review = SystematicReview(
+        id=st.session_state.review_id,
+        background=st.session_state.background,
+        research_question=st.session_state.research_question,
+        inclusion_criteria=st.session_state.inclusion_criteria,
+        exclusion_criteria=st.session_state.exclusion_criteria,
+    )
+    response_widget.success("SystematicReview model built successfully")
+    return review
+
+
+def persist_review(model: SystematicReview) -> SystematicReview:
+    with st.session_state.session_factory() as session:
+        # Check if record exists in DB
+        stmt = select(SystematicReview).where(SystematicReview.id == model.id)
+        db_model = session.exec(stmt).first()
+
+        if db_model:
+            # Update existing record
+            db_model.background = model.background
+            db_model.research_question = model.research_question
+            db_model.inclusion_criteria = model.inclusion_criteria
+            db_model.exclusion_criteria = model.exclusion_criteria
+            persisted_model = db_model
+        else:
+            # Add as new record
+            session.add(model)
+            persisted_model = model
+
+        session.commit()
+        session.refresh(persisted_model)
+        return persisted_model
+
+
+if "review_status" not in st.session_state:
+    st.session_state["review_status"] = "draft"
+
 # Set up page
 st.title("Define Research Question & Criteria")
+st.write("Review status: ", st.session_state.review_status)
 
 # Initialize session state variables
 # HACK: This should come from the Review model, but because of streamlit and needing to
@@ -41,8 +83,8 @@ if "review_id" not in st.session_state:
     st.session_state["review_id"] = uuid.uuid4()
 if "background" not in st.session_state:
     st.session_state["background"] = ""
-if "question" not in st.session_state:
-    st.session_state["question"] = ""
+if "research_question" not in st.session_state:
+    st.session_state["research_question"] = ""
 if "inclusion_criteria" not in st.session_state:
     st.session_state["inclusion_criteria"] = ""
 if "exclusion_criteria" not in st.session_state:
@@ -56,6 +98,8 @@ if "suggestions_agent" not in st.session_state:
 col1, col2 = st.columns(2)
 
 with col1:
+    notification_widget = st.empty()
+    review_model_widget = st.empty()
     st.write("TODO: PICO(T/S), FINER, chat, ...")
     st.subheader("Define Your Protocol")
     st.session_state.background = st.text_area(
@@ -70,9 +114,9 @@ with col1:
 
     # NOTE: In order for the text fields to retain content when navigating between pages,
     # we can't set the key but have to assing the widget to state (for some reason).
-    st.session_state.question = st.text_area(
+    st.session_state.research_question = st.text_area(
         label="Research Question",
-        value=st.session_state.question,
+        value=st.session_state.research_question,
         # key="question",
         placeholder="E.g. 'Does intervention X improve outcome Y in population Z?'",
     )
@@ -100,6 +144,7 @@ with col1:
 
 with col2:
     st.subheader("LLM Suggestions")
+    suggestions_spinner = st.empty()
     if st.session_state["llm_suggestions"]:
         st.markdown(st.session_state["llm_suggestions"])
     else:
@@ -107,45 +152,44 @@ with col2:
 
 # LLM Interaction
 if validate_button:
-    review = Review(
-        id=st.session_state.review_id,
-        background=st.session_state.background,
-        question=st.session_state.question,
-        inclusion_criteria=st.session_state.inclusion_criteria,
-        exclusion_criteria=st.session_state.exclusion_criteria,
-    )
-    st.session_state.review = review
-    st.session_state["llm_suggestions"] = st.session_state[
-        "suggestions_agent"
-    ].get_suggestions(review)
-    st.rerun()
+    with suggestions_spinner.container():
+        st.info("Validating ...")
+        review = build_review_model(review_model_widget)
+        with st.spinner():
+            st.session_state["llm_suggestions"] = st.session_state[
+                "suggestions_agent"
+            ].get_suggestions(review)
+            st.rerun()
 
-st.subheader("Finalize & Save")
+st.subheader("Save Protocol")
 st.write(
     "Once you are happy with the question and criteria, click the 'Save Protocol' button."
 )
 
-save_button = st.button("Save Protocol")
-# TODO: support updates
-if save_button:
-    if "review" not in st.session_state:
-        st.session_state.review = Review(
-            id=st.session_state.review_id,
-            background=st.session_state.background,
-            question=st.session_state.question,
-            inclusion_criteria=st.session_state.inclusion_criteria,
-            exclusion_criteria=st.session_state.exclusion_criteria,
-        )
-    review = st.session_state.review
-    supabase: Client = st.session_state.supabase
-    # handle UUIDs, let Supabase be source for time
-    # TODO: this should be a repository concern
-    payload = json.loads(review.model_dump_json(exclude={"created_at", "updated_at"}))
-    # TODO: handle updates/upsert
-    ret = supabase.table("reviews").insert(payload).execute()
-    saved_review = Review.model_validate(ret.data[0])
-    st.session_state.review = saved_review
 
-    st.success("Criteria saved")
-    # we get int overflows if using the model directly
-    st.json(json.loads(st.session_state.review.model_dump_json()))
+if st.button("Save Protocol"):
+    if not st.session_state.research_question:
+        notification_widget.warning("Please define a research question")
+        st.stop()
+    elif not st.session_state.inclusion_criteria:
+        notification_widget.warning("Please define inclusion criteria")
+        st.stop()
+    elif not st.session_state.exclusion_criteria:
+        notification_widget.warning("Please define exclusion criteria")
+        st.stop()
+    else:
+        review = build_review_model(review_model_widget)
+        if not review:
+            st.session_state.review_status = "validation error"
+            st.rerun()
+        st.session_state.review = review
+        st.session_state.review_status = f"saved at {datetime.now(tz=timezone.utc)}"
+
+        with st.status("Saving protocol to database ...", expanded=True):
+            review = persist_review(review)
+            st.session_state.review = review
+            st.write(
+                "Saved protocol to database, review status: ",
+                st.session_state.review_status,
+            )
+            st.json(review.model_dump(mode="json"))
