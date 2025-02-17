@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import streamlit as st
-from llama_index_integration import build_llama_index_from_pubmed
-from logger import log_pubmed_search
-from pubmed_integration import pubmed_fetch_details, pubmed_search
+from loguru import logger
+
+from step2.llama_index_integration import build_llama_index_from_pubmed
+from step2.logger import log_pubmed_search
+from step2.pubmed_integration import pubmed_fetch_details, pubmed_search
 
 
 def run_step2_search_and_index() -> None:
@@ -48,6 +50,7 @@ def run_step2_search_and_index() -> None:
         # Fetch details
         pubmed_records = pubmed_fetch_details(pmid_list)
         st.write(f"Fetched details for {len(pubmed_records)} records.")
+        logger.debug("Fetched details: {!r}", pubmed_records)
 
         # Build LlamaIndex
         index = build_llama_index_from_pubmed(

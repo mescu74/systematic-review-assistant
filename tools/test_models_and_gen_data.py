@@ -1,0 +1,247 @@
+"""Generate test data for systematic review database using SQLModel."""
+
+import os
+import sys
+from datetime import UTC, datetime
+import typing as t
+import uuid
+import argparse
+
+from sqlmodel import Session, SQLModel, create_engine, select, col
+import sqlalchemy as sa
+import sqlalchemy.dialects.postgresql as sa_pg
+from dotenv import load_dotenv
+
+from sr_assistant.core.models import (
+    SystematicReview,
+    PubMedResult,
+    ScreenAbstractResultModel,
+)
+from sr_assistant.core.types import (
+    ScreeningDecisionType,
+    ScreeningStrategyType
+)
+#from sr_assistant.app.database import session_factory # TODO: test this here?
+from sr_assistant.core.schemas import ExclusionReasons
+
+from sqlalchemy.schema import DropTable
+from sqlalchemy.ext.compiler import compiles
+
+cleanup = False
+
+def confirm_database_drop(engine: sa.Engine) -> bool:
+    """Confirm database drop with user."""
+    url = engine.url
+    print(f"\nWARNING: About to drop all tables in database:")
+    print(f"Database: {url.database}")
+    print(f"Host: {url.host}")
+    print(f"User: {url.username}")
+
+    while True:
+        response = input("\nDo you want to proceed? [y/N] ").lower().strip()
+        if response in {'y', 'yes'}:
+            return True
+        if response in {'n', 'no', ''}:  # Empty response counts as no
+            return False
+        print("Please answer 'y' or 'n'")
+
+@compiles(DropTable, "postgresql")
+def _compile_drop_table(element: DropTable, compiler: t.Any, **kwargs: t.Any) -> str:
+    if cleanup:
+        return compiler.visit_drop_table(element) + " CASCADE"
+    return compiler.visit_drop_table(element)
+
+def cleanup_database(engine: sa.Engine, cleanup: bool = False) -> None:
+    """Drop all tables and custom types from the database.
+
+    SQLmodel/SA doesn't seem to drop `sa.ENUM` types contrary to documentation, so we
+    just drop the ``public`` schema altogether.
+
+    Args:
+        engine (sa.Engine): SQLAlchemy engine to use for database operations.
+        cleanup (bool, optional): If True, drop and re-create 'public' schema. Defaults
+            to False which is a no-op.
+    """
+    print(f"Dropping public schema with engine {engine!r}")
+    if not cleanup:
+        print("ERROR: cleanup_database called with cleanup=False, aborting")
+        return
+
+    with engine.connect() as conn:
+        conn.execute(sa.text("""
+            DROP SCHEMA public CASCADE;
+            CREATE SCHEMA public;
+            GRANT ALL ON SCHEMA public TO postgres;
+            GRANT ALL ON SCHEMA public TO public;
+        """))
+        conn.commit()
+        SQLModel.metadata.drop_all(engine) # make sqlmodel/sa aware of drops
+        #else:
+        #    try:
+        #        # Disable foreign key checks
+        #        conn.execute(text("SET session_replication_role = 'replica';"))
+
+        #        # Regular SQLModel cleanup
+        #        SQLModel.metadata.drop_all(engine)
+
+        #        # Find and drop custom types
+        #        custom_types_query = text("""
+        #            SELECT t.typname
+        #            FROM pg_type t
+        #            JOIN pg_catalog.pg_namespace n ON n.oid = t.typnamespace
+        #            WHERE n.nspname = 'public'
+        #            AND t.typtype = 'e';  -- 'e' for enum types
+        #        """)
+
+        #        result = conn.execute(custom_types_query)
+        #        custom_types = result.fetchall()
+
+        #        for type_row in custom_types:
+        #            type_name = type_row[0]
+        #            conn.execute(text(f'DROP TYPE IF EXISTS "{type_name}" CASCADE;'))
+
+        #        conn.commit()
+        #    finally:
+        #        # Always re-enable foreign key checks
+        #        conn.execute(text("SET session_replication_role = 'origin';"))
+        #        conn.commit()
+
+def create_test_data(engine: sa.Engine) -> None:
+    """Create test data in database.
+
+    Creates reviews, PubMed results, and screening results with proper relationships.
+    Uses SQLModel for clean, type-safe database operations.
+    """
+
+    SQLModel.metadata.create_all(engine)
+
+    with Session(engine) as session:
+        # Create reviews
+        reviews = [
+            SystematicReview(
+                id=uuid.uuid4(),
+                background="Test background for systematic review on cancer treatment",
+                research_question="What is the efficacy of immunotherapy in treating melanoma?",
+                inclusion_criteria="RCTs studying immunotherapy in melanoma patients",
+                exclusion_criteria="Non-RCT studies, non-melanoma cancers",
+            ),
+            SystematicReview(
+                id=uuid.uuid4(),
+                background="COVID-19 vaccine effectiveness study",
+                research_question="How effective are mRNA vaccines against COVID-19 variants?",
+                inclusion_criteria="Clinical trials of mRNA vaccines",
+                exclusion_criteria="Non-clinical studies, non-mRNA vaccines",
+            ),
+        ]
+        # Add and commit reviews
+        session.add_all(reviews)
+        session.commit()
+
+        # Create PubMed results for each review
+        pubmed_results = []
+        for review in reviews:
+            for i in range(5):
+                result = PubMedResult(
+                    id=uuid.uuid4(),
+                    review_id=review.id,
+                    query=f"Test query for {review.research_question}",
+                    pmid=f"PMD{i+1}",
+                    pmc=f"PMC00{i+1}",
+                    doi=f"10.1000/test.{i+1}",
+                    title=f"Test Article {i+1} for Review {review.id}",
+                    abstract=f"This is a test abstract for article {i+1}",
+                    journal=f"Test Journal {i+1}",
+                    year=str(2020 + i),
+                )
+                pubmed_results.append(result)
+
+        # Add and commit PubMed results
+        session.add_all(pubmed_results)
+        session.commit()
+
+        # Create screening results for each PubMed result
+        screening_results = []
+        screening_pairs = []  # Store pairs for later FK update
+        for result in pubmed_results:
+            trace_id = uuid.uuid4()
+
+            # Conservative screening
+            conservative = ScreenAbstractResultModel(
+                id=uuid.uuid4(),
+                review_id=result.review_id,
+                pubmed_result_id=result.id,
+                trace_id=trace_id,
+                decision=ScreeningDecisionType.INCLUDE if result.year > "2022" else ScreeningDecisionType.EXCLUDE,
+                confidence_score=0.85,
+                rationale="Test rationale for conservative screening",
+                extracted_quotes=["Test quote 1", "Test quote 2"],
+                screening_strategy=ScreeningStrategyType.CONSERVATIVE,
+                model_name="test-model",
+                start_time=datetime.now(UTC),
+                end_time=datetime.now(UTC),
+                response_metadata={"test": "metadata"},
+            )
+            screening_results.append(conservative)
+
+            # Comprehensive screening
+            comprehensive = ScreenAbstractResultModel(
+                id=uuid.uuid4(),
+                review_id=result.review_id,
+                pubmed_result_id=result.id,
+                trace_id=trace_id,
+                decision=ScreeningDecisionType.INCLUDE,
+                confidence_score=0.75,
+                rationale="Test rationale for comprehensive screening",
+                extracted_quotes=["Test quote 3", "Test quote 4"],
+                screening_strategy=ScreeningStrategyType.COMPREHENSIVE,
+                model_name="test-model",
+                start_time=datetime.now(UTC),
+                end_time=datetime.now(UTC),
+                response_metadata={"test": "metadata"},
+            )
+            screening_results.append(comprehensive)
+
+            #screening_results.extend([conservative, comprehensive])
+            screening_pairs.append((result, conservative.id, comprehensive.id))
+
+        # Add screening results first
+        session.add_all(screening_results)
+        session.commit()
+
+         # Now update PubMed results with the committed screening result IDs
+        for result, cons_id, comp_id in screening_pairs:
+            result.conservative_result_id = cons_id
+            result.comprehensive_result_id = comp_id
+        session.commit()
+
+        # Verify results using SQLModel select
+        stmt = select(ScreenAbstractResultModel).order_by(col(ScreenAbstractResultModel.created_at))
+        results = session.exec(stmt).all()
+        print(f"Created {len(results)} screening results")
+        for result in results:
+            print(f"- {result.created_at} {result.screening_strategy}: {result.decision} ({result.confidence_score})")
+
+if __name__ == "__main__":
+    load_dotenv(".env.test", override=True)
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--cleanup", action="store_true", help="Drop all tables and enum types before creating test data")
+    args = parser.parse_args()
+
+    # Set the global flag based on the argument
+    cleanup = args.cleanup
+
+    db_url = os.getenv("SRA_DATABASE_URL", os.getenv("DATABASE_URL", ""))
+    if "sra_integration_test" not in db_url:
+        print("Error: (SRA_)|DATABASE_URL must be set to integration test database")
+        exit(1)
+
+    engine = create_engine(db_url, echo=True)
+
+    if cleanup := confirm_database_drop(engine=engine):
+        print("Running in cleanup mode")
+        cleanup_database(engine, cleanup)
+    else:
+        print("Running in non-cleanup mode")
+
+    create_test_data(engine)

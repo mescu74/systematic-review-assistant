@@ -1,0 +1,1757 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "PubmedArticleSet": {
+      "$ref": "#/definitions/PubmedArticleSet"
+    }
+  },
+  "required": ["PubmedArticleSet"],
+  "definitions": {
+    "PubmedArticleSet": {
+      "type": "object",
+      "properties": {
+        "PubmedArticle": {
+          "$ref": "#/definitions/PubmedArticle"
+        },
+        "PubmedBookArticle": {
+          "$ref": "#/definitions/PubmedBookArticle"
+        }
+      },
+      "required": ["PubmedArticle", "PubmedBookArticle"]
+    },
+    "BookDocumentSet": {
+      "type": "object",
+      "properties": {
+        "BookDocument": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/BookDocument"
+          }
+        },
+        "DeleteDocument": {
+          "$ref": "#/definitions/DeleteDocument"
+        }
+      }
+    },
+    "PubmedBookArticleSet": {
+      "type": "object",
+      "properties": {
+        "PubmedBookArticle": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/PubmedBookArticle"
+          }
+        }
+      }
+    },
+    "PubmedArticle": {
+      "type": "object",
+      "properties": {
+        "MedlineCitation": {
+          "$ref": "#/definitions/MedlineCitation"
+        },
+        "PubmedData": {
+          "$ref": "#/definitions/PubmedData"
+        }
+      },
+      "required": ["MedlineCitation"]
+    },
+    "PubmedBookArticle": {
+      "type": "object",
+      "properties": {
+        "BookDocument": {
+          "$ref": "#/definitions/BookDocument"
+        },
+        "PubmedBookData": {
+          "$ref": "#/definitions/PubmedBookData"
+        }
+      },
+      "required": ["BookDocument"]
+    },
+    "BookDocument": {
+      "type": "object",
+      "properties": {
+        "PMID": {
+          "$ref": "#/definitions/PMID"
+        },
+        "ArticleIdList": {
+          "$ref": "#/definitions/ArticleIdList"
+        },
+        "Book": {
+          "$ref": "#/definitions/Book"
+        },
+        "LocationLabel": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/LocationLabel"
+          }
+        },
+        "ArticleTitle": {
+          "$ref": "#/definitions/ArticleTitle"
+        },
+        "VernacularTitle": {
+          "$ref": "#/definitions/VernacularTitle"
+        },
+        "Pagination": {
+          "$ref": "#/definitions/Pagination"
+        },
+        "Language": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Language"
+          }
+        },
+        "AuthorList": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/AuthorList"
+          }
+        },
+        "InvestigatorList": {
+          "$ref": "#/definitions/InvestigatorList"
+        },
+        "PublicationType": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/PublicationType"
+          }
+        },
+        "Abstract": {
+          "$ref": "#/definitions/Abstract"
+        },
+        "Sections": {
+          "$ref": "#/definitions/Sections"
+        },
+        "KeywordList": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/KeywordList"
+          }
+        },
+        "ContributionDate": {
+          "$ref": "#/definitions/ContributionDate"
+        },
+        "DateRevised": {
+          "$ref": "#/definitions/DateRevised"
+        },
+        "GrantList": {
+          "$ref": "#/definitions/GrantList"
+        },
+        "ItemList": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ItemList"
+          }
+        },
+        "ReferenceList": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ReferenceList"
+          }
+        }
+      },
+      "required": ["PMID", "ArticleIdList", "Book"]
+    },
+    "DeleteCitation": {
+      "type": "object",
+      "properties": {
+        "PMID": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/PMID"
+          }
+        }
+      },
+      "required": ["PMID"]
+    },
+    "DeleteDocument": {
+      "type": "object",
+      "properties": {
+        "PMID": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/PMID"
+          }
+        }
+      }
+    },
+    "MedlineCitation": {
+      "type": "object",
+      "properties": {
+        "PMID": {
+          "$ref": "#/definitions/PMID"
+        },
+        "DateCompleted": {
+          "$ref": "#/definitions/DateCompleted"
+        },
+        "DateRevised": {
+          "$ref": "#/definitions/DateRevised"
+        },
+        "Article": {
+          "$ref": "#/definitions/Article"
+        },
+        "MedlineJournalInfo": {
+          "$ref": "#/definitions/MedlineJournalInfo"
+        },
+        "ChemicalList": {
+          "$ref": "#/definitions/ChemicalList"
+        },
+        "SupplMeshList": {
+          "$ref": "#/definitions/SupplMeshList"
+        },
+        "CitationSubset": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/CitationSubset"
+          }
+        },
+        "CommentsCorrectionsList": {
+          "$ref": "#/definitions/CommentsCorrectionsList"
+        },
+        "GeneSymbolList": {
+          "$ref": "#/definitions/GeneSymbolList"
+        },
+        "MeshHeadingList": {
+          "$ref": "#/definitions/MeshHeadingList"
+        },
+        "NumberOfReferences": {
+          "$ref": "#/definitions/NumberOfReferences"
+        },
+        "PersonalNameSubjectList": {
+          "$ref": "#/definitions/PersonalNameSubjectList"
+        },
+        "OtherID": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/OtherID"
+          }
+        },
+        "OtherAbstract": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/OtherAbstract"
+          }
+        },
+        "KeywordList": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/KeywordList"
+          }
+        },
+        "CoiStatement": {
+          "$ref": "#/definitions/CoiStatement"
+        },
+        "SpaceFlightMission": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SpaceFlightMission"
+          }
+        },
+        "InvestigatorList": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/InvestigatorList"
+          }
+        },
+        "GeneralNote": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/GeneralNote"
+          }
+        },
+        "Owner": {
+          "type": "string",
+          "enum": ["NLM", "NASA", "PIP", "KIE", "HSR", "HMD", "NOTNLM"],
+          "default": "NLM"
+        },
+        "Status": {
+          "type": "string",
+          "enum": ["Completed", ""],
+          "default": "In-Process"
+        },
+        "MEDLINE": {
+          "type": "string",
+          "default": "In-Data-Review"
+        },
+        "Publisher": {
+          "type": "string"
+        },
+        "VersionID": {
+          "type": "string"
+        },
+        "VersionDate": {
+          "type": "string"
+        },
+        "IndexingMethod": {
+          "type": "string"
+        }
+      },
+      "required": ["PMID", "Article", "MedlineJournalInfo", "Publisher"]
+    },
+    "PubmedData": {
+      "type": "object",
+      "properties": {
+        "History": {
+          "$ref": "#/definitions/History"
+        },
+        "PublicationStatus": {
+          "$ref": "#/definitions/PublicationStatus"
+        },
+        "ArticleIdList": {
+          "$ref": "#/definitions/ArticleIdList"
+        },
+        "ObjectList": {
+          "$ref": "#/definitions/ObjectList"
+        },
+        "ReferenceList": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ReferenceList"
+          }
+        }
+      },
+      "required": ["PublicationStatus", "ArticleIdList"]
+    },
+    "PubmedBookData": {
+      "type": "object",
+      "properties": {
+        "History": {
+          "$ref": "#/definitions/History"
+        },
+        "PublicationStatus": {
+          "$ref": "#/definitions/PublicationStatus"
+        },
+        "ArticleIdList": {
+          "$ref": "#/definitions/ArticleIdList"
+        },
+        "ObjectList": {
+          "$ref": "#/definitions/ObjectList"
+        }
+      },
+      "required": ["PublicationStatus", "ArticleIdList"]
+    },
+    "Article": {
+      "type": "object",
+      "properties": {
+        "Journal": {
+          "$ref": "#/definitions/Journal"
+        },
+        "ELocationID": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ELocationID"
+          }
+        },
+        "PubModel": {
+          "type": "string",
+          "enum": ["Print", ""],
+          "default": "Print-Electronic"
+        },
+        "Electronic": {
+          "type": "string",
+          "default": "Electronic-Print"
+        }
+      },
+      "required": ["Journal", "ELocationID"]
+    },
+    "Abstract": {
+      "type": "object",
+      "properties": {
+        "AbstractText": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/AbstractText"
+          }
+        },
+        "CopyrightInformation": {
+          "$ref": "#/definitions/CopyrightInformation"
+        }
+      },
+      "required": ["AbstractText"]
+    },
+    "AbstractText": {
+      "type": "object",
+      "properties": {
+        "mml": {
+          "$ref": "#/definitions/mml"
+        },
+        "DispFormula": {
+          "$ref": "#/definitions/DispFormula"
+        },
+        "Label": {
+          "type": "string"
+        },
+        "NlmCategory": {
+          "type": "string",
+          "enum": [
+            "BACKGROUND",
+            "OBJECTIVE",
+            "METHODS",
+            "RESULTS",
+            "CONCLUSIONS",
+            "UNASSIGNED"
+          ]
+        }
+      },
+      "required": ["mml", "DispFormula"]
+    },
+    "AccessionNumber": {
+      "type": "object",
+      "properties": {}
+    },
+    "AccessionNumberList": {
+      "type": "object",
+      "properties": {
+        "AccessionNumber": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/AccessionNumber"
+          }
+        }
+      },
+      "required": ["AccessionNumber"]
+    },
+    "Acronym": {
+      "type": "object",
+      "properties": {}
+    },
+    "Affiliation": {
+      "type": "object",
+      "properties": {}
+    },
+    "AffiliationInfo": {
+      "type": "object",
+      "properties": {
+        "Affiliation": {
+          "$ref": "#/definitions/Affiliation"
+        },
+        "Identifier": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Identifier"
+          }
+        }
+      },
+      "required": ["Affiliation"]
+    },
+    "Agency": {
+      "type": "object",
+      "properties": {}
+    },
+    "ArticleDate": {
+      "type": "object",
+      "properties": {
+        "Year": {
+          "$ref": "#/definitions/Year"
+        },
+        "Month": {
+          "$ref": "#/definitions/Month"
+        },
+        "Day": {
+          "$ref": "#/definitions/Day"
+        },
+        "DateType": {
+          "type": "string"
+        }
+      },
+      "required": ["Year", "Month", "Day"]
+    },
+    "ArticleId": {
+      "type": "object",
+      "properties": {
+        "IdType": {
+          "type": "string",
+          "enum": [
+            "doi",
+            "pii",
+            "pmcpid",
+            "pmpid",
+            "pmc",
+            "mid",
+            "sici",
+            "pubmed",
+            "medline",
+            "pmcid",
+            "pmcbook",
+            "bookaccession"
+          ],
+          "default": "pubmed"
+        }
+      }
+    },
+    "ArticleIdList": {
+      "type": "object",
+      "properties": {
+        "ArticleId": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ArticleId"
+          }
+        }
+      },
+      "required": ["ArticleId"]
+    },
+    "ArticleTitle": {
+      "type": "object",
+      "properties": {
+        "mml": {
+          "$ref": "#/definitions/mml"
+        }
+      },
+      "required": ["mml"]
+    },
+    "Author": {
+      "type": "object",
+      "properties": {
+        "LastName": {
+          "$ref": "#/definitions/LastName"
+        },
+        "CollectiveName": {
+          "$ref": "#/definitions/CollectiveName"
+        },
+        "ValidYN": {
+          "type": "string",
+          "enum": ["Y", "N"],
+          "default": "Y"
+        },
+        "EqualContrib": {
+          "type": "string",
+          "enum": ["Y", "N)"]
+        }
+      },
+      "required": ["LastName", "CollectiveName"]
+    },
+    "AuthorList": {
+      "type": "object",
+      "properties": {
+        "Author": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Author"
+          }
+        },
+        "CompleteYN": {
+          "type": "string",
+          "enum": ["Y", "N"],
+          "default": "Y"
+        },
+        "Type": {
+          "type": "string",
+          "enum": ["authors", "editors )"]
+        }
+      },
+      "required": ["Author"]
+    },
+    "b": {
+      "type": "object",
+      "properties": {}
+    },
+    "BeginningDate": {
+      "type": "object",
+      "properties": {
+        "Year": {
+          "$ref": "#/definitions/Year"
+        },
+        "Season": {
+          "$ref": "#/definitions/Season"
+        }
+      },
+      "required": ["Year", "Season"]
+    },
+    "Book": {
+      "type": "object",
+      "properties": {
+        "Publisher": {
+          "$ref": "#/definitions/Publisher"
+        },
+        "BookTitle": {
+          "$ref": "#/definitions/BookTitle"
+        },
+        "PubDate": {
+          "$ref": "#/definitions/PubDate"
+        },
+        "BeginningDate": {
+          "$ref": "#/definitions/BeginningDate"
+        },
+        "EndingDate": {
+          "$ref": "#/definitions/EndingDate"
+        },
+        "AuthorList": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/AuthorList"
+          }
+        },
+        "InvestigatorList": {
+          "$ref": "#/definitions/InvestigatorList"
+        },
+        "Volume": {
+          "$ref": "#/definitions/Volume"
+        },
+        "VolumeTitle": {
+          "$ref": "#/definitions/VolumeTitle"
+        },
+        "Edition": {
+          "$ref": "#/definitions/Edition"
+        },
+        "CollectionTitle": {
+          "$ref": "#/definitions/CollectionTitle"
+        },
+        "Isbn": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Isbn"
+          }
+        },
+        "ELocationID": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ELocationID"
+          }
+        },
+        "Medium": {
+          "$ref": "#/definitions/Medium"
+        },
+        "ReportNumber": {
+          "$ref": "#/definitions/ReportNumber"
+        }
+      },
+      "required": ["Publisher", "BookTitle", "PubDate"]
+    },
+    "BookTitle": {
+      "type": "object",
+      "properties": {
+        "mml": {
+          "$ref": "#/definitions/mml"
+        }
+      },
+      "required": ["mml"]
+    },
+    "Chemical": {
+      "type": "object",
+      "properties": {
+        "RegistryNumber": {
+          "$ref": "#/definitions/RegistryNumber"
+        },
+        "NameOfSubstance": {
+          "$ref": "#/definitions/NameOfSubstance"
+        }
+      },
+      "required": ["RegistryNumber", "NameOfSubstance"]
+    },
+    "ChemicalList": {
+      "type": "object",
+      "properties": {
+        "Chemical": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Chemical"
+          }
+        }
+      },
+      "required": ["Chemical"]
+    },
+    "Citation": {
+      "type": "object",
+      "properties": {
+        "mml": {
+          "$ref": "#/definitions/mml"
+        }
+      },
+      "required": ["mml"]
+    },
+    "CitationSubset": {
+      "type": "object",
+      "properties": {}
+    },
+    "CoiStatement": {
+      "type": "object",
+      "properties": {}
+    },
+    "CollectionTitle": {
+      "type": "object",
+      "properties": {
+        "mml": {
+          "$ref": "#/definitions/mml"
+        }
+      },
+      "required": ["mml"]
+    },
+    "CollectiveName": {
+      "type": "object",
+      "properties": {
+        "Investigators": {
+          "type": "string"
+        }
+      }
+    },
+    "CommentsCorrections": {
+      "type": "object",
+      "properties": {
+        "RefSource": {
+          "$ref": "#/definitions/RefSource"
+        },
+        "PMID": {
+          "$ref": "#/definitions/PMID"
+        },
+        "Note": {
+          "$ref": "#/definitions/Note"
+        },
+        "RefType": {
+          "type": "string",
+          "enum": [
+            "AssociatedDataset",
+            "AssociatedPublication",
+            "CommentIn",
+            "CommentOn",
+            "CorrectedandRepublishedIn",
+            "CorrectedandRepublishedFrom",
+            "ErratumIn",
+            "ErratumFor",
+            "ExpressionOfConcernIn",
+            "ExpressionOfConcernFor",
+            "RepublishedIn",
+            "RepublishedFrom",
+            "RetractedandRepublishedIn",
+            "RetractedandRepublishedFrom",
+            "RetractionIn",
+            "RetractionOf",
+            "UpdateIn",
+            "UpdateOf",
+            "SummaryForPatientsIn",
+            "OriginalReportIn",
+            "ReprintIn",
+            "ReprintOf",
+            "Cites)"
+          ]
+        }
+      },
+      "required": ["RefSource", "RefType"]
+    },
+    "CommentsCorrectionsList": {
+      "type": "object",
+      "properties": {
+        "CommentsCorrections": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/CommentsCorrections"
+          }
+        }
+      },
+      "required": ["CommentsCorrections"]
+    },
+    "ContractNumber": {
+      "type": "object",
+      "properties": {}
+    },
+    "ContributionDate": {
+      "type": "object",
+      "properties": {
+        "Year": {
+          "$ref": "#/definitions/Year"
+        },
+        "Season": {
+          "$ref": "#/definitions/Season"
+        }
+      },
+      "required": ["Year", "Season"]
+    },
+    "CopyrightInformation": {
+      "type": "object",
+      "properties": {}
+    },
+    "Country": {
+      "type": "object",
+      "properties": {}
+    },
+    "DataBank": {
+      "type": "object",
+      "properties": {
+        "DataBankName": {
+          "$ref": "#/definitions/DataBankName"
+        },
+        "AccessionNumberList": {
+          "$ref": "#/definitions/AccessionNumberList"
+        }
+      },
+      "required": ["DataBankName"]
+    },
+    "DataBankList": {
+      "type": "object",
+      "properties": {
+        "DataBank": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DataBank"
+          }
+        },
+        "CompleteYN": {
+          "type": "string",
+          "enum": ["Y", "N"],
+          "default": "Y"
+        }
+      },
+      "required": ["DataBank"]
+    },
+    "DataBankName": {
+      "type": "object",
+      "properties": {}
+    },
+    "DateCompleted": {
+      "type": "object",
+      "properties": {
+        "Year": {
+          "$ref": "#/definitions/Year"
+        },
+        "Month": {
+          "$ref": "#/definitions/Month"
+        },
+        "Day": {
+          "$ref": "#/definitions/Day"
+        }
+      },
+      "required": ["Year", "Month", "Day"]
+    },
+    "DateRevised": {
+      "type": "object",
+      "properties": {
+        "Year": {
+          "$ref": "#/definitions/Year"
+        },
+        "Month": {
+          "$ref": "#/definitions/Month"
+        },
+        "Day": {
+          "$ref": "#/definitions/Day"
+        }
+      },
+      "required": ["Year", "Month", "Day"]
+    },
+    "Day": {
+      "type": ["string", "object"],
+      "properties": {}
+    },
+    "DescriptorName": {
+      "type": "object",
+      "properties": {
+        "MajorTopicYN": {
+          "type": "string",
+          "enum": ["Y", "N"],
+          "default": "N"
+        },
+        "AutoHM": {
+          "type": "string",
+          "enum": ["Y"]
+        },
+        "Type": {
+          "type": "string",
+          "enum": ["Geographic"]
+        },
+        "UI": {
+          "type": "string"
+        }
+      },
+      "required": ["UI"]
+    },
+    "DispFormula": {
+      "type": "object",
+      "properties": {
+        "mml": {
+          "$ref": "#/definitions/mml"
+        }
+      },
+      "required": ["mml"]
+    },
+    "Edition": {
+      "type": "object",
+      "properties": {}
+    },
+    "ELocationID": {
+      "type": "object",
+      "properties": {
+        "EIdType": {
+          "type": "string",
+          "enum": ["doi", "pii"]
+        },
+        "ValidYN": {
+          "type": "string",
+          "enum": ["Y", "N"],
+          "default": "Y"
+        }
+      },
+      "required": ["EIdType"]
+    },
+    "EndingDate": {
+      "type": "object",
+      "properties": {
+        "Year": {
+          "$ref": "#/definitions/Year"
+        },
+        "Season": {
+          "$ref": "#/definitions/Season"
+        }
+      },
+      "required": ["Year", "Season"]
+    },
+    "EndPage": {
+      "type": "object",
+      "properties": {}
+    },
+    "ForeName": {
+      "type": "object",
+      "properties": {}
+    },
+    "GeneSymbol": {
+      "type": "object",
+      "properties": {}
+    },
+    "GeneSymbolList": {
+      "type": "object",
+      "properties": {
+        "GeneSymbol": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/GeneSymbol"
+          }
+        }
+      },
+      "required": ["GeneSymbol"]
+    },
+    "GeneralNote": {
+      "type": "object",
+      "properties": {
+        "Owner": {
+          "type": "string",
+          "enum": ["NLM", "NASA", "PIP", "KIE", "HSR", "HMD"],
+          "default": "NLM"
+        }
+      }
+    },
+    "Grant": {
+      "type": "object",
+      "properties": {
+        "GrantID": {
+          "$ref": "#/definitions/GrantID"
+        },
+        "Acronym": {
+          "$ref": "#/definitions/Acronym"
+        },
+        "Agency": {
+          "$ref": "#/definitions/Agency"
+        },
+        "Country": {
+          "$ref": "#/definitions/Country"
+        }
+      },
+      "required": ["Agency"]
+    },
+    "GrantID": {
+      "type": "object",
+      "properties": {}
+    },
+    "GrantList": {
+      "type": "object",
+      "properties": {
+        "Grant": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Grant"
+          }
+        },
+        "CompleteYN": {
+          "type": "string",
+          "enum": ["Y", "N"],
+          "default": "Y"
+        }
+      },
+      "required": ["Grant"]
+    },
+    "History": {
+      "type": "object",
+      "properties": {
+        "PubMedPubDate": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/PubMedPubDate"
+          }
+        }
+      },
+      "required": ["PubMedPubDate"]
+    },
+    "Hour": {
+      "type": "object",
+      "properties": {}
+    },
+    "i": {
+      "type": "object",
+      "properties": {}
+    },
+    "Identifier": {
+      "type": "object",
+      "properties": {
+        "Source": {
+          "type": "string"
+        }
+      },
+      "required": ["Source"]
+    },
+    "Initials": {
+      "type": "object",
+      "properties": {}
+    },
+    "Investigator": {
+      "type": "object",
+      "properties": {
+        "LastName": {
+          "$ref": "#/definitions/LastName"
+        },
+        "ForeName": {
+          "$ref": "#/definitions/ForeName"
+        },
+        "Initials": {
+          "$ref": "#/definitions/Initials"
+        },
+        "Suffix": {
+          "$ref": "#/definitions/Suffix"
+        },
+        "Identifier": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Identifier"
+          }
+        },
+        "AffiliationInfo": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/AffiliationInfo"
+          }
+        },
+        "ValidYN": {
+          "type": "string",
+          "enum": ["Y", "N"],
+          "default": "Y"
+        }
+      },
+      "required": ["LastName"]
+    },
+    "InvestigatorList": {
+      "type": "object",
+      "properties": {
+        "Investigator": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Investigator"
+          }
+        },
+        "ID": {
+          "type": "string"
+        }
+      },
+      "required": ["Investigator"]
+    },
+    "Isbn": {
+      "type": "object",
+      "properties": {}
+    },
+    "ISOAbbreviation": {
+      "type": "object",
+      "properties": {}
+    },
+    "ISSN": {
+      "type": "object",
+      "properties": {
+        "IssnType": {
+          "type": "string",
+          "enum": ["Electronic", "Print"]
+        }
+      },
+      "required": ["IssnType"]
+    },
+    "ISSNLinking": {
+      "type": "object",
+      "properties": {}
+    },
+    "Issue": {
+      "type": "object",
+      "properties": {}
+    },
+    "Item": {
+      "type": "object",
+      "properties": {}
+    },
+    "ItemList": {
+      "type": "object",
+      "properties": {
+        "Item": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Item"
+          }
+        },
+        "ListType": {
+          "type": "string"
+        }
+      },
+      "required": ["Item", "ListType"]
+    },
+    "Journal": {
+      "type": "object",
+      "properties": {
+        "ISSN": {
+          "$ref": "#/definitions/ISSN"
+        },
+        "JournalIssue": {
+          "$ref": "#/definitions/JournalIssue"
+        },
+        "Title": {
+          "$ref": "#/definitions/Title"
+        },
+        "ISOAbbreviation": {
+          "$ref": "#/definitions/ISOAbbreviation"
+        }
+      },
+      "required": ["JournalIssue"]
+    },
+    "JournalIssue": {
+      "type": "object",
+      "properties": {
+        "Volume": {
+          "$ref": "#/definitions/Volume"
+        },
+        "Issue": {
+          "$ref": "#/definitions/Issue"
+        },
+        "PubDate": {
+          "$ref": "#/definitions/PubDate"
+        },
+        "CitedMedium": {
+          "type": "string",
+          "enum": ["Internet", "Print"]
+        }
+      },
+      "required": ["PubDate", "CitedMedium"]
+    },
+    "Keyword": {
+      "type": "object",
+      "properties": {
+        "mml": {
+          "$ref": "#/definitions/mml"
+        },
+        "MajorTopicYN": {
+          "type": "string",
+          "enum": ["Y", "N"],
+          "default": "N"
+        }
+      },
+      "required": ["mml"]
+    },
+    "KeywordList": {
+      "type": "object",
+      "properties": {
+        "Keyword": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Keyword"
+          }
+        },
+        "Owner": {
+          "type": "string",
+          "enum": ["NLM", ""],
+          "default": "NLM-AUTO"
+        },
+        "NASA": {
+          "type": "string",
+          "default": "NLM"
+        }
+      },
+      "required": ["Keyword"]
+    },
+    "Language": {
+      "type": "object",
+      "properties": {}
+    },
+    "LastName": {
+      "type": "object",
+      "properties": {}
+    },
+    "LocationLabel": {
+      "type": "object",
+      "properties": {
+        "Type": {
+          "type": "string",
+          "enum": [
+            "part",
+            "chapter",
+            "section",
+            "appendix",
+            "figure",
+            "table",
+            "box)"
+          ]
+        }
+      }
+    },
+    "Medium": {
+      "type": "object",
+      "properties": {}
+    },
+    "MedlineDate": {
+      "type": "object",
+      "properties": {}
+    },
+    "MedlineJournalInfo": {
+      "type": "object",
+      "properties": {
+        "Country": {
+          "$ref": "#/definitions/Country"
+        },
+        "MedlineTA": {
+          "$ref": "#/definitions/MedlineTA"
+        },
+        "NlmUniqueID": {
+          "$ref": "#/definitions/NlmUniqueID"
+        },
+        "ISSNLinking": {
+          "$ref": "#/definitions/ISSNLinking"
+        }
+      },
+      "required": ["MedlineTA"]
+    },
+    "MedlinePgn": {
+      "type": "object",
+      "properties": {}
+    },
+    "MedlineTA": {
+      "type": "object",
+      "properties": {}
+    },
+    "MeshHeading": {
+      "type": "object",
+      "properties": {
+        "DescriptorName": {
+          "$ref": "#/definitions/DescriptorName"
+        },
+        "QualifierName": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/QualifierName"
+          }
+        }
+      },
+      "required": ["DescriptorName"]
+    },
+    "MeshHeadingList": {
+      "type": "object",
+      "properties": {
+        "MeshHeading": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/MeshHeading"
+          }
+        }
+      },
+      "required": ["MeshHeading"]
+    },
+    "Minute": {
+      "type": "object",
+      "properties": {}
+    },
+    "Month": {
+      "type": "object",
+      "properties": {}
+    },
+    "NameOfSubstance": {
+      "type": "object",
+      "properties": {
+        "UI": {
+          "type": "string"
+        }
+      },
+      "required": ["UI"]
+    },
+    "NlmUniqueID": {
+      "type": "object",
+      "properties": {}
+    },
+    "Note": {
+      "type": "object",
+      "properties": {}
+    },
+    "NumberOfReferences": {
+      "type": "object",
+      "properties": {}
+    },
+    "Object": {
+      "type": "object",
+      "properties": {
+        "Param": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Param"
+          }
+        },
+        "Type": {
+          "type": "string"
+        }
+      },
+      "required": ["Type"]
+    },
+    "ObjectList": {
+      "type": "object",
+      "properties": {
+        "Object": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Object"
+          }
+        }
+      },
+      "required": ["Object"]
+    },
+    "OtherAbstract": {
+      "type": "object",
+      "properties": {
+        "AbstractText": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/AbstractText"
+          }
+        },
+        "CopyrightInformation": {
+          "$ref": "#/definitions/CopyrightInformation"
+        },
+        "Type": {
+          "type": "string",
+          "enum": ["AAMC", "AIDS", "KIE", "PIP", "NASA", "Publisher", ""],
+          "default": "plain-language-summary)"
+        },
+        "REQUIRED": {
+          "type": "string",
+          "default": "eng"
+        }
+      },
+      "required": ["AbstractText"]
+    },
+    "OtherID": {
+      "type": "object",
+      "properties": {
+        "Source": {
+          "type": "string",
+          "enum": [
+            "NASA",
+            "KIE",
+            "PIP",
+            "POP",
+            "ARPL",
+            "CPC",
+            "IND",
+            "CPFH",
+            "CLML",
+            "NRCBL",
+            "NLM",
+            "QCIM"
+          ]
+        }
+      },
+      "required": ["Source"]
+    },
+    "PMID": {
+      "type": "object",
+      "properties": {
+        "Version": {
+          "type": "string"
+        }
+      },
+      "required": ["Version"]
+    },
+    "Pagination": {
+      "type": "object",
+      "properties": {
+        "StartPage": {
+          "$ref": "#/definitions/StartPage"
+        },
+        "MedlinePgn": {
+          "$ref": "#/definitions/MedlinePgn"
+        }
+      },
+      "required": ["StartPage", "MedlinePgn"]
+    },
+    "Param": {
+      "type": "object",
+      "properties": {
+        "Name": {
+          "type": "string"
+        }
+      },
+      "required": ["Name"]
+    },
+    "PersonalNameSubject": {
+      "type": "object",
+      "properties": {
+        "LastName": {
+          "$ref": "#/definitions/LastName"
+        },
+        "ForeName": {
+          "$ref": "#/definitions/ForeName"
+        },
+        "Initials": {
+          "$ref": "#/definitions/Initials"
+        },
+        "Suffix": {
+          "$ref": "#/definitions/Suffix"
+        }
+      },
+      "required": ["LastName"]
+    },
+    "PersonalNameSubjectList": {
+      "type": "object",
+      "properties": {
+        "PersonalNameSubject": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/PersonalNameSubject"
+          }
+        }
+      },
+      "required": ["PersonalNameSubject"]
+    },
+    "PubDate": {
+      "type": "object",
+      "properties": {
+        "Year": {
+          "$ref": "#/definitions/Year"
+        },
+        "Season": {
+          "$ref": "#/definitions/Season"
+        },
+        "MedlineDate": {
+          "$ref": "#/definitions/MedlineDate"
+        }
+      },
+      "required": ["Year", "Season", "MedlineDate"]
+    },
+    "PublicationStatus": {
+      "type": "object",
+      "properties": {}
+    },
+    "PublicationType": {
+      "type": "object",
+      "properties": {
+        "UI": {
+          "type": "string"
+        }
+      },
+      "required": ["UI"]
+    },
+    "PublicationTypeList": {
+      "type": "object",
+      "properties": {
+        "PublicationType": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/PublicationType"
+          }
+        }
+      },
+      "required": ["PublicationType"]
+    },
+    "PubMedPubDate": {
+      "type": "object",
+      "properties": {
+        "Year": {
+          "$ref": "#/definitions/Year"
+        },
+        "Month": {
+          "$ref": "#/definitions/Month"
+        },
+        "Day": {
+          "$ref": "#/definitions/Day"
+        },
+        "Second": {
+          "$ref": "#/definitions/Second"
+        },
+        "PubStatus": {
+          "type": "string",
+          "enum": [
+            "received",
+            "accepted",
+            "epublish",
+            "ppublish",
+            "revised",
+            "aheadofprint",
+            "retracted",
+            "ecollection",
+            "pmc",
+            "pmcr",
+            "pubmed",
+            "pubmedr",
+            "premedline",
+            "medline",
+            "medliner",
+            "entrez",
+            ""
+          ],
+          "default": "pmc-release)"
+        }
+      },
+      "required": ["Year", "Month", "Day"]
+    },
+    "Publisher": {
+      "type": "object",
+      "properties": {
+        "PublisherName": {
+          "$ref": "#/definitions/PublisherName"
+        },
+        "PublisherLocation": {
+          "$ref": "#/definitions/PublisherLocation"
+        }
+      },
+      "required": ["PublisherName"]
+    },
+    "PublisherLocation": {
+      "type": "object",
+      "properties": {}
+    },
+    "PublisherName": {
+      "type": "object",
+      "properties": {}
+    },
+    "QualifierName": {
+      "type": "object",
+      "properties": {
+        "AutoHM": {
+          "type": "string",
+          "enum": ["Y"]
+        },
+        "MajorTopicYN": {
+          "type": "string",
+          "enum": ["Y", "N"],
+          "default": "N"
+        },
+        "UI": {
+          "type": "string"
+        }
+      },
+      "required": ["UI"]
+    },
+    "Reference": {
+      "type": "object",
+      "properties": {
+        "Citation": {
+          "$ref": "#/definitions/Citation"
+        },
+        "ArticleIdList": {
+          "$ref": "#/definitions/ArticleIdList"
+        }
+      },
+      "required": ["Citation"]
+    },
+    "ReferenceList": {
+      "type": "object",
+      "properties": {
+        "Title": {
+          "$ref": "#/definitions/Title"
+        },
+        "Reference": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Reference"
+          }
+        },
+        "ReferenceList": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ReferenceList"
+          }
+        }
+      }
+    },
+    "RefSource": {
+      "type": "object",
+      "properties": {}
+    },
+    "RegistryNumber": {
+      "type": "object",
+      "properties": {}
+    },
+    "ReportNumber": {
+      "type": "object",
+      "properties": {}
+    },
+    "Season": {
+      "type": "object",
+      "properties": {}
+    },
+    "Second": {
+      "type": "object",
+      "properties": {}
+    },
+    "Section": {
+      "type": "object",
+      "properties": {
+        "LocationLabel": {
+          "$ref": "#/definitions/LocationLabel"
+        },
+        "SectionTitle": {
+          "$ref": "#/definitions/SectionTitle"
+        },
+        "Section": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Section"
+          }
+        }
+      },
+      "required": ["SectionTitle"]
+    },
+    "Sections": {
+      "type": "object",
+      "properties": {
+        "Section": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Section"
+          }
+        }
+      },
+      "required": ["Section"]
+    },
+    "SectionTitle": {
+      "type": "object",
+      "properties": {}
+    },
+    "SpaceFlightMission": {
+      "type": "object",
+      "properties": {}
+    },
+    "StartPage": {
+      "type": "object",
+      "properties": {}
+    },
+    "sub": {
+      "type": "object",
+      "properties": {}
+    },
+    "Suffix": {
+      "type": "object",
+      "properties": {}
+    },
+    "sup": {
+      "type": "object",
+      "properties": {}
+    },
+    "SupplMeshList": {
+      "type": "object",
+      "properties": {
+        "SupplMeshName": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SupplMeshName"
+          }
+        }
+      },
+      "required": ["SupplMeshName"]
+    },
+    "SupplMeshName": {
+      "type": "object",
+      "properties": {
+        "Type": {
+          "type": "string",
+          "enum": ["Disease", "Protocol", "Organism", "Anatomy", "Population"]
+        },
+        "UI": {
+          "type": "string"
+        }
+      },
+      "required": ["Type", "UI"]
+    },
+    "Title": {
+      "type": "object",
+      "properties": {}
+    },
+    "u": {
+      "type": "object",
+      "properties": {}
+    },
+    "URL": {
+      "type": "object",
+      "properties": {
+        "lang": {
+          "type": "string",
+          "enum": [
+            "AF",
+            "AR",
+            "AZ",
+            "BG",
+            "CS",
+            "DA",
+            "DE",
+            "EN",
+            "EL",
+            "ES",
+            "FA",
+            "FI",
+            "FR",
+            "HE",
+            "HU",
+            "HY",
+            "IN",
+            "IS",
+            "IT",
+            "IW",
+            "JA",
+            "KA",
+            "KO",
+            "LT",
+            "MK",
+            "ML",
+            "NL",
+            "NO",
+            "PL",
+            "PT",
+            "PS",
+            "RO",
+            "RU",
+            "SL",
+            "SK",
+            "SQ",
+            "SR",
+            "SV",
+            "SW",
+            "TH",
+            "TR",
+            "UK",
+            "VI",
+            "ZH"
+          ]
+        },
+        "Type": {
+          "type": "string",
+          "enum": ["FullText", "Summary", "fulltext", "summary"]
+        }
+      }
+    },
+    "VernacularTitle": {
+      "type": "object",
+      "properties": {
+        "mml": {
+          "$ref": "#/definitions/mml"
+        }
+      },
+      "required": ["mml"]
+    },
+    "Volume": {
+      "type": "object",
+      "properties": {}
+    },
+    "VolumeTitle": {
+      "type": "object",
+      "properties": {}
+    },
+    "Year": {
+      "type": "object",
+      "properties": {}
+    }
+  }
+}
