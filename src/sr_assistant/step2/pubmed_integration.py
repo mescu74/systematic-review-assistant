@@ -156,10 +156,10 @@ def extract_article_info(article: dict[str, Any]) -> dict[str, str]:
         ...             },
         ...             "Journal": {
         ...                 "Title": "Familial cancer",
-        ...             },
-        ...             "JournalIssue": {
-        ...                 "PubDate": {
-        ...                     "Year": "2024",
+        ...                 "JournalIssue": {
+        ...                     "PubDate": {
+        ...                         "Year": "2024",
+        ...                     },
         ...                 },
         ...             },
         ...         },
@@ -240,7 +240,8 @@ def extract_article_info(article: dict[str, Any]) -> dict[str, str]:
             "abstract": abstract,
             "journal": str(article_info.get("Journal", {}).get("Title", "No journal")),
             "year": str(
-                article_info.get("JournalIssue", {})
+                article_info.get("Journal", {})
+                .get("JournalIssue", {})
                 .get("PubDate", {})
                 .get("Year", "No year")
             ),
