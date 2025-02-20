@@ -255,93 +255,104 @@ def screen_abstracts(  # noqa: C901
 
     batch_size = ut.init_state_key("screen_abstracts_batch_size", 10)
     batch_idx = ut.init_state_key("screen_abstracts_batch_idx", -1)
-    for i in range(0, len(search_results), batch_size):
-        batch = search_results[i : i + batch_size]
-        batch_size = len(batch)
-        batch_idx += 1
-        st.session_state.screen_abstracts_batch_idx = batch_idx
-        # runs in executor
-        logger.info(f"Screening batch {batch_idx} of size {batch_size} ...")
-        batch_output = screen_abstracts_batch(batch, batch_idx, review)
-        logger.info(f"Screening batch {batch_idx} of size {batch_size} ... done")
-        if not batch_output:
-            msg = (
-                f"Screening batch {batch_idx} of size {batch_size} returned no results"
+    with st.spinner("Screening abstracts ..."):
+        screening_status = st.status("Screening abstracts status ...", expanded=True)
+        for i in range(0, len(search_results), batch_size):
+            batch = search_results[i : i + batch_size]
+            batch_size = len(batch)
+            batch_idx += 1
+            st.session_state.screen_abstracts_batch_idx = batch_idx
+            # runs in executor
+            logger.info(f"Screening batch {batch_idx} of size {batch_size} ...")
+            screening_status.text(
+                f"Screening batch {batch_idx} of size {batch_size} ..."
             )
-            logger.error(msg)
-            # st.write(msg)
-            st.session_state.screen_abstracts_errors.extend([None] * batch_size)
-            return
-        cb = batch_output.cb
-        results = batch_output.results
-        st.session_state.screen_abstracts_total_tokens += cb.total_tokens
-        st.session_state.screen_abstracts_total_cost += cb.total_cost
-        st.session_state.screen_abstracts_successful_requests += cb.successful_requests
-        for j, res in enumerate(results):
-            pm_r = res.search_result
-
-            if pm_r.id != batch[j].id:
-                msg = f"Search result id mismatch: {pm_r.id} != {batch[j].id}, skipping ... res: {res!r}"
-                logger.bind(output=pm_r.id, input=batch[j].id).error(msg)
-                # status_text.write(msg)
-                st.session_state.screen_abstracts_errors.append(
-                    ScreeningError(search_result=pm_r, error=res, message=msg)
-                )
-                continue
-
-            if not isinstance(res.conservative_result, ScreeningResult):
-                msg = f"Conservative screening error: {type(res.conservative_result)}: {res.conservative_result!r}"
+            batch_output = screen_abstracts_batch(batch, batch_idx, review)
+            logger.info(f"Screening batch {batch_idx} of size {batch_size} ... done")
+            if not batch_output:
+                msg = f"Screening batch {batch_idx} of size {batch_size} returned no results"
                 logger.error(msg)
+                screening_status.text(msg)
                 # st.write(msg)
-                st.session_state.screen_abstracts_errors.append(res.conservative_result)
-            else:
-                st.session_state.screen_abstracts_results.append(
-                    (pm_r, res.conservative_result)
-                )
-                match res.conservative_result.decision:
-                    case ScreeningDecisionType.INCLUDE:
-                        st.session_state.screen_abstracts_included += 1
-                    case ScreeningDecisionType.EXCLUDE:
-                        st.session_state.screen_abstracts_excluded += 1
-                    case ScreeningDecisionType.UNCERTAIN:
-                        st.session_state.screen_abstracts_uncertain += 1
+                st.session_state.screen_abstracts_errors.extend([None] * batch_size)
+                return
+            cb = batch_output.cb
+            results = batch_output.results
+            st.session_state.screen_abstracts_total_tokens += cb.total_tokens
+            st.session_state.screen_abstracts_total_cost += cb.total_cost
+            st.session_state.screen_abstracts_successful_requests += (
+                cb.successful_requests
+            )
+            for j, res in enumerate(results):
+                pm_r = res.search_result
 
-            if not isinstance(res.comprehensive_result, ScreeningResult):
-                msg = f"Comprehensive screening error: {type(res.comprehensive_result)}: {res.comprehensive_result!r}"
-                logger.error(msg)
-                # st.write(msg)
-                st.session_state.screen_abstracts_errors.append(
-                    res.comprehensive_result
-                )
-            else:
-                st.session_state.screen_abstracts_results.append(
-                    (pm_r, res.comprehensive_result)
-                )
-                match res.comprehensive_result.decision:
-                    case ScreeningDecisionType.INCLUDE:
-                        st.session_state.screen_abstracts_included += 1
-                    case ScreeningDecisionType.EXCLUDE:
-                        st.session_state.screen_abstracts_excluded += 1
-                    case ScreeningDecisionType.UNCERTAIN:
-                        st.session_state.screen_abstracts_uncertain += 1
+                if pm_r.id != batch[j].id:
+                    msg = f"Search result id mismatch: {pm_r.id} != {batch[j].id}, skipping ... res: {res!r}"
+                    logger.bind(output=pm_r.id, input=batch[j].id).error(msg)
+                    # status_text.write(msg)
+                    screening_status.text(msg)
+                    st.session_state.screen_abstracts_errors.append(
+                        ScreeningError(search_result=pm_r, error=res, message=msg)
+                    )
+                    continue
 
-            st.session_state.screen_abstracts_screened += 1
+                if not isinstance(res.conservative_result, ScreeningResult):
+                    msg = f"Conservative screening error: {type(res.conservative_result)}: {res.conservative_result!r}"
+                    logger.error(msg)
+                    # st.write(msg)
+                    screening_status.text(msg)
+                    st.session_state.screen_abstracts_errors.append(
+                        res.conservative_result
+                    )
+                else:
+                    st.session_state.screen_abstracts_results.append(
+                        (pm_r, res.conservative_result)
+                    )
+                    match res.conservative_result.decision:
+                        case ScreeningDecisionType.INCLUDE:
+                            st.session_state.screen_abstracts_included += 1
+                        case ScreeningDecisionType.EXCLUDE:
+                            st.session_state.screen_abstracts_excluded += 1
+                        case ScreeningDecisionType.UNCERTAIN:
+                            st.session_state.screen_abstracts_uncertain += 1
 
-            if (
-                isinstance(res.conservative_result, ScreeningResult)
-                and isinstance(res.comprehensive_result, ScreeningResult)
-                and res.conservative_result.decision
-                != res.comprehensive_result.decision
-            ):
-                st.session_state.screen_abstracts_conflicts.append(
-                    (pm_r, res.conservative_result, res.comprehensive_result)
-                )
+                if not isinstance(res.comprehensive_result, ScreeningResult):
+                    msg = f"Comprehensive screening error: {type(res.comprehensive_result)}: {res.comprehensive_result!r}"
+                    logger.error(msg)
+                    # st.write(msg)
+                    screening_status.text(msg)
+                    st.session_state.screen_abstracts_errors.append(
+                        res.comprehensive_result
+                    )
+                else:
+                    st.session_state.screen_abstracts_results.append(
+                        (pm_r, res.comprehensive_result)
+                    )
+                    match res.comprehensive_result.decision:
+                        case ScreeningDecisionType.INCLUDE:
+                            st.session_state.screen_abstracts_included += 1
+                        case ScreeningDecisionType.EXCLUDE:
+                            st.session_state.screen_abstracts_excluded += 1
+                        case ScreeningDecisionType.UNCERTAIN:
+                            st.session_state.screen_abstracts_uncertain += 1
 
-            # FIXME: these don't update ...
-            # render_metrics()
-            # render_progress_bar()
-            # render_df()
-            # render_errors()
+                st.session_state.screen_abstracts_screened += 1
+
+                if (
+                    isinstance(res.conservative_result, ScreeningResult)
+                    and isinstance(res.comprehensive_result, ScreeningResult)
+                    and res.conservative_result.decision
+                    != res.comprehensive_result.decision
+                ):
+                    st.session_state.screen_abstracts_conflicts.append(
+                        (pm_r, res.conservative_result, res.comprehensive_result)
+                    )
+
+                # FIXME: these don't update ...
+                # render_metrics()
+                # render_progress_bar()
+                # render_df()
+                # render_errors()
 
 
 def screen_abstracts_page(review_id: uuid.UUID | None = None) -> None:
@@ -399,6 +410,9 @@ def screen_abstracts_page(review_id: uuid.UUID | None = None) -> None:
 # For quick testing
 if "review_id" not in st.session_state:
     st.session_state.review_id = uuid.UUID(hex="393f5e13-175a-4314-b47e-45b804ab3d6f")
+if "logger_extra_configured" not in st.session_state:
+    logger.configure(extra={"review_id": st.session_state.review_id})
+    st.session_state.logger_extra_configured = True
 if "review" not in st.session_state:
     with st.session_state.session_factory() as session:
         st.session_state.review = session.get(

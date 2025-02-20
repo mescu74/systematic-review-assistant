@@ -3,6 +3,7 @@ from __future__ import annotations
 from uuid import UUID
 
 import streamlit as st
+from loguru import logger
 
 from sr_assistant.core.repositories_old import PubMedRepository
 from sr_assistant.step2.pubmed_integration import pubmed_fetch_details, pubmed_search
@@ -28,6 +29,7 @@ def search_page(review_id: UUID | None = None) -> None:
         with st.status("Searching...", expanded=True) as status:
             try:
                 # Search PubMed
+                logger.info("Searching PubMed: {!r}", query)
                 st.write("Searching PubMed...")
                 pmids = pubmed_search(query, max_results)
                 if not pmids:
@@ -38,10 +40,12 @@ def search_page(review_id: UUID | None = None) -> None:
 
                 # Fetch details
                 records = pubmed_fetch_details(pmids)
+                logger.info("Fetched {len(records['PubmedArticle'])} study details")
                 st.write(f"Fetched {len(records['PubmedArticle'])} study details")
 
                 # Store in Supabase
                 results = repo.store_results(review_id, query, records)
+                logger.info("Stored {len(results)} articles")
                 st.success(f"Stored {len(results)} articles")
                 status.update(label="Search complete", state="complete")
 
@@ -77,9 +81,16 @@ def search_page(review_id: UUID | None = None) -> None:
         st.subheader(article.title)
         st.text(f"{article.journal} ({article.year})")
         st.write(article.abstract)
+        logger.info("Selected article: {!r}", article)
+        st.json(article.model_dump(mode="json"), expanded=True)
+
+    st.page_link("pages/screen_abstracts.py", label="Next: Screen Abstracts")
 
 
 if "review" not in st.session_state:
     st.error("Please define a systematic review protocol first")
 else:
+    if "logger_extra_configured" not in st.session_state:
+        logger.configure(extra={"review_id": st.session_state.review.id})
+        st.session_state.logger_extra_configured = True
     search_page(review_id=st.session_state.review.id)

@@ -81,6 +81,12 @@ st.write("Review status: ", st.session_state.review_status)
 # keep this constant, we've to initialize the reviews_id here. It's like a session ID.
 if "review_id" not in st.session_state:
     st.session_state["review_id"] = uuid.uuid4()
+# Inject review_id to shared logger extra, is log_records table it's a fk to systematic_reviews.id
+# and this way all logs for a review are easy to query and show/export.
+if "logger_extra_configured" not in st.session_state:
+    logger.configure(extra={"review_id": st.session_state.review_id})
+    st.session_state.logger_extra_configured = True
+
 if "background" not in st.session_state:
     st.session_state["background"] = ""
 if "research_question" not in st.session_state:
@@ -193,3 +199,5 @@ if st.button("Save Protocol"):
                 st.session_state.review_status,
             )
             st.json(review.model_dump(mode="json"))
+
+    st.page_link("pages/search.py", label="Next: PubMed Search")
