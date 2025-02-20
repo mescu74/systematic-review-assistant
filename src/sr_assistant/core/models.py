@@ -16,16 +16,12 @@ from datetime import datetime
 
 import sqlalchemy as sa
 import sqlalchemy.dialects.postgresql as sa_pg
-import streamlit as st
-import uuid6
-from loguru import logger
-from pydantic import ConfigDict, JsonValue, model_validator
+from pydantic import ConfigDict, JsonValue
 from pydantic.types import PositiveInt
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import Mapped
 from sqlmodel import Field, Relationship, SQLModel  # type: ignore
 
-import sr_assistant.app.utils as ut
 from sr_assistant.core.schemas import ExclusionReasons
 from sr_assistant.core.types import (
     CriteriaFramework,
@@ -168,7 +164,7 @@ class SystematicReview(SQLModelBase, table=True):
     )
     """PubMed search results for the review."""
 
-    screen_abstract_results: Mapped[list["ScreenAbstractResultModel"]] = Relationship(
+    screen_abstract_results: Mapped[list["ScreenAbstractResult"]] = Relationship(
         back_populates="review",
         sa_relationship_kwargs={"lazy": "selectin"},
     )
@@ -285,7 +281,7 @@ class PubMedResult(SQLModelBase, table=True):
         index=True,
         # sa_column=sa.Column(sa.UUID, sa.ForeignKey("screen_abstract_results.id"), index=True, nullable=True),
     )
-    conservative_result: Mapped["ScreenAbstractResultModel"] = Relationship(
+    conservative_result: Mapped["ScreenAbstractResult"] = Relationship(
         sa_relationship_kwargs={
             "foreign_keys": "PubMedResult.conservative_result_id",
             "lazy": "selectin",
@@ -299,7 +295,7 @@ class PubMedResult(SQLModelBase, table=True):
         index=True,
         # sa_column=sa.Column(sa.UUID, sa.ForeignKey("screen_abstract_results.id"), index=True, nullable=True),
     )
-    comprehensive_result: Mapped["ScreenAbstractResultModel"] = Relationship(
+    comprehensive_result: Mapped["ScreenAbstractResult"] = Relationship(
         sa_relationship_kwargs={
             "foreign_keys": "PubMedResult.comprehensive_result_id",
             "lazy": "selectin",
@@ -308,7 +304,7 @@ class PubMedResult(SQLModelBase, table=True):
     )
 
 
-class ScreenAbstractResultModel(SQLModelBase, table=True):
+class ScreenAbstractResult(SQLModelBase, table=True):
     """Abstract screening decision model.
 
     Tracks the screening decisions for each paper in the review.
@@ -459,29 +455,12 @@ class ScreenAbstractResultModel(SQLModelBase, table=True):
     pubmed_result: Mapped["PubMedResult"] = Relationship(
         sa_relationship_kwargs={
             "lazy": "selectin",
-            "foreign_keys": "ScreenAbstractResultModel.pubmed_result_id",
+            "foreign_keys": "ScreenAbstractResult.pubmed_result_id",
         },
     )
-    # as_conservative: Mapped["PubMedResult"] = Relationship(
-    #     back_populates="conservative_result",
-    #     sa_relationship_kwargs={
-    #         "lazy": "selectin",
-    #         "primaryjoin": ("and_(PubMedResult.conservative_result_id==ScreenAbstractResultModel.id, "
-    #                       "PubMedResult.id==ScreenAbstractResultModel.pubmed_result_id)")
-    #     }
-    # )
-
-    # as_comprehensive: Mapped["PubMedResult"] = Relationship(
-    #     back_populates="comprehensive_result",
-    #     sa_relationship_kwargs={
-    #         "lazy": "selectin",
-    #         "primaryjoin": ("and_(PubMedResult.comprehensive_result_id==ScreenAbstractResultModel.id, "
-    #                       "PubMedResult.id==ScreenAbstractResultModel.pubmed_result_id)")
-    #     }
-    # )
 
 
-class LogRecord(SQLModel, table=True):
+class LogRecord(SQLModelBase, table=True):
     """Model for storing app log records."""
 
     _table_name: t.ClassVar[t.Literal["log_records"]] = "log_records"
@@ -553,7 +532,7 @@ class LogRecord(SQLModel, table=True):
     )
 
     # @model_validator(mode="after")
-    # def _set_review_id(self) -> t.Self:  # noqa: PLW0211 (not a static method ...)
+    # def _set_review_id(self) -> t.Self:
     #    if not self.review_id:
     #        review_id = self.extra.get("review_id")
     #        if not ut.is_uuid(review_id) and ut.in_streamlit():

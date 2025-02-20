@@ -1,10 +1,27 @@
-"""Repository implementations for systematic review models.
+"""Synchronous repository implementations for systematic review models.
 
-This module provides async repositories for database operations using SQLModel.
+This module provides sync repositories for database operations using SQLModel.
 Includes examples for common operations and complex queries including JSONB.
+
+Note:
+    - All repositories use a sessionmaker factory assigned as self.session_factory.
+
+      ``with self.session_factory.begin() as session``:
+            - Executes the query within a session.
+            - Commits the session.
+            - Rollbacks the session on error.
+            - DOES NOT SUPPORT MANUAL ``session.commit()``
+            - Cannot be used when ``session.refresh()`` is needed.
+
+      ``with self.session_factory() as session``:
+            - No automatic commit/rollback
+            - Can use ``session.commit()`` and ``session.refresh()`` manually.
+
+    - Async repositories are in `sr_assistant.core.repositories_async`.
 
 Examples:
     Basic repository usage:
+
     ```python
     # Initialize repository
     review_repo = SystematicReviewRepository()
@@ -15,197 +32,229 @@ Examples:
         inclusion_criteria="RCTs published after 2010...",
         exclusion_criteria="Case studies, non-English...",
     )
-    created = await review_repo.create(review)
+    created = review_repo.add(review)
 
     # Get with relationships
-    full_review = await review_repo.get_with_pubmed_results(created.id)
-
-    # Update
-    review.inclusion_criteria = "Updated criteria..."
-    updated = await review_repo.update(review.id, review)
-    ```
-
-    Working with screening results:
-    ```python
-    # Get both conservative and comprehensive results
-    pubmed_repo = PubMedResultRepository()
-    result = await pubmed_repo.get_with_screening_results(pubmed_id)
-
-    if result.conservative_result:
-        print(f"Conservative decision: {result.conservative_result.decision}")
-    if result.comprehensive_result:
-        print(f"Comprehensive decision: {result.comprehensive_result.decision}")
-
-    # Query by JSONB fields
-    screen_repo = ScreenAbstractResultRepository()
-    results = await screen_repo.get_by_exclusion_category(
-        review_id, category="wrong_population"
-    )
+    review_with_search_results = review_repo.get_with_pubmed_results(created.id)
+    full_review = review_repo.get_with_all(created.id) # search, logs, screening results
+    full_review.pubmed_results ...
+    full_review.screen_abstract_results ...
+    full_review.log_records ...
     ```
 """
 
 from __future__ import annotations
 
+import types
 import typing as t
-import uuid
 
 from loguru import logger
-from pydantic.types import JsonValue
-from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.ext.asyncio import async_sessionmaker
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import selectinload
-from sqlmodel import select
+from sqlmodel import and_, col, or_, select
 
-from sr_assistant.app.database import AsyncSQLModelSession, asession_factory
+from sr_assistant.app.database import SQLModelSession, session_factory, sessionmaker
 from sr_assistant.core.models import (
+    Base,
+    LogRecord,
     PubMedResult,
-    ScreenAbstractResultModel,
+    ScreenAbstractResult,  # AbstractScreeningResult
     SystematicReview,
 )
+from sr_assistant.core.schemas import ExclusionReasons
 from sr_assistant.core.types import ScreeningStrategyType
+from sr_assistant.step2.pubmed_integration import (
+    extract_article_info,  # TODO move to app.pubmed_integration
+)
 
-type RepositoryType = SystematicReview | PubMedResult | ScreenAbstractResultModel
+if t.TYPE_CHECKING:
+    import uuid
+    from collections.abc import Sequence
+
+    from pydantic.types import JsonValue
+    from sqlmodel.sql.expression import SelectOfScalar
 
 
-class BaseRepository[T: RepositoryType]:
+class RepositoryError(Exception):
+    """Base exception for persistence layer failures."""
+
+
+class ConstraintViolationError(RepositoryError):
+    """Database constraint violation (unique constraint, foreign key, etc.)."""
+
+
+class RecordNotFoundError(RepositoryError):
+    """Requested record was not found in the database."""
+
+
+class BaseRepository[T: Base]:
     """Base repository implementing common database operations.
 
-    Examples:
-        ```python
-        repo = BaseRepository[SystematicReview]()
+    Args:
+        session_factory: SQLAlchemy sessionmaker instance
 
-        # Get by ID
-        review = await repo.get_by_id(uuid.UUID("..."))
+    Attributes:
+        model_cls: SQLModel class this repository manages
 
-        # Get all with limit
-        reviews = await repo.get_all(limit=10)
-
-        # Create
-        new_review = SystematicReview(...)
-        created = await repo.create(new_review)
-
-        # Update
-        updated = await repo.update(review.id, review)
-
-        # Delete
-        deleted = await repo.delete(review.id)
-        ```
+    Raises:
+        ConstraintViolationError: On database constraint violations
+        RecordNotFoundError: When a requested record is not found
+        RepositoryError: On other database errors
     """
-
-    model_class: t.ClassVar[t.type[T]]
 
     def __init__(
         self,
-        asession_factory: async_sessionmaker[AsyncSQLModelSession] = asession_factory,
+        session_factory: sessionmaker[SQLModelSession] = session_factory,
     ) -> None:
         """Initialize repository with session factory."""
-        self.asession_factory = asession_factory
+        self.session_factory = session_factory
 
-    async def get_by_id(self, id: uuid.UUID) -> T | None:
+    @property
+    def model_cls(self) -> type[T]:
+        """Get the model class associated with the repository."""
+        return t.get_args(types.get_original_bases(type(self))[0])[0]
+
+    def _construct_get_stmt(self, id: uuid.UUID) -> SelectOfScalar[T]:
+        return select(self.model_cls).where(self.model_cls.id == id)  # pyright: ignore [reportAttributeAccessIssue]
+
+    def get_by_id(self, id: uuid.UUID) -> T | None:
         """Get a record by its ID."""
         try:
-            async with self.asession_factory.begin() as session:
-                query = select(self.model_class).where(self.model_class.id == id)
-                return await session.exec(query).first()
-        except SQLAlchemyError as e:
-            logger.exception(f"Database error in get_by_id: {e}")
-            raise
+            with self.session_factory.begin() as session:
+                return session.exec(self._construct_get_stmt(id)).first()
+        except SQLAlchemyError as exc:
+            msg = f"Database error in get_by_id for {self.model_cls.__name__}: {exc}"
+            logger.exception(msg)
+            raise RepositoryError(msg) from exc
 
-    async def get_all(self, limit: int | None = None) -> list[T]:
+    def get_all(self, limit: int | None = None) -> Sequence[T]:
         """Get all records with optional limit."""
         try:
-            async with self.asession_factory.begin() as session:
-                query = select(self.model_class)
+            with self.session_factory.begin() as session:
+                query = select(self.model_cls)
                 if limit is not None:
                     query = query.limit(limit)
-                return list(await session.exec(query))
-        except SQLAlchemyError as e:
-            logger.exception(f"Database error in get_by_exclusion_category: {e}")
-            raise
+                return list(session.exec(query))
+        except SQLAlchemyError as exc:
+            msg = f"Failed to fetch all records for {self.model_cls.__name__}: {exc}"
+            logger.exception(msg)
+            raise RepositoryError(msg) from exc
 
-    async def get_by_response_metadata(
-        self,
-        review_id: uuid.UUID,
-        metadata: dict[str, JsonValue],
-    ) -> list[ScreenAbstractResultModel]:
-        """Get results by matching response_metadata JSONB fields.
+    def _construct_list_stmt(self, **filters: dict[str, t.Any]) -> SelectOfScalar[T]:
+        stmt = select(self.model_cls)
+        where_clauses = []
+        for c, v in filters.items():
+            if not hasattr(self.model_cls, c):
+                msg = f"Invalid column name {c}"
+                logger.warning(msg)
+                raise ValueError(msg)
+            where_clauses.append(getattr(self.model_cls, c) == v)
 
-        Example:
-            ```python
-            # Find all results from a specific model configuration
-            results = await repo.get_by_response_metadata(
-                review_id, {"model": "gpt-4", "temperature": 0.0}
-            )
-            ```
+        if len(where_clauses) == 1:
+            stmt = stmt.where(where_clauses[0])
+        elif len(where_clauses) > 1:
+            stmt = stmt.where(and_(*where_clauses))
+        return stmt
+
+    def list(self, **filters: dict[str, t.Any]) -> Sequence[T]:
+        """List records matching the filters. ``model_fiel``, ``value`` pairs.
+
+        Examples:
+            >>> repo = SystematicReviewRepository()
+            >>> repo.list(dict(criteria_framework="PICO"))
         """
         try:
-            async with self.asession_factory.begin() as session:
-                query = select(ScreenAbstractResultModel).where(
-                    ScreenAbstractResultModel.review_id == review_id,
-                    *[
-                        ScreenAbstractResultModel.response_metadata[key] == value
-                        for key, value in metadata.items()
-                    ],
-                )
-                return list(await session.exec(query))
-        except SQLAlchemyError as e:
-            logger.exception(f"Database error in get_by_response_metadata: {e}")
-            raise
+            stmt = self._construct_list_stmt(**filters)
+            with self.session_factory.begin() as session:
+                return session.exec(stmt).all()
+        except SQLAlchemyError as exc:
+            msg = (
+                f"Failed to fetch {self.model_cls.__name__} by response metadata: {exc}"
+            )
+            logger.exception(msg)
+            raise RepositoryError(msg) from exc
 
-    async def create(self, model: T) -> T:
-        """Create a new record."""
+    def add(self, record: T) -> T:
+        """Add a new record."""
         try:
-            async with self.asession_factory.begin() as session:
-                session.add(model)
-                await session.commit()
-                await session.refresh(model)
-                return model
-        except SQLAlchemyError as e:
-            logger.exception(f"Database error in create: {e}")
-            raise
+            with self.session_factory() as session:
+                session.add(record)
+                session.commit()
+                session.refresh(record)
+                return record
+        except IntegrityError as exc:
+            msg = f"Failed to add {self.model_cls.__name__}: {exc}"
+            logger.exception(msg)
+            raise ConstraintViolationError(msg) from exc
+        except SQLAlchemyError as exc:
+            msg = f"Failed to add {self.model_cls.__name__}: {exc}"
+            logger.exception(msg)
+            raise RepositoryError(msg) from exc
 
-    async def update(self, id: uuid.UUID, model: T) -> T:
+    def add_all(self, objs: Sequence[T]) -> Sequence[T]:
+        """Add multiple records at once."""
+        try:
+            with self.session_factory() as session:
+                session.add_all(objs)
+                session.commit()
+                for o in objs:
+                    session.refresh(o)
+                return objs
+        except IntegrityError as exc:
+            msg = f"Failed to add multiple {self.model_cls.__name__} records: {exc}"
+            logger.exception(msg)
+            raise ConstraintViolationError(msg) from exc
+        except SQLAlchemyError as exc:
+            msg = f"Failed to add multiple {self.model_cls.__name__} records: {exc}"
+            logger.exception(msg)
+            raise RepositoryError(msg) from exc
+
+    def update(self, record: T) -> T:
         """Update an existing record."""
+        if not record.id:  # type: ignore
+            msg = f"{self.model_cls.__name__} has no id"
+            raise ValueError(msg)
+
         try:
-            async with self.asession_factory.begin() as session:
-                query = select(self.model_class).where(self.model_class.id == id)
-                db_model = await session.exec(query).first()
+            with self.session_factory.begin() as session:
+                # First check if record exists
+                existing = session.get(self.model_cls, record.id)  # type: ignore
+                if not existing:
+                    msg = f"{self.model_cls.__name__} with id {record.id} not found"
+                    logger.warning(msg)
+                    raise RecordNotFoundError(msg)
 
-                if db_model is None:
-                    msg = f"{self.model_class.__name__} with ID {id} not found"
-                    raise ValueError(msg)
+                # Merge the updated record
+                assert record not in session  # noqa: S101
+                return session.merge(record)
+        except IntegrityError as exc:
+            msg = f"Database constraint violation in update for {self.model_cls.__name__}: {exc}"
+            logger.exception(msg)
+            raise ConstraintViolationError(msg) from exc
+        except SQLAlchemyError as exc:
+            msg = f"Database error in update for {self.model_cls.__name__}: {exc}"
+            logger.exception(msg)
+            raise RepositoryError(msg) from exc
 
-                # Update fields excluding id and timestamps
-                model_data = model.model_dump(
-                    exclude={"id", "created_at", "updated_at"}
-                )
-                for key, value in model_data.items():
-                    setattr(db_model, key, value)
-
-                session.add(db_model)
-                await session.commit()
-                await session.refresh(db_model)
-                return db_model
-        except SQLAlchemyError as e:
-            logger.exception(f"Database error in update: {e}")
-            raise
-
-    async def delete(self, id: uuid.UUID) -> bool:
+    def delete(self, id: uuid.UUID) -> None:
         """Delete a record by ID."""
         try:
-            async with self.asession_factory.begin() as session:
-                query = select(self.model_class).where(self.model_class.id == id)
-                model = await session.exec(query).first()
+            record = self.get_by_id(id)
+            if record is None:
+                msg = f"{self.model_cls.__name__} with id {id} not found"
+                logger.warning(msg)
+                raise RecordNotFoundError(msg)
 
-                if model is None:
-                    return False
-
-                await session.delete(model)
-                await session.commit()
-                return True
-        except SQLAlchemyError as e:
-            logger.exception(f"Database error in delete: {e}")
-            raise
+            with self.session_factory.begin() as session:
+                session.delete(record)
+        except IntegrityError as exc:
+            msg = f"Database constraint violation in delete for {self.model_cls.__name__}: {exc}"
+            logger.exception(msg)
+            raise ConstraintViolationError(msg) from exc
+        except SQLAlchemyError as exc:
+            msg = f"Database error in delete for {self.model_cls.__name__}: {exc}"
+            logger.exception(msg)
+            raise RepositoryError(msg) from exc
 
 
 class SystematicReviewRepository(BaseRepository[SystematicReview]):
@@ -216,7 +265,7 @@ class SystematicReviewRepository(BaseRepository[SystematicReview]):
         repo = SystematicReviewRepository()
 
         # Get review with all relationships
-        review = await repo.get_with_pubmed_results(review_id)
+        review = repo.get_with_pubmed_results(review_id)
 
         # Access relationships
         for result in review.pubmed_results:
@@ -228,24 +277,41 @@ class SystematicReviewRepository(BaseRepository[SystematicReview]):
         ```
     """
 
-    model_class = SystematicReview
-
-    async def get_with_pubmed_results(self, id: uuid.UUID) -> SystematicReview | None:
+    def get_with_pubmed_results(self, id: uuid.UUID) -> SystematicReview | None:
         """Get a review with its PubMed results and screening results loaded."""
         try:
-            async with self.asession_factory.begin() as session:
+            with self.session_factory.begin() as session:
                 query = (
-                    select(SystematicReview)
-                    .where(SystematicReview.id == id)
+                    select(self.model_cls)
+                    .where(self.model_cls.id == id)
                     .options(
-                        selectinload(SystematicReview.pubmed_results),
-                        selectinload(SystematicReview.screen_abstract_results),
+                        selectinload(self.model_cls.pubmed_results),
                     )
                 )
-                return await session.exec(query).first()
-        except SQLAlchemyError as e:
-            logger.exception(f"Database error in get_with_pubmed_results: {e}")
-            raise
+                return session.exec(query).first()
+        except SQLAlchemyError as exc:
+            msg = f"Database error in get_with_pubmed_results for {self.model_cls.__name__}: {exc}"
+            logger.exception(msg)
+            raise RepositoryError(msg) from exc
+
+    def get_with_all(self, id: uuid.UUID) -> SystematicReview | None:
+        """Get a review with its PubMed results, screening results, and log records loaded."""
+        try:
+            with self.session_factory.begin() as session:
+                query = (
+                    select(self.model_cls)
+                    .where(self.model_cls.id == id)
+                    .options(
+                        selectinload(self.model_cls.pubmed_results),
+                        selectinload(self.model_cls.screen_abstract_results),
+                        selectinload(self.model_cls.log_records),
+                    )
+                )
+                return session.exec(query).first()
+        except SQLAlchemyError as exc:
+            msg = f"Database error in get_with_all for {self.model_cls.__name__}: {exc}"
+            logger.exception(msg)
+            raise RepositoryError(msg) from exc
 
 
 class PubMedResultRepository(BaseRepository[PubMedResult]):
@@ -256,91 +322,137 @@ class PubMedResultRepository(BaseRepository[PubMedResult]):
         repo = PubMedResultRepository()
 
         # Get all results for a review
-        results = await repo.get_by_review_id(review_id)
+        results = repo.get_by_review_id(review_id)
 
         # Get with screening results
-        result = await repo.get_with_screening_results(pubmed_id)
+        result = repo.get_with_screening_results(pubmed_id)
 
         # Get results by screening strategy
-        conservative = await repo.get_by_screening_strategy(
+        conservative = repo.get_by_screening_strategy(
             review_id, ScreeningStrategyType.CONSERVATIVE
-        )
-        comprehensive = await repo.get_by_screening_strategy(
-            review_id, ScreeningStrategyType.COMPREHENSIVE
         )
         ```
     """
 
-    model_class = PubMedResult
-
-    async def get_by_review_id(self, review_id: uuid.UUID) -> list[PubMedResult]:
+    def get_by_review_id(self, review_id: uuid.UUID) -> Sequence[PubMedResult]:
         """Get all PubMed results for a review."""
         try:
-            async with self.asession_factory.begin() as session:
+            with self.session_factory.begin() as session:
                 query = (
-                    select(PubMedResult)
-                    .where(PubMedResult.review_id == review_id)
+                    select(self.model_cls)
+                    .where(self.model_cls.review_id == review_id)
                     .options(
-                        selectinload(PubMedResult.conservative_result),
-                        selectinload(PubMedResult.comprehensive_result),
+                        selectinload(self.model_cls.review),
+                        selectinload(self.model_cls.conservative_result),
+                        selectinload(self.model_cls.comprehensive_result),
                     )
                 )
-                return list(await session.exec(query))
-        except SQLAlchemyError as e:
-            logger.exception(f"Database error in get_by_review_id: {e}")
-            raise
+                return list(session.exec(query))
+        except SQLAlchemyError as exc:
+            msg = f"Failed to fetch PubMed results for review {self.model_cls.__name__}: {exc}"
+            logger.exception(msg)
+            raise RepositoryError(msg) from exc
 
-    async def get_with_screening_results(self, id: uuid.UUID) -> PubMedResult | None:
+    def get_with_screening_results(self, id: uuid.UUID) -> PubMedResult | None:
         """Get a PubMed result with both screening results loaded."""
         try:
-            async with self.asession_factory.begin() as session:
+            with self.session_factory.begin() as session:
                 query = (
-                    select(PubMedResult)
-                    .where(PubMedResult.id == id)
+                    select(self.model_cls)
+                    .where(self.model_cls.id == id)
                     .options(
-                        selectinload(PubMedResult.conservative_result),
-                        selectinload(PubMedResult.comprehensive_result),
+                        selectinload(self.model_cls.conservative_result),
+                        selectinload(self.model_cls.comprehensive_result),
                     )
                 )
-                return await session.exec(query).first()
-        except SQLAlchemyError as e:
-            logger.exception(f"Database error in get_with_screening_results: {e}")
-            raise
+                return session.exec(query).first()
+        except SQLAlchemyError as exc:
+            msg = f"Failed to fetch PubMed result with screening results for {self.model_cls.__name__}: {exc}"
+            logger.exception(msg)
+            raise RepositoryError(msg) from exc
 
-    async def get_by_screening_strategy(
+    def get_by_screening_strategy(
         self,
         review_id: uuid.UUID,
         strategy: ScreeningStrategyType,
     ) -> list[PubMedResult]:
         """Get PubMed results that have a specific screening strategy result."""
         try:
-            async with self.asession_factory.begin() as session:
-                # Build base query
-                query = select(PubMedResult).where(PubMedResult.review_id == review_id)
+            with self.session_factory.begin() as session:
+                query = select(self.model_cls).where(
+                    self.model_cls.review_id == review_id
+                )
 
-                # Add join based on strategy
                 if strategy == ScreeningStrategyType.CONSERVATIVE:
                     query = query.where(
-                        PubMedResult.conservative_result_id.is_not(None)
+                        col(self.model_cls.conservative_result_id).is_not(None)
                     )
                     query = query.options(
-                        selectinload(PubMedResult.conservative_result)
+                        selectinload(self.model_cls.conservative_result)
                     )
                 else:
                     query = query.where(
-                        PubMedResult.comprehensive_result_id.is_not(None)
+                        col(self.model_cls.comprehensive_result_id).is_not(None)
                     )
                     query = query.options(
-                        selectinload(PubMedResult.comprehensive_result)
+                        selectinload(self.model_cls.comprehensive_result)
                     )
 
-                return list(await session.exec(query))
-        except SQLAlchemyError as e:
-            logger.exception(f"Database error in get_by_screening_strategy: {e}")
-            raise
+                return list(session.exec(query))
+        except SQLAlchemyError as exc:
+            msg = f"Database error in get_by_screening_strategy for {self.model_cls.__name__}: {exc}"
+            logger.exception(msg)
+            raise RepositoryError(msg) from exc
+
+    def store_results(
+        self, review_id: uuid.UUID, query: str, records: dict[str, t.Any]
+    ) -> Sequence[PubMedResult]:
+        """Store PubMed search results.
+
+        Args:
+            review_id (uuid.UUID): ID of the review the results belong to.
+            query (str): Query used to search PubMed.
+            records (dict[str, t.Any]): Search results from PubMed.
+
+        Returns:
+            Sequence[PubMedResult]: List of stored PubMed results.
+        """
+        results = []
+        for record in records["PubmedArticle"]:
+            try:
+                article_info = extract_article_info(record)
+                if not article_info:
+                    continue
+                result = PubMedResult(
+                    review_id=review_id,
+                    query=query,
+                    pmid=article_info["pmid"],
+                    pmc=article_info["pmc"],
+                    doi=article_info["doi"],
+                    title=article_info["title"],
+                    abstract=article_info["abstract"],
+                    journal=article_info["journal"],
+                    year=article_info["year"],
+                )
+                logger.info(f"Storing PubMed result: {result}")
+                with self.session_factory() as session:
+                    session.add(result)
+                    session.commit()
+                    session.refresh(result)
+                    results.append(result)
+            except Exception:
+                msg = f"Failed to extract article info from record: {record!r}"
+                logger.exception(msg)
+                continue
+
+        if not results:
+            return []
+
+        logger.info(f"Stored {len(results)} PubMed results for review {review_id}")
+        return results
 
 
-class ScreenAbstractResultRepository(BaseRepository[ScreenAbstractResultModel]):
+class ScreenAbstractResultRepository(BaseRepository[ScreenAbstractResult]):
     """Repository for ScreenAbstractResult model operations.
 
     Examples:
@@ -348,137 +460,177 @@ class ScreenAbstractResultRepository(BaseRepository[ScreenAbstractResultModel]):
         repo = ScreenAbstractResultRepository()
 
         # Get all results for a review
-        results = await repo.get_by_review_id(review_id)
+        results = repo.get_by_review_id(review_id)
 
         # Get results by strategy
-        conservative = await repo.get_by_strategy(
-            review_id, ScreeningStrategyType.CONSERVATIVE
-        )
+        conservative = repo.get_by_strategy(review_id, ScreeningStrategyType.CONSERVATIVE)
 
         # Query by JSONB fields (exclusion reasons)
-        wrong_population = await repo.get_by_exclusion_category(
-            review_id, "wrong_population"
+        wrong_population = repo.get_by_exclusion_category(
+            review_id, "population_exclusion_reasons"
         )
 
         # Complex JSONB query
-        results = await repo.get_by_response_metadata(
+        results = repo.get_by_response_metadata(
             review_id, {"model": "gpt-4", "temperature": 0.0}
         )
         ```
     """
 
-    model_class = ScreenAbstractResultModel
-
-    async def get_by_review_id(
-        self, review_id: uuid.UUID
-    ) -> list[ScreenAbstractResultModel]:
+    def get_by_review_id(self, review_id: uuid.UUID) -> list[ScreenAbstractResult]:
         """Get all screening results for a review."""
         try:
-            async with self.asession_factory.begin() as session:
+            with self.session_factory.begin() as session:
                 query = (
-                    select(ScreenAbstractResultModel)
-                    .where(ScreenAbstractResultModel.review_id == review_id)
-                    .options(selectinload(ScreenAbstractResultModel.pubmed_result))
+                    select(self.model_cls)
+                    .where(self.model_cls.review_id == review_id)
+                    .options(selectinload(self.model_cls.pubmed_result))
                 )
-                return list(await session.exec(query))
-        except SQLAlchemyError as e:
-            logger.exception(f"Database error in get_by_review_id: {e}")
-            raise
+                return list(session.exec(query))
+        except SQLAlchemyError as exc:
+            msg = f"Failed to fetch screening results for review {self.model_cls.__name__}: {exc}"
+            logger.exception(msg)
+            raise RepositoryError(msg) from exc
 
-    async def get_by_pubmed_result(
+    def get_by_pubmed_result(
         self,
         review_id: uuid.UUID,
         pubmed_result_id: uuid.UUID,
-    ) -> list[ScreenAbstractResultModel]:
+    ) -> list[ScreenAbstractResult]:
         """Get screening results for a specific PubMed result."""
         try:
-            async with self.asession_factory.begin() as session:
+            with self.session_factory.begin() as session:
                 query = (
-                    select(ScreenAbstractResultModel)
+                    select(self.model_cls)
                     .where(
-                        ScreenAbstractResultModel.review_id == review_id,
-                        ScreenAbstractResultModel.pubmed_result_id == pubmed_result_id,
+                        self.model_cls.review_id == review_id,
+                        self.model_cls.pubmed_result_id == pubmed_result_id,
                     )
-                    .options(selectinload(ScreenAbstractResultModel.pubmed_result))
+                    .options(selectinload(self.model_cls.pubmed_result))
                 )
-                return list(await session.exec(query))
-        except SQLAlchemyError as e:
-            logger.exception(f"Database error in get_by_pubmed_result: {e}")
-            raise
+                return list(session.exec(query))
+        except SQLAlchemyError as exc:
+            msg = f"Failed to fetch screening results for PubMed result {self.model_cls.__name__}: {exc}"
+            logger.exception(msg)
+            raise RepositoryError(msg) from exc
 
-    async def get_by_strategy(
+    def get_by_strategy(
         self,
         review_id: uuid.UUID,
         strategy: ScreeningStrategyType,
-    ) -> list[ScreenAbstractResultModel]:
+    ) -> list[ScreenAbstractResult]:
         """Get screening results for a specific strategy."""
         try:
-            async with self.asession_factory.begin() as session:
+            with self.session_factory.begin() as session:
                 query = (
-                    select(ScreenAbstractResultModel)
+                    select(self.model_cls)
                     .where(
-                        ScreenAbstractResultModel.review_id == review_id,
-                        ScreenAbstractResultModel.screening_strategy == strategy,
+                        self.model_cls.review_id == review_id,
+                        self.model_cls.screening_strategy == strategy,
                     )
-                    .options(selectinload(ScreenAbstractResultModel.pubmed_result))
+                    .options(selectinload(self.model_cls.pubmed_result))
                 )
-                return list(await session.exec(query))
-        except SQLAlchemyError as e:
-            logger.exception(f"Database error in get_by_strategy: {e}")
-            raise
+                return list(session.exec(query))
+        except SQLAlchemyError as exc:
+            msg = f"Failed to fetch screening results by strategy for {self.model_cls.__name__}: {exc}"
+            logger.exception(msg)
+            raise RepositoryError(msg) from exc
 
-    async def get_by_exclusion_category(
+    def get_by_exclusion_category(
         self,
         review_id: uuid.UUID,
-        category: str,
-    ) -> list[ScreenAbstractResultModel]:
-        """Get results where exclusion_reason_categories JSONB contains category.
+        exclusion_reason: str,
+    ) -> list[ScreenAbstractResult]:
+        """Get results where any exclusion category list contains the given reason.
+
+        Args:
+            review_id: Review ID to filter by
+            exclusion_reason: The specific exclusion reason to search for, e.g. "Non-human subjects"
 
         Example:
             ```python
-            # Find all results excluded due to wrong population
-            results = await repo.get_by_exclusion_category(review_id, "wrong_population")
+            # Find all results excluded due to non-human subjects
+            results = repo.get_by_exclusion_category(review_id, "Non-human subjects")
             ```
         """
         try:
-            async with self.asession_factory.begin() as session:
-                query = select(ScreenAbstractResultModel).where(
-                    ScreenAbstractResultModel.review_id == review_id,
-                    ScreenAbstractResultModel.exclusion_reason_categories[
-                        category
-                    ].is_not(None),
+            with self.session_factory.begin() as session:
+                # Get all fields from ExclusionReasons model that end with _exclusion_reasons
+                category_fields = [
+                    field_name
+                    for field_name in ExclusionReasons.model_fields.keys()
+                    if field_name.endswith("_exclusion_reasons")
+                ]
+
+                # Build OR conditions to check each category array
+                category_conditions = [
+                    col(self.model_cls.exclusion_reason_categories)[field].op("@>")(  # type: ignore
+                        f'["{exclusion_reason}"]'
+                    )
+                    for field in category_fields
+                ]
+
+                query = (
+                    select(self.model_cls)
+                    .where(
+                        and_(
+                            self.model_cls.review_id == review_id,
+                            or_(*category_conditions),
+                        )
+                    )
+                    .options(selectinload(self.model_cls.pubmed_result))
                 )
+                return list(session.exec(query))
+        except SQLAlchemyError as exc:
+            msg = f"Failed to fetch records by exclusion category for {self.model_cls.__name__}: {exc}"
+            logger.exception(msg)
+            raise RepositoryError(msg) from exc
 
-                return list(await session.exec(query))
-        except SQLAlchemyError as e:
-            logger.exception(f"Database error in get_by_exclusion_category: {e}")
-            raise
-
-    async def get_by_response_metadata(
+    def get_by_response_metadata(
         self,
         review_id: uuid.UUID,
         metadata: dict[str, JsonValue],
-    ) -> list[ScreenAbstractResultModel]:
+    ) -> list[ScreenAbstractResult]:
         """Get results by matching response_metadata JSONB fields.
 
         Example:
             ```python
             # Find all results from a specific model configuration
-            results = await repo.get_by_response_metadata(
+            results = repo.get_by_response_metadata(
                 review_id, {"model": "gpt-4", "temperature": 0.0}
             )
             ```
         """
         try:
-            async with self.asession_factory.begin() as session:
-                query = select(ScreenAbstractResultModel).where(
-                    ScreenAbstractResultModel.review_id == review_id,
+            with self.session_factory.begin() as session:
+                query = select(self.model_cls).where(
+                    self.model_cls.review_id == review_id,
                     *[
-                        ScreenAbstractResultModel.response_metadata[key] == value
+                        col(self.model_cls.response_metadata)[key] == value
                         for key, value in metadata.items()
                     ],
                 )
-                return list(await session.exec(query))
-        except SQLAlchemyError as e:
-            logger.exception(f"Database error in get_by_response_metadata: {e}")
-            raise
+                return list(session.exec(query))
+        except SQLAlchemyError as exc:
+            msg = f"Failed to fetch records by response metadata for {self.model_cls.__name__}: {exc}"
+            logger.exception(msg)
+            raise RepositoryError(msg) from exc
+
+
+class LogRepository(BaseRepository[LogRecord]):
+    """Repository for log records."""
+
+    def get_by_review_id(self, review_id: uuid.UUID) -> Sequence[LogRecord]:
+        """Get log records by review ID."""
+        try:
+            with self.session_factory.begin() as session:
+                query = select(self.model_cls).where(
+                    self.model_cls.review_id == review_id
+                )
+                return list(
+                    session.exec(query.options(selectinload(self.model_cls.review)))
+                )
+        except SQLAlchemyError as exc:
+            msg = f"Failed to fetch records by review ID for {self.model_cls.__name__}: {exc}"
+            logger.exception(msg)
+            raise RepositoryError(msg) from exc
