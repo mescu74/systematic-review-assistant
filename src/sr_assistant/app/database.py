@@ -56,11 +56,13 @@ def persist_model(model: SQLModelBase) -> SQLModelBase:
     session_factory = t.cast(
         sessionmaker[SQLModelSession], st.session_state.session_factory
     )
-    with session_factory() as session:
-        model = session.merge(model)
-        session.commit()
-        session.refresh(model)
-        return model
+    # with session_factory() as session:
+    #    model = session.merge(model)
+    #    session.commit()
+    #    session.refresh(model)
+    #    return model
+    with session_factory.begin() as session:
+        return session.merge(model)
 
 
 def is_persisted(model: SQLModelBase) -> bool:
