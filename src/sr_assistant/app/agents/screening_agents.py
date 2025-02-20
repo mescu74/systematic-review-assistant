@@ -30,9 +30,6 @@ under the hood.
 ## TODO
 
 - Either move types here or from here to core.types/schemas. Not both.
-- Add unit and integration tests
-  - Integration tests pending test DB config and data finalization
-  - guard any st access
 """
 
 from __future__ import annotations
@@ -181,7 +178,7 @@ class ScreeningError(BaseModel):
     )
 
     @model_validator(mode="after")
-    def _validate_error_and_message(self) -> t.Self:  # noqa: PLW0211 # this is an instance method
+    def _validate_error_and_message(self) -> t.Self:  # this is an instance method
         if isinstance(self.error, ScreeningResult) and self.message is None:
             msg = "ScreeningResult should always have a message"
             logger.warning(msg)
@@ -296,7 +293,7 @@ def screen_abstracts_chain_on_end_cb(run_obj: Run) -> None:  # noqa: C901
         if not end_time:
             cr_logger.warning("No end time for run: {cr!r}, setting to now")
             end_time = datetime.now(tz=timezone.utc)
-        resp_metadata = {}
+        resp_metadata = {}  # FIXME: these don't work
         invocation_params = {}
         for ccr in cr.child_runs:
             # TODO: parse model_id from openai metadata
@@ -355,7 +352,7 @@ def make_screen_abstracts_chain_input(
 ) -> ScreenAbstractsChainBatchInputDict:
     """Create input for a batch to be passed to abstracts screening chain.
 
-    chain.batch(input) input as returned from this function.
+    chain.batch(**input) input as returned from this function.
 
     TODO: We pass the same input and config to both reviewers, is it possible
           to bind configs to the sub chains such that metadata from the parallel
