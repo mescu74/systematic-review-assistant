@@ -49,14 +49,12 @@ dependencies = [
   "langsmith>=0.3.6",
   "more-itertools>=10.6.0",
   "logfire[sqlalchemy]>=3.5.3",
-  "typer>=0.15.1",
   "pandas-stubs>=2.2.3.241126",
 ]
 
 [dependency-groups]
 dev = [
   "pytest>=7.4.3",
-  "pytest-async>=0.1.1",
   "pytest-cov>=6.0.0",
   "pytest-sugar>=1.0.0",
   "pytest-xdist>=3.6.1",
@@ -72,6 +70,9 @@ dev = [
   "devtools>=0.12.2",
   "jsonref>=1.1.0",
   "logot>=1.3.0",
+  "pytest-asyncio>=0.25.3",
+  "pytest-mock>=3.14.0",
+  "mock-alchemy>=0.2.6",
 ]
 security = ["pip-audit>=2.7.3", "ruff>=0.8.6"]
 observability = [
@@ -105,14 +106,16 @@ extraPaths = [
   "src/sr_assistant/step4",
   "src/sr_assistant/core",
   "src/sr_assistant/app",
-  "src/sr_assistant/agents",
   "src/sr_assistant",
+  "tools",
 ]
 pythonVersion = "3.12"
 typeCheckingMode = "strict"
 include = ["src/sr_assistant/**", "tests/**", "tools/**"]
 reportImportCycles = true
 analyzeUnannotatedFunctions = true
+enableReachabilityAnalysis = true
+enableExperimentalFeatures = true
 reportMatchNotExhaustive = "warning"
 reportDeprecated = true
 reportOptionalCall = true
@@ -123,14 +126,15 @@ deprecateTypingAliases = true
 reportCallInDefaultInitializer = true
 reportImplicitOverride = true
 reportImplicitStringConcatenation = true
-reportMissingSuperCall = "warning"
 reportShadowedImports = false # too annoying
 reportUninitializedInstanceVariable = true
 # Library code causing these all the time
 reportUnknownMemberType = false
 reportUnknownVariableType = false
 reportUnknownArgumentType = false
-reportAttributeAccessIssue = false
+reportUnknownParameterType = false
+reportUnknownLambdaType = false
+#reportAttributeAccessIssue = false
 
 [tool.mypy]
 strict = true
@@ -177,22 +181,22 @@ ignore = [
   "E501",    # Line too long, formatting will handle and sometimes it's fine
   "ERA001",  # Commented-out code
   "G004",    # Logging statement uses f-string
-  "ISC001",  # Implicit string concatenation
   "PGH003",  # type: ignore
   "PLE1205", # too many arguments for `logging` format string, not for loguru
-  "PLR",     # Design related pylint codes
-  "PT011",   # `pytest.raises(ValueError)` is too broad, set the `match` parameter or use a more specific exception"
-  "T201",    # Use of print
+  #"PLR",     # Design related pylint codes
+  #"PT011",   # `pytest.raises(ValueError)` is too broad, set the `match` parameter or use a more specific exception"
+  "T201",   # Use of print
   "TD002",
   "TD003",
-  "TRY300",  # Use else in try except
-  "UP017",   # datetime.UTC instead of datetime.timezone.utc. Don't think so.
+  "TRY300", # Use else in try except
+  "UP017",  # datetime.UTC instead of datetime.timezone.utc. Don't think so.
 ]
 fixable = ["ALL"]
 unfixable = [
   "T20",   # Removes print statements
   "F841",  # Removes unused variables
-  "UP017",
+  "UP017", # datetime.UTC instead of datetime.timezone.utc. Don't think so.
+
 ]
 
 task-tags = ["TODO", "FIXME", "XXX", "HACK", "BUG", "NOTE", "PERF"]
@@ -207,7 +211,7 @@ docstring-code-format = true
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
-ignore-decorators = ["declared_attr", "validator", "root_validator"]
+ignore-decorators = ["declared_attr", "field_validator", "model_validator"]
 property-decorators = ["property", 'functools.cached_property']
 
 [tool.ruff.lint.mccabe]
@@ -225,21 +229,22 @@ extend-immutable-calls = [
 [tool.ruff.lint.pyupgrade]
 keep-runtime-typing = true
 
-
 [tool.ruff.lint.flake8-builtins]
 builtins-ignorelist = ["id", "type", "input"]
 
 [tool.ruff.lint.pep8-naming]
-staticmethod-decorators = [
-  "pydantic.validator",
-  "pydantic.root_validator",
-  "pydantic.model_validator",
-  "pydantic.validate_call",
-  "pydantic.validate_arguments",
-]
+staticmethod-decorators = []
 
 [tool.ruff.lint.isort]
-known-first-party = ["step1", "step2", "step3", "step4", "core"]
+known-first-party = [
+  "sr_assistant",
+  "sr_assistant.step1",
+  "sr_assistant.step2",
+  "sr_assistant.step3",
+  "sr_assistant.step4",
+  "sr_assistant.core",
+  "sr_assistant.app",
+]
 required-imports = []
 
 [tool.ruff.lint.per-file-ignores]
@@ -277,7 +282,7 @@ ignore-overlong-task-comments = true
 
 [tool.pytest.ini_options]
 addopts = "-vvv -ra -q --import-mode=importlib"
-pythonpath = ["src/sr_assistant"]
+pythonpath = ["src/sr_assistant", "tools/"]
 testpaths = ["tests/unit"] # Default to unit tests
 markers = [
   "integration: marks tests as integration tests",
@@ -288,7 +293,7 @@ filterwarnings = ["ignore::UserWarning"]
 [tool.coverage.run]
 source = ["src/sr_assistant"]
 branch = true
-omit = ["tests/*", "**/__init__.py", "**/_*.py"]
+omit = ["tests/**", "**/__init__.py", "**/_*.py"]
 
 [tool.coverage.report]
 exclude_lines = [
@@ -297,6 +302,7 @@ exclude_lines = [
   "raise NotImplementedError",
   "if __name__ == .__main__.:",
   "if TYPE_CHECKING:",
+  "if t.TYPE_CHECKING:",
 ]
 show_missing = true
 fail_under = 0 # Set minimum coverage percentage when ready
