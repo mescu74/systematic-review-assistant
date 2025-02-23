@@ -21,26 +21,31 @@ from sr_assistant.core.models import (
     PubMedResult,
     SystematicReview,
 )
-from sr_assistant.core.repositories_old import (
-    PubMedRepository,
-    ScreeningAbstractRepository,
+from sr_assistant.core.repositories import (
+    PubMedResultRepository,
+    ScreenAbstractResultRepository,
+    SystematicReviewRepository,
 )
 from sr_assistant.core.schemas import ScreeningDecisionType
 
-if t.TYPE_CHECKING:
-    from supabase import Client
 
-
-def init_pubmed_repository(supabase: Client) -> PubMedRepository:
+def init_pubmed_repository() -> PubMedResultRepository:
     if "repo_pubmed" not in st.session_state:
-        repo = PubMedRepository(supabase)
+        repo = PubMedResultRepository()
         st.session_state.repo_pubmed = repo
     return st.session_state.repo_pubmed
 
 
-def init_screen_abstracts_repository(supabase: Client) -> ScreeningAbstractRepository:
+def init_review_repository() -> SystematicReviewRepository:
+    if "repo_review" not in st.session_state:
+        repo = SystematicReviewRepository()
+        st.session_state.repo_review = repo
+    return st.session_state.repo_review
+
+
+def init_screen_abstracts_repository() -> ScreenAbstractResultRepository:
     if "repo_screen_abstracts" not in st.session_state:
-        repo = ScreeningAbstractRepository(supabase)
+        repo = ScreenAbstractResultRepository()
         st.session_state.repo_screen_abstracts = repo
     return st.session_state.repo_screen_abstracts
 
@@ -255,8 +260,9 @@ def screen_abstracts(  # noqa: C901
 
     batch_size = ut.init_state_key("screen_abstracts_batch_size", 10)
     batch_idx = ut.init_state_key("screen_abstracts_batch_idx", -1)
-    with st.spinner("Screening abstracts ..."):
-        screening_status = st.status("Screening abstracts status ...", expanded=True)
+    screening_status = st.status("Screening abstracts status ...", expanded=True)
+
+    with screening_status:
         for i in range(0, len(search_results), batch_size):
             batch = search_results[i : i + batch_size]
             batch_size = len(batch)
@@ -354,6 +360,8 @@ def screen_abstracts(  # noqa: C901
                 # render_df()
                 # render_errors()
 
+    screening_status.update(label="Screening complete", state="complete")
+
 
 def screen_abstracts_page(review_id: uuid.UUID | None = None) -> None:
     """Abstract screening page."""
@@ -370,16 +378,17 @@ def screen_abstracts_page(review_id: uuid.UUID | None = None) -> None:
         st.stop()
 
     # Init session state
-    # TODO: switch to new repos, use screening repo
-    init_pubmed_repository(st.session_state.supabase)
+    init_review_repository()
+    init_pubmed_repository()
+    init_screen_abstracts_repository()
     init_screen_abstracts_chain()
 
     st.header("Abstract Screening")
     screening_notification_widget = st.empty()
     # Get search results and existing screening decisions
     if "pubmed_results" not in st.session_state:
-        st.session_state.pubmed_results = (
-            st.session_state.repo_pubmed.get_search_results(review_id)
+        st.session_state.pubmed_results = st.session_state.repo_pubmed.get_by_review_id(
+            review_id
         )
 
     if st.button("Screen Abstracts"):
@@ -409,18 +418,21 @@ def screen_abstracts_page(review_id: uuid.UUID | None = None) -> None:
 
 # For quick testing
 if "review_id" not in st.session_state:
-    st.session_state.review_id = uuid.UUID(hex="393f5e13-175a-4314-b47e-45b804ab3d6f")
+    st.session_state.review_id = uuid.UUID(
+        hex="60057808-f51c-4f9e-8bcf-8860cf4b718d"
+    )  # seemingly deleted uuid.UUID(hex="393f5e13-175a-4314-b47e-45b804ab3d6f")
 if "logger_extra_configured" not in st.session_state:
     logger.configure(extra={"review_id": st.session_state.review_id})
     st.session_state.logger_extra_configured = True
+init_screen_abstracts_repository()
+init_review_repository()
 if "review" not in st.session_state:
-    with st.session_state.session_factory() as session:
-        st.session_state.review = session.get(
-            SystematicReview, st.session_state.review_id
-        )
-init_pubmed_repository(st.session_state.supabase)
+    review = st.session_state.repo_review.get_by_id(st.session_state.review_id)
+    logger.info(f"review: {review}")
+    st.session_state.review = review
+init_pubmed_repository()
 if "pubmed_results" not in st.session_state:
-    st.session_state.pubmed_results = st.session_state.repo_pubmed.get_search_results(
+    st.session_state.pubmed_results = st.session_state.repo_pubmed.get_by_review_id(
         st.session_state.review_id
     )
 screen_abstracts_page()
