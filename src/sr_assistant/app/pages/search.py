@@ -5,7 +5,7 @@ from uuid import UUID
 import streamlit as st
 from loguru import logger
 
-from sr_assistant.core.repositories_old import PubMedRepository
+from sr_assistant.core.repositories import PubMedResultRepository
 from sr_assistant.step2.pubmed_integration import pubmed_fetch_details, pubmed_search
 
 
@@ -15,7 +15,7 @@ def search_page(review_id: UUID | None = None) -> None:
         st.error("Please select a review protocol first")
         st.stop()
 
-    repo = PubMedRepository(st.session_state.supabase)
+    repo = PubMedResultRepository()
 
     with st.form("pubmed_search"):
         query = st.text_input(
@@ -55,7 +55,7 @@ def search_page(review_id: UUID | None = None) -> None:
                 return
 
     # Show existing results
-    existing = repo.get_search_results(review_id)
+    existing = repo.get_by_review_id(review_id)
     if not existing:
         return
 
