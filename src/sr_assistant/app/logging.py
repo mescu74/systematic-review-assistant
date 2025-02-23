@@ -61,7 +61,7 @@ class PostgresLogSink:
             name=message.record["name"],  # pyright: ignore [reportCallIssue]
             function=serialized.get("function"),
             line=message.record["line"],
-            extra=serialized.get("extra"),
+            extra=serialized.get("extra", {}),
             process=f"{message.record["process"].name}:{message.record['process'].id}",  # pyright: ignore [reportCallIssue]
             thread=f"{message.record["thread"].name}:{message.record['thread'].id}",  # pyright: ignore [reportCallIssue]
             review_id=review_id,
@@ -106,7 +106,7 @@ class AsyncPostgresLogSink:
             name=message.record["name"],  # pyright: ignore [reportCallIssue]
             function=serialized.get("function"),
             line=message.record["line"],
-            extra=serialized.get("extra"),
+            extra=serialized.get("extra", {}),
             process=f"{message.record["process"].name}:{message.record['process'].id}",  # pyright: ignore [reportCallIssue]
             thread=f"{message.record["thread"].name}:{message.record['thread'].id}",  # pyright: ignore [reportCallIssue]
             review_id=review_id,
@@ -135,17 +135,17 @@ def configure_logging() -> None:
                 enqueue=True,
                 catch=True,
                 colorize=True,
-            ),  # noqa: C408
+            ),
             dict(
                 sink="app.log", level="DEBUG", enqueue=True, catch=True, serialize=True
-            ),  # noqa: C408
+            ),
             dict(
                 sink=sync_pg_sink,
                 level="DEBUG",
                 enqueue=True,
                 catch=True,
                 serialize=True,
-            ),  # noqa: C408
+            ),
             logfire.loguru_handler(),
         ],  # pyright: ignore [reportArgumentType]
     )
