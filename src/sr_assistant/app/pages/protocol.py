@@ -12,6 +12,7 @@ from sqlmodel import select
 from streamlit.delta_generator import DeltaGenerator
 
 from sr_assistant.core.models import CriteriaFramework, SystematicReview
+from sr_assistant.core.schemas import PicosSuggestions, SuggestionResult
 from sr_assistant.step1.suggestion_agent import SuggestionAgent
 
 load_dotenv(find_dotenv(), override=True)
@@ -247,12 +248,52 @@ with col2:
 # LLM Interaction
 if validate_button:
     with suggestions_spinner.container():
-        st.info("Validating ...")
-        review = build_review_model_from_pico(review_model_widget)
-        with st.spinner():
-            st.session_state["llm_suggestions"] = st.session_state[
+        st.info("Generating suggestions...")
+        # Build a temporary model just to pass to the agent (doesn't need PICO yet)
+        temp_review_data = SystematicReview(
+            id=st.session_state.review_id,  # Use current ID
+            background=st.session_state.get(
+                "background", ""
+            ),  # Default to empty string
+            research_question=st.session_state.get(
+                "research_question", ""
+            ),  # Default to empty string
+            # Pass empty/placeholder for criteria as agent uses background/question
+            inclusion_criteria="",
+            exclusion_criteria="",
+        )
+        with st.spinner("Analyzing protocol and suggesting PICO..."):
+            suggestion_result: SuggestionResult = st.session_state[
                 "suggestions_agent"
-            ].get_suggestions(review)
+            ].get_suggestions(temp_review_data)
+
+            pico_suggestions: PicosSuggestions | None = suggestion_result.get("pico")
+            general_suggestions: str = suggestion_result.get(
+                "raw_response", "No suggestions provided."
+            )  # Display critique
+
+            if pico_suggestions:
+                # Update session state only if the field is currently empty
+                if not st.session_state.pico_population and pico_suggestions.population:
+                    st.session_state.pico_population = pico_suggestions.population
+                    logger.info("Prefilled PICO Population.")
+                if (
+                    not st.session_state.pico_intervention
+                    and pico_suggestions.intervention
+                ):
+                    st.session_state.pico_intervention = pico_suggestions.intervention
+                    logger.info("Prefilled PICO Intervention.")
+                if not st.session_state.pico_comparison and pico_suggestions.comparison:
+                    st.session_state.pico_comparison = pico_suggestions.comparison
+                    logger.info("Prefilled PICO Comparison.")
+                if not st.session_state.pico_outcome and pico_suggestions.outcome:
+                    st.session_state.pico_outcome = pico_suggestions.outcome
+                    logger.info("Prefilled PICO Outcome.")
+
+            # Store the general critique for display
+            st.session_state["llm_suggestions"] = general_suggestions
+
+            # Rerun to show updated fields and suggestions text
             st.rerun()
 
 st.subheader("Save Protocol")

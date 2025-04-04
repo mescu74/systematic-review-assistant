@@ -10,6 +10,7 @@ Todo:
 from __future__ import annotations
 
 import uuid
+from typing import TypedDict
 
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.types import AwareDatetime, JsonValue, PositiveInt  # noqa: TC002
@@ -248,3 +249,29 @@ screening input, the two reviewers share the `trace_id`. `id` is unique to the r
     )
     """Metadata read from the chain/graph events. inputs, invocation params, \
 resp metadata, token usage, etc. JSONB in Postgres."""
+
+
+# --- Agent/Step Schemas --- # Added section
+
+
+class PicosSuggestions(BaseModel):
+    """Structured PICO suggestions from LLM."""
+
+    population: str = Field(
+        description="Suggested Population/Problem description based on context."
+    )
+    intervention: str = Field(
+        description="Suggested Intervention/Exposure description."
+    )
+    comparison: str = Field(description="Suggested Comparison/Control description.")
+    outcome: str = Field(description="Suggested Outcome description.")
+    general_critique: str = Field(
+        description="General critique and suggestions for the overall protocol."
+    )
+
+
+class SuggestionResult(TypedDict):
+    """Return type for suggestion agent."""
+
+    pico: PicosSuggestions | None
+    raw_response: str
