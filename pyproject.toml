@@ -19,7 +19,7 @@ dependencies = [
   "pandas==2.1.4",
   "pypdf>=5.1.0,<6.0.0",
   "python-docx==1.0.1",
-  "python-dotenv==1.0.0",
+  "python-dotenv>=1.0.1",
   "streamlit>=1.41.1",
   "biopython>=1.83",
   "pydantic>=2.10.4",
@@ -48,7 +48,7 @@ dependencies = [
   "orjson>=3.10.15",
   "langsmith>=0.3.6",
   "more-itertools>=10.6.0",
-  "logfire[sqlalchemy]>=3.5.3",
+  "logfire[fastapi,httpx,psycopg,sqlalchemy,system-metrics]>=3.5.3",
   "pandas-stubs>=2.2.3.241126",
 ]
 
@@ -73,10 +73,12 @@ dev = [
   "pytest-asyncio>=0.25.3",
   "pytest-mock>=3.14.0",
   "mock-alchemy>=0.2.6",
+  "langchain-mcp-tools>=0.1.7",
+  "pyright>=1.1.395",
 ]
 security = ["pip-audit>=2.7.3", "ruff>=0.8.6"]
 observability = [
-  "logfire>=3.5.3",
+  "logfire[fastapi,httpx,psycopg,sqlalchemy,system-metrics]>=3.5.3",
   "opentelemetry-instrumentation-aiohttp-client>=0.51b0",
   "opentelemetry-instrumentation-fastapi>=0.51b0",
   "opentelemetry-instrumentation-httpx>=0.51b0",
@@ -90,6 +92,8 @@ observability = [
   "opentelemetry-instrumentation-urllib>=0.51b0",
 ]
 
+[tool.logfire]
+pydantic_plugin_record = "all"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/sr_assistant"]
