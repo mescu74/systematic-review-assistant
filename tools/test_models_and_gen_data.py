@@ -1,55 +1,42 @@
 """Generate test data for systematic review database using SQLModel."""
 
-import os
-import sys
-from datetime import UTC, datetime
-import typing as t
-import uuid
 import argparse
+import os
+import uuid
+from datetime import UTC, datetime
 
-from sqlmodel import Session, SQLModel, create_engine, select, col
 import sqlalchemy as sa
-import sqlalchemy.dialects.postgresql as sa_pg
 from dotenv import load_dotenv
+from sqlmodel import Session, SQLModel, col, create_engine, select
 
 from sr_assistant.core.models import (
-    SystematicReview,
     PubMedResult,
-    ScreenAbstractResultModel,
+    ScreenAbstractResult,
+    SystematicReview,
 )
-from sr_assistant.core.types import (
-    ScreeningDecisionType,
-    ScreeningStrategyType
-)
-#from sr_assistant.app.database import session_factory # TODO: test this here?
-from sr_assistant.core.schemas import ExclusionReasons
+from sr_assistant.core.types import ScreeningDecisionType, ScreeningStrategyType
 
-from sqlalchemy.schema import DropTable
-from sqlalchemy.ext.compiler import compiles
+# from sr_assistant.app.database import session_factory # TODO: test this here?
 
 cleanup = False
+
 
 def confirm_database_drop(engine: sa.Engine) -> bool:
     """Confirm database drop with user."""
     url = engine.url
-    print(f"\nWARNING: About to drop all tables in database:")
+    print("\nWARNING: About to drop all tables in database:")
     print(f"Database: {url.database}")
     print(f"Host: {url.host}")
     print(f"User: {url.username}")
 
     while True:
         response = input("\nDo you want to proceed? [y/N] ").lower().strip()
-        if response in {'y', 'yes'}:
+        if response in {"y", "yes"}:
             return True
-        if response in {'n', 'no', ''}:  # Empty response counts as no
+        if response in {"n", "no", ""}:  # Empty response counts as no
             return False
         print("Please answer 'y' or 'n'")
 
-@compiles(DropTable, "postgresql")
-def _compile_drop_table(element: DropTable, compiler: t.Any, **kwargs: t.Any) -> str:
-    if cleanup:
-        return compiler.visit_drop_table(element) + " CASCADE"
-    return compiler.visit_drop_table(element)
 
 def cleanup_database(engine: sa.Engine, cleanup: bool = False) -> None:
     """Drop all tables and custom types from the database.
@@ -68,15 +55,17 @@ def cleanup_database(engine: sa.Engine, cleanup: bool = False) -> None:
         return
 
     with engine.connect() as conn:
-        conn.execute(sa.text("""
+        conn.execute(
+            sa.text("""
             DROP SCHEMA public CASCADE;
             CREATE SCHEMA public;
             GRANT ALL ON SCHEMA public TO postgres;
             GRANT ALL ON SCHEMA public TO public;
-        """))
+        """)
+        )
         conn.commit()
-        SQLModel.metadata.drop_all(engine) # make sqlmodel/sa aware of drops
-        #else:
+        SQLModel.metadata.drop_all(engine)  # make sqlmodel/sa aware of drops
+        # else:
         #    try:
         #        # Disable foreign key checks
         #        conn.execute(text("SET session_replication_role = 'replica';"))
@@ -106,13 +95,13 @@ def cleanup_database(engine: sa.Engine, cleanup: bool = False) -> None:
         #        conn.execute(text("SET session_replication_role = 'origin';"))
         #        conn.commit()
 
+
 def create_test_data(engine: sa.Engine) -> None:
     """Create test data in database.
 
     Creates reviews, PubMed results, and screening results with proper relationships.
     Uses SQLModel for clean, type-safe database operations.
     """
-
     SQLModel.metadata.create_all(engine)
 
     with Session(engine) as session:
@@ -145,12 +134,12 @@ def create_test_data(engine: sa.Engine) -> None:
                     id=uuid.uuid4(),
                     review_id=review.id,
                     query=f"Test query for {review.research_question}",
-                    pmid=f"PMD{i+1}",
-                    pmc=f"PMC00{i+1}",
-                    doi=f"10.1000/test.{i+1}",
-                    title=f"Test Article {i+1} for Review {review.id}",
-                    abstract=f"This is a test abstract for article {i+1}",
-                    journal=f"Test Journal {i+1}",
+                    pmid=f"PMD{i + 1}",
+                    pmc=f"PMC00{i + 1}",
+                    doi=f"10.1000/test.{i + 1}",
+                    title=f"Test Article {i + 1} for Review {review.id}",
+                    abstract=f"This is a test abstract for article {i + 1}",
+                    journal=f"Test Journal {i + 1}",
                     year=str(2020 + i),
                 )
                 pubmed_results.append(result)
@@ -166,12 +155,14 @@ def create_test_data(engine: sa.Engine) -> None:
             trace_id = uuid.uuid4()
 
             # Conservative screening
-            conservative = ScreenAbstractResultModel(
+            conservative = ScreenAbstractResult(
                 id=uuid.uuid4(),
                 review_id=result.review_id,
                 pubmed_result_id=result.id,
                 trace_id=trace_id,
-                decision=ScreeningDecisionType.INCLUDE if result.year > "2022" else ScreeningDecisionType.EXCLUDE,
+                decision=ScreeningDecisionType.INCLUDE
+                if result.year > "2022"
+                else ScreeningDecisionType.EXCLUDE,
                 confidence_score=0.85,
                 rationale="Test rationale for conservative screening",
                 extracted_quotes=["Test quote 1", "Test quote 2"],
@@ -183,13 +174,20 @@ def create_test_data(engine: sa.Engine) -> None:
             )
             screening_results.append(conservative)
 
-            # Comprehensive screening
-            comprehensive = ScreenAbstractResultModel(
+            # Comprehensive screening - Introduce conflict for odd indices
+            comp_decision = (
+                ScreeningDecisionType.EXCLUDE
+                if result.year > "2022"
+                and int(result.year) % 2
+                != 0  # Conflict on odd year if conservative included
+                else ScreeningDecisionType.INCLUDE
+            )
+            comprehensive = ScreenAbstractResult(
                 id=uuid.uuid4(),
                 review_id=result.review_id,
                 pubmed_result_id=result.id,
                 trace_id=trace_id,
-                decision=ScreeningDecisionType.INCLUDE,
+                decision=comp_decision,
                 confidence_score=0.75,
                 rationale="Test rationale for comprehensive screening",
                 extracted_quotes=["Test quote 3", "Test quote 4"],
@@ -201,31 +199,40 @@ def create_test_data(engine: sa.Engine) -> None:
             )
             screening_results.append(comprehensive)
 
-            #screening_results.extend([conservative, comprehensive])
+            # screening_results.extend([conservative, comprehensive])
             screening_pairs.append((result, conservative.id, comprehensive.id))
 
         # Add screening results first
         session.add_all(screening_results)
         session.commit()
 
-         # Now update PubMed results with the committed screening result IDs
+        # Now update PubMed results with the committed screening result IDs
         for result, cons_id, comp_id in screening_pairs:
             result.conservative_result_id = cons_id
             result.comprehensive_result_id = comp_id
         session.commit()
 
         # Verify results using SQLModel select
-        stmt = select(ScreenAbstractResultModel).order_by(col(ScreenAbstractResultModel.created_at))
-        results = session.exec(stmt).all()
-        print(f"Created {len(results)} screening results")
-        for result in results:
-            print(f"- {result.created_at} {result.screening_strategy}: {result.decision} ({result.confidence_score})")
+        stmt = select(ScreenAbstractResult).order_by(
+            col(ScreenAbstractResult.created_at)
+        )
+        db_results = session.exec(stmt).all()
+        print(f"Created {len(db_results)} screening results")
+        for result in db_results:
+            print(
+                f"- {result.created_at} {result.screening_strategy}: {result.decision} ({result.confidence_score})"
+            )
+
 
 if __name__ == "__main__":
     load_dotenv(".env.test", override=True)
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--cleanup", action="store_true", help="Drop all tables and enum types before creating test data")
+    parser.add_argument(
+        "--cleanup",
+        action="store_true",
+        help="Drop all tables and enum types before creating test data",
+    )
     args = parser.parse_args()
 
     # Set the global flag based on the argument

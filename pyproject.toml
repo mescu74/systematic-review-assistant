@@ -185,6 +185,7 @@ ignore = [
   "E501",    # Line too long, formatting will handle and sometimes it's fine
   "ERA001",  # Commented-out code
   "G004",    # Logging statement uses f-string
+  "ISC001",
   "PGH003",  # type: ignore
   "PLE1205", # too many arguments for `logging` format string, not for loguru
   #"PLR",     # Design related pylint codes

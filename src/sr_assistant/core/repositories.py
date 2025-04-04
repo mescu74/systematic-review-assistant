@@ -59,6 +59,7 @@ from sr_assistant.core.models import (
     LogRecord,
     PubMedResult,
     ScreenAbstractResult,
+    ScreeningResolution,
     SystematicReview,
 )
 from sr_assistant.core.schemas import ExclusionReasons
@@ -220,7 +221,7 @@ class BaseRepository[T: Base]:
                 # First check if record exists
                 existing = session.get(self.model_cls, record.id)  # type: ignore
                 if not existing:
-                    msg = f"{self.model_cls.__name__} with id {record.id} not found"
+                    msg = f"{self.model_cls.__name__} with id {record.id} not found"  # type: ignore [attr-defined] # id exists on Base subclasses
                     logger.warning(msg)
                     raise RecordNotFoundError(msg)
 
@@ -468,12 +469,15 @@ class PubMedResultRepository(BaseRepository[PubMedResult]):
         """Delete all PubMed results for a review."""
         try:
             with self.session_factory.begin() as session:
-                query = delete(self.model_cls).where(col(self.model_cls.review_id) == review_id)
+                query = delete(self.model_cls).where(
+                    col(self.model_cls.review_id) == review_id
+                )
                 session.exec(query)  # pyright: ignore[reportCallIssue,reportArgumentType] exec missing overload, but works
         except SQLAlchemyError as exc:
             msg = f"Failed to delete PubMed results for review {self.model_cls.__name__}: {exc}"
             logger.exception(msg)
             raise RepositoryError(msg) from exc
+
 
 class ScreenAbstractResultRepository(BaseRepository[ScreenAbstractResult]):
     """Repository for ScreenAbstractResult model operations.
@@ -486,7 +490,9 @@ class ScreenAbstractResultRepository(BaseRepository[ScreenAbstractResult]):
         results = repo.get_by_review_id(review_id)
 
         # Get results by strategy
-        conservative = repo.get_by_strategy(review_id, ScreeningStrategyType.CONSERVATIVE)
+        conservative = repo.get_by_strategy(
+            review_id, ScreeningStrategyType.CONSERVATIVE
+        )
 
         # Query by JSONB fields (exclusion reasons)
         wrong_population = repo.get_by_exclusion_category(
@@ -651,9 +657,7 @@ class LogRepository(BaseRepository[LogRecord]):
                     self.model_cls.review_id == review_id
                 )
                 return list(
-                    session.exec(
-                        query.options(selectinload(self.model_cls.review))
-                    )
+                    session.exec(query.options(selectinload(self.model_cls.review)))
                 )
         except SQLAlchemyError as exc:
             msg = f"Failed to fetch records by review ID for {self.model_cls.__name__}: {exc}"
@@ -680,11 +684,33 @@ class LogRepository(BaseRepository[LogRecord]):
                     self.model_cls.level == level,
                 )
                 return list(
-                    session.exec(
-                        query.options(selectinload(self.model_cls.review))
-                    )
+                    session.exec(query.options(selectinload(self.model_cls.review)))
                 )
         except SQLAlchemyError as exc:
             msg = f"Failed to fetch records by review ID for {self.model_cls.__name__}: {exc}"
+            logger.exception(msg)
+            raise RepositoryError(msg) from exc
+
+
+class ScreeningResolutionRepository(BaseRepository[ScreeningResolution]):
+    """Repository for ScreeningResolution model operations.
+
+    Handles saving and retrieving resolution decisions.
+    """
+
+    def get_by_pubmed_id(
+        self, pubmed_result_id: uuid.UUID
+    ) -> ScreeningResolution | None:
+        """Get resolution by PubMedResult ID."""
+        try:
+            with self.session_factory.begin() as session:
+                query = (
+                    select(self.model_cls)
+                    .where(self.model_cls.pubmed_result_id == pubmed_result_id)
+                    .options(selectinload(self.model_cls.pubmed_result))
+                )
+                return session.exec(query).first()
+        except SQLAlchemyError as exc:
+            msg = f"Database error in get_by_pubmed_id for {self.model_cls.__name__}: {exc}"
             logger.exception(msg)
             raise RepositoryError(msg) from exc
