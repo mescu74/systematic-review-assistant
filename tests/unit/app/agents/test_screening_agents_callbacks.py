@@ -2,7 +2,7 @@
 
 import uuid
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 from sr_assistant.app.agents.screening_agents import (
     chain_on_error_listener_cb,
@@ -16,35 +16,74 @@ class TestChainOnErrorListenerCb:
 
     @patch("sr_assistant.app.agents.screening_agents.logger")
     def test_error_logging(self, mock_logger: MagicMock) -> None:
-        """Test that errors are logged correctly."""
+        """Test that errors and associated run objects are logged correctly."""
         # Create a mock Run object with child runs
-        mock_run = MagicMock()
-        mock_run.id = str(uuid.uuid4())
+        mock_run = MagicMock(name="MockRun")
+        run_id = str(uuid.uuid4())
+        mock_run.id = run_id
         mock_run.name = "test_run"
 
-        mock_child_run1 = MagicMock()
+        mock_child_run1 = MagicMock(name="MockChildRun1")
         mock_child_run1.id = str(uuid.uuid4())
         mock_child_run1.name = "child_run1"
 
-        mock_child_run2 = MagicMock()
+        mock_child_run2 = MagicMock(name="MockChildRun2")
         mock_child_run2.id = str(uuid.uuid4())
         mock_child_run2.name = "child_run2"
 
         mock_run.child_runs = [mock_child_run1, mock_child_run2]
 
-        # Call the function
-        chain_on_error_listener_cb(mock_run)
+        # Define the error
+        test_error = ValueError("Simulated error for testing")
 
-        # Check that logger.bind and logger.error were called correctly
-        assert mock_logger.bind.called
-        # The bound logger should have error called once for the run
-        bound_logger = mock_logger.bind.return_value
-        assert bound_logger.error.called
+        # Call the function with the error and the run object in kwargs
+        # Note: The original callback signature might have been different previously
+        # Ensure this call matches the signature in screening_agents.py
+        chain_on_error_listener_cb(test_error, run=mock_run)
 
-        # Child runs should also be logged
-        assert (
-            bound_logger.error.call_count >= 3
-        )  # At least once for parent and once for each child
+        # Get the list of calls made to the mock_logger and its returned mocks
+        calls = mock_logger.mock_calls
+
+        # Expected sequence of calls:
+        expected_calls = [
+            # 1. Initial bind for parent run
+            call.bind(run_id=run_id, run_name=mock_run.name),
+            # 2. Exception log on the bound logger
+            call.bind().exception(
+                f"Error during chain execution: run_id={run_id}, error={test_error!r}, kwargs={{'run': {mock_run!r}}}",
+                error=test_error,
+                kwargs={
+                    "run": mock_run
+                },  # Note: The actual kwargs dict might vary slightly based on test execution context
+            ),
+            # 3. Error log for parent run object
+            call.bind().error("Associated run object: {run_obj!r}", run_obj=mock_run),
+            # 4. Bind for first child run
+            call.bind(
+                run_id=mock_child_run1.id,
+                run_name=mock_child_run1.name,
+                parent_run_id=run_id,
+                parent_run_name=mock_run.name,
+            ),
+            # 5. Error log for first child run
+            call.bind().error("Associated child run: {cr!r}", cr=mock_child_run1),
+            # 6. Bind for second child run
+            call.bind(
+                run_id=mock_child_run2.id,
+                run_name=mock_child_run2.name,
+                parent_run_id=run_id,
+                parent_run_name=mock_run.name,
+            ),
+            # 7. Error log for second child run
+            call.bind().error("Associated child run: {cr!r}", cr=mock_child_run2),
+        ]
+
+        # Use assert_has_calls to check if these calls occurred in sequence.
+        # Allow extra calls if log level might produce more debug logs.
+        mock_logger.assert_has_calls(expected_calls, any_order=False)
+
+        # Optional stricter check: Ensure EXACTLY these calls happened and no others
+        # assert calls == expected_calls
 
 
 class TestScreenAbstractsChainOnEndCb:

@@ -14,7 +14,7 @@ from streamlit.delta_generator import DeltaGenerator
 from sr_assistant.core.models import SystematicReview
 from sr_assistant.step1.suggestion_agent import SuggestionAgent
 
-load_dotenv(find_dotenv())
+load_dotenv(find_dotenv(), override=True)
 
 
 def init_agent_config() -> RunnableConfig:
@@ -22,7 +22,7 @@ def init_agent_config() -> RunnableConfig:
         return cast(RunnableConfig, st.session_state.agent_config)
 
     config = RunnableConfig(
-        recursion_limit=1000, configurable={"thread_id": str(uuid.uuid4().hex)}
+        recursion_limit=1000, configurable={"thread_id": str(uuid.uuid4())}
     )
     st.session_state.agent_config = config
     return config
@@ -200,4 +200,4 @@ if st.button("Save Protocol"):
             )
             st.json(review.model_dump(mode="json"))
 
-    st.page_link("pages/search.py", label="Next: PubMed Search")
+    st.page_link("pages/search.py", label="Next: PubMed Search", icon=":material/search:")

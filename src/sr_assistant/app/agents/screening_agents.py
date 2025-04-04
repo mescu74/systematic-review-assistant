@@ -205,17 +205,29 @@ class ScreenAbstractResultTuple(t.NamedTuple):
 
 
 @logger.catch(onerror=lambda exc: st.error(exc) if ut.in_streamlit() else None)  # pyright: ignore [reportArgumentType]
-def chain_on_error_listener_cb(run_obj: Run) -> None:
-    cb_logger = logger.bind(run_id=run_obj.id, run_name=run_obj.name)
-    cb_logger.error("run_obj: {run_obj!r}", run_obj=run_obj)
-    for cr in run_obj.child_runs:
-        cb_cr_logger = logger.bind(
-            run_id=cr.id,
-            run_name=cr.name,
-            parent_run_id=run_obj.id,
-            parent_run_name=run_obj.name,
-        )
-        cb_cr_logger.error("child run: {cr!r}", cr=cr)
+def chain_on_error_listener_cb(error: BaseException, **kwargs: t.Any) -> None:
+    """Listener for Runnable sequence on_error events."""
+    run_obj = kwargs.get("run")
+    run_id = getattr(run_obj, "id", "unknown")
+    run_name = getattr(run_obj, "name", "unknown")
+    cb_logger = logger.bind(run_id=run_id, run_name=run_name)
+    # Use logger.exception to include traceback
+    cb_logger.exception(
+        f"Error during chain execution: run_id={run_id}, error={error!r}, kwargs={kwargs!r}",
+        error=error,
+        kwargs=kwargs,
+    )
+    # Optionally log child runs if needed, checking if run_obj exists and has child_runs
+    if run_obj and hasattr(run_obj, "child_runs") and run_obj.child_runs:
+        cb_logger.error("Associated run object: {run_obj!r}", run_obj=run_obj)
+        for cr in run_obj.child_runs:
+            cb_cr_logger = logger.bind(
+                run_id=getattr(cr, "id", "unknown"),
+                run_name=getattr(cr, "name", "unknown"),
+                parent_run_id=run_id,
+                parent_run_name=run_name,
+            )
+            cb_cr_logger.error("Associated child run: {cr!r}", cr=cr)
 
 
 @logger.catch(onerror=lambda exc: st.error(exc) if ut.in_streamlit() else None)  # pyright: ignore [reportArgumentType]
