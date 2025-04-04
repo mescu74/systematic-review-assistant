@@ -70,11 +70,9 @@ def get_query(review: SystematicReview) -> str:
         review.criteria_framework != CriteriaFramework.PICO
         or not review.criteria_framework_answers
     ):
-        # Handle cases where PICO isn't set (though it should be from protocol page)
         logger.warning(
             "Review criteria framework is not PICO or answers are missing. Falling back to basic query gen."
         )
-        # Fallback prompt (optional, or could raise error)
         fallback_prompt = ChatPromptTemplate.from_messages(
             [
                 (
@@ -87,25 +85,25 @@ def get_query(review: SystematicReview) -> str:
         fallback_chain = fallback_prompt | ChatOpenAI(
             model="gpt-4o", temperature=0.0
         ).with_structured_output(PubMedQuery)
-        result_dict = fallback_chain.invoke(
+        result_object: PubMedQuery = fallback_chain.invoke(
             {"research_question": review.research_question}
         )
-        return result_dict.get("query", "")
+        return result_object.query if result_object else ""
 
     pico = review.criteria_framework_answers
     logger.info(f"Generating query from PICO: {pico}")
-    result_dict = st.session_state.query_chain.invoke(
+    result_object: PubMedQuery = st.session_state.query_chain.invoke(
         {
-            "background": review.background or "",  # Ensure defaults if None
+            "background": review.background or "",
             "research_question": review.research_question,
             "population": pico.get("population", ""),
             "intervention": pico.get("intervention", ""),
             "comparison": pico.get("comparison", ""),
             "outcome": pico.get("outcome", ""),
-            "exclusion_criteria": review.exclusion_criteria or "",  # Ensure default
+            "exclusion_criteria": review.exclusion_criteria or "",
         }
     )
-    return result_dict.get("query", "")
+    return result_object.query if result_object else ""
 
 
 def gen_query_cb() -> None:
