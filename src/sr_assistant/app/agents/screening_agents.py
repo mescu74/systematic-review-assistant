@@ -71,7 +71,7 @@ if t.TYPE_CHECKING:
 
 # Resolver model and chain for resolving disagreements between reviewers
 RESOLVER_MODEL = ChatOpenAI(
-    model=os.getenv("SR_RESOLVER_MODEL", "o3-mini-high"),
+    model=os.getenv("SRA_RESOLVER_MODEL", "o3-mini-high"),
     api_key=SecretStr(os.getenv("OPENAI_API_KEY") or ""),
     temperature=0.0,
 )
@@ -152,7 +152,9 @@ Abstract: {pubmed_result.abstract}
     systematic_review = f"""
 Research Question: {review.research_question}
 Background: {review.background or "Not provided"}
-Inclusion Criteria: {review.inclusion_criteria}
+# Use correct fields based on model update
+Criteria Framework: {review.criteria_framework.value if review.criteria_framework else "N/A"}
+Criteria Answers: {review.criteria_framework_answers if review.criteria_framework_answers else "{}"}
 Exclusion Criteria: {review.exclusion_criteria}
 """
 
@@ -178,22 +180,11 @@ Rationale: {comprehensive_result.rationale}
             f"Extracted Quotes: {', '.join(comprehensive_result.extracted_quotes)}\n"
         )
 
-    # The resolver will provide this format in its response
-    resolver_output = """
-You need to make a final decision on whether to include or exclude this study.
-
-Please provide:
-1. A list of screening strategies that you believe are appropriate (conservative, comprehensive, or both)
-2. Detailed reasoning for your decision
-3. A confidence score (0.0 to 1.0) for your decision
-"""
-
     return {
         "search_result": search_result,
         "systematic_review": systematic_review,
         "conservative_reviewer_result": conservative_reviewer_result,
         "comprehensive_reviewer_result": comprehensive_reviewer_result,
-        "resolver_output": resolver_output,
     }
 
 
@@ -273,7 +264,6 @@ def resolve_screening_conflict(
             resolver_decision=result.resolver_decision,
             resolver_reasoning=result.resolver_reasoning,
             resolver_confidence_score=result.resolver_confidence_score,
-            resolver_include=result.resolver_include,
             resolver_model_name=RESOLVER_MODEL.model_name,
             start_time=start_time,
             end_time=end_time,
@@ -289,7 +279,7 @@ def resolve_screening_conflict(
         )
 
         logger.info(
-            f"Resolution: {resolution.resolver_decision}, confidence: {resolution.resolver_confidence_score}, includes: {resolution.resolver_include}"
+            f"Resolution: {resolution.resolver_decision}, confidence: {resolution.resolver_confidence_score}"
         )
 
         return resolution

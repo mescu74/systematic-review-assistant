@@ -18,10 +18,9 @@ from sr_assistant.core.types import (
     ScreeningDecisionType,
     ScreeningStrategyType
 )
-from sr_assistant.core.schemas import ExclusionReasons
-#from sr_assistant.app.database import session_factory # TODO: test this here?
+# from sr_assistant.core.schemas import ExclusionReasons
 
-cleanup = False
+cleanup_flag = False
 
 def confirm_database_drop(engine: sa.Engine) -> bool:
     """Confirm database drop with user."""
@@ -63,36 +62,7 @@ def cleanup_database(engine: sa.Engine, cleanup: bool = False) -> None:
             GRANT ALL ON SCHEMA public TO public;
         """))
         conn.commit()
-        SQLModel.metadata.drop_all(engine) # make sqlmodel/sa aware of drops
-        #else:
-        #    try:
-        #        # Disable foreign key checks
-        #        conn.execute(text("SET session_replication_role = 'replica';"))
-
-        #        # Regular SQLModel cleanup
-        #        SQLModel.metadata.drop_all(engine)
-
-        #        # Find and drop custom types
-        #        custom_types_query = text("""
-        #            SELECT t.typname
-        #            FROM pg_type t
-        #            JOIN pg_catalog.pg_namespace n ON n.oid = t.typnamespace
-        #            WHERE n.nspname = 'public'
-        #            AND t.typtype = 'e';  -- 'e' for enum types
-        #        """)
-
-        #        result = conn.execute(custom_types_query)
-        #        custom_types = result.fetchall()
-
-        #        for type_row in custom_types:
-        #            type_name = type_row[0]
-        #            conn.execute(text(f'DROP TYPE IF EXISTS "{type_name}" CASCADE;'))
-
-        #        conn.commit()
-        #    finally:
-        #        # Always re-enable foreign key checks
-        #        conn.execute(text("SET session_replication_role = 'origin';"))
-        #        conn.commit()
+        # SQLModel.metadata.drop_all(engine) # Not strictly needed after schema drop
 
 def create_test_data(engine: sa.Engine) -> None:
     """Create test data in database.
@@ -223,7 +193,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Set the global flag based on the argument
-    cleanup = args.cleanup
+    cleanup_flag = args.cleanup
 
     db_url = os.getenv("SRA_DATABASE_URL", os.getenv("DATABASE_URL", ""))
     if "sra_integration_test" not in db_url:
@@ -232,9 +202,15 @@ if __name__ == "__main__":
 
     engine = create_engine(db_url, echo=True)
 
-    if cleanup := confirm_database_drop(engine=engine):
-        print("Running in cleanup mode")
-        cleanup_database(engine, cleanup)
+    # Call the local cleanup_database function
+    if cleanup_flag:
+        # Confirmation happens interactively if needed
+        if confirm_database_drop(engine=engine):
+            print("Running in cleanup mode")
+            cleanup_database(engine, cleanup=True)
+        else:
+            print("Cleanup cancelled by user.")
+            exit(0)
     else:
         print("Running in non-cleanup mode")
 

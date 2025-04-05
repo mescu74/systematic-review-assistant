@@ -144,9 +144,9 @@ class SystematicReview(SQLModelBase, table=True):
     )
     """Answers to the criteria framework."""
 
-    inclusion_criteria: str = Field(
+    inclusion_criteria: str | None = Field(
         description="Inclusion criteria. To be replaced by above framework fields.",
-        sa_column=sa.Column(sa.Text(), nullable=False),
+        sa_column=sa.Column(sa.Text(), nullable=True),
     )
     """Inclusion criteria."""
 
@@ -324,10 +324,7 @@ class ScreeningResolution(SQLModelBase, table=True):
 
     __tablename__ = _tablename  # pyright: ignore # type: ignore
 
-    __table_args__ = (
-        add_gin_index(_tablename, "resolver_include"),
-        add_gin_index(_tablename, "response_metadata"),
-    )
+    __table_args__ = (add_gin_index(_tablename, "response_metadata"),)
 
     # --- Fields ---
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
@@ -359,7 +356,10 @@ class ScreeningResolution(SQLModelBase, table=True):
     resolver_decision: ScreeningDecisionType = Field(
         sa_column=sa.Column(
             sa_pg.ENUM(
-                ScreeningDecisionType, name="screeningdecisiontype", create_type=False
+                ScreeningDecisionType,
+                name="screeningdecisiontype",
+                values_callable=enum_values,
+                create_type=False,
             ),
             nullable=False,
             index=True,
@@ -368,9 +368,6 @@ class ScreeningResolution(SQLModelBase, table=True):
     resolver_reasoning: str = Field(sa_column=sa.Column(sa.Text(), nullable=False))
     resolver_confidence_score: float = Field(ge=0.0, le=1.0)
     resolver_model_name: str | None = Field(default=None)
-    resolver_include: Sequence[str] | None = Field(
-        default=None, sa_column=sa.Column(sa_pg.ARRAY(sa.String()), nullable=True)
-    )
     response_metadata: Mapping[str, JsonValue] | None = Field(
         default_factory=dict,
         sa_column=sa.Column(sa_pg.JSONB(none_as_null=True), nullable=False),
@@ -395,6 +392,21 @@ class ScreeningResolution(SQLModelBase, table=True):
             "lazy": "selectin",
             "foreign_keys": "[ScreeningResolution.review_id]",
         },
+    )
+    # Add relationships to load the actual abstract results
+    conservative_result: Mapped["ScreenAbstractResult"] = Relationship(
+        sa_relationship_kwargs={
+            "foreign_keys": "[ScreeningResolution.conservative_result_id]",
+            "lazy": "selectin",
+            "viewonly": True,  # Avoids potential conflicts with PubMedResult relationships
+        }
+    )
+    comprehensive_result: Mapped["ScreenAbstractResult"] = Relationship(
+        sa_relationship_kwargs={
+            "foreign_keys": "[ScreeningResolution.comprehensive_result_id]",
+            "lazy": "selectin",
+            "viewonly": True,  # Avoids potential conflicts with PubMedResult relationships
+        }
     )
 
 
@@ -477,7 +489,7 @@ class ScreenAbstractResult(SQLModelBase, table=True):
         description="Supporting quotes from the title/abstract. Can be omitted if uncertain.",
         sa_column=sa.Column(sa_pg.ARRAY(sa.Text()), nullable=True),
     )
-    exclusion_reason_categories: dict[str, list] = Field(
+    exclusion_reason_categories: Mapping[str, list[str]] = Field(
         default_factory=dict,
         description="The PRISMA exclusion reason categories for the decision. This complements the 'rationale' field.",
         sa_column=sa.Column(sa_pg.JSONB(none_as_null=True)),
