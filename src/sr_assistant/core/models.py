@@ -22,7 +22,6 @@ from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import Mapped
 from sqlmodel import Field, Relationship, SQLModel  # type: ignore
 
-from sr_assistant.core.schemas import ExclusionReasons
 from sr_assistant.core.types import (
     CriteriaFramework,
     LogLevel,
@@ -478,7 +477,7 @@ class ScreenAbstractResult(SQLModelBase, table=True):
         description="Supporting quotes from the title/abstract. Can be omitted if uncertain.",
         sa_column=sa.Column(sa_pg.ARRAY(sa.Text()), nullable=True),
     )
-    exclusion_reason_categories: ExclusionReasons = Field(
+    exclusion_reason_categories: dict[str, list] = Field(
         default_factory=dict,
         description="The PRISMA exclusion reason categories for the decision. This complements the 'rationale' field.",
         sa_column=sa.Column(sa_pg.JSONB(none_as_null=True)),
