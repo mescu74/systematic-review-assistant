@@ -43,9 +43,8 @@ def seed_data(db_session: Session):
     db_session.commit()
     db_session.refresh(review)
 
-    # Initialize with id=None for linter
+    # Initialize without id=None for SQLModel
     pubmed_res = PubMedResult(
-        id=None,
         review_id=review.id,
         query="Test query",
         pmid="RESOLVER_TEST_1",

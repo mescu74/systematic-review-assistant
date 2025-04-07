@@ -644,8 +644,8 @@ def make_screen_abstracts_chain_input(
                 **ScreenAbstractsChainInput(
                     background=review.background,
                     research_question=review.research_question,
-                    inclusion_criteria=review.inclusion_criteria,
-                    exclusion_criteria=review.exclusion_criteria,
+                    inclusion_criteria=review.inclusion_criteria or "",
+                    exclusion_criteria=review.exclusion_criteria or "",
                     title=pubmed_result.title,
                     journal=pubmed_result.journal,
                     year=pubmed_result.year,
