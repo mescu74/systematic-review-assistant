@@ -5,6 +5,7 @@ Revises: edd72f8c1a16
 Create Date: 2025-01-31 07:11:51.408417+00:00
 
 """
+
 from typing import Union
 from collections.abc import Sequence
 
@@ -14,12 +15,10 @@ import sqlmodel
 
 
 # revision identifiers, used by Alembic.
-revision: str = '0ab256b04824'
-down_revision: str | None = 'edd72f8c1a16'
+revision: str = "0ab256b04824"
+down_revision: str | None = "edd72f8c1a16"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
-
-
 
 
 def upgrade() -> None:
@@ -31,7 +30,7 @@ def upgrade() -> None:
             nullable=True,
             existing_type=sa.DateTime(),
             type_=sa.DateTime(timezone=True),
-            postgresql_using=f"{column} AT TIME ZONE 'UTC'"
+            postgresql_using=f"{column} AT TIME ZONE 'UTC'",
         )
 
     # Reviews
@@ -42,7 +41,7 @@ def upgrade() -> None:
             nullable=True,
             existing_type=sa.DateTime(),
             type_=sa.DateTime(timezone=True),
-            postgresql_using=f"{column} AT TIME ZONE 'UTC'"
+            postgresql_using=f"{column} AT TIME ZONE 'UTC'",
         )
 
     # Pubmed results
@@ -52,7 +51,7 @@ def upgrade() -> None:
         nullable=True,
         existing_type=sa.DateTime(),
         type_=sa.DateTime(timezone=True),
-        postgresql_using="created_at AT TIME ZONE 'UTC'"
+        postgresql_using="created_at AT TIME ZONE 'UTC'",
     )
 
 
@@ -65,7 +64,7 @@ def downgrade() -> None:
             nullable=True,
             existing_type=sa.DateTime(timezone=True),  # Note the timezone=True here
             type_=sa.DateTime(),
-            postgresql_using=f"{column} AT TIME ZONE 'UTC'"
+            postgresql_using=f"{column} AT TIME ZONE 'UTC'",
         )
 
     # Reviews
@@ -76,7 +75,7 @@ def downgrade() -> None:
             nullable=True,
             existing_type=sa.DateTime(timezone=True),  # Note the timezone=True here
             type_=sa.DateTime(),
-            postgresql_using=f"{column} AT TIME ZONE 'UTC'"
+            postgresql_using=f"{column} AT TIME ZONE 'UTC'",
         )
 
     # Pubmed results
@@ -86,5 +85,5 @@ def downgrade() -> None:
         nullable=True,
         existing_type=sa.DateTime(timezone=True),  # Note the timezone=True here
         type_=sa.DateTime(),
-        postgresql_using="created_at AT TIME ZONE 'UTC'"
+        postgresql_using="created_at AT TIME ZONE 'UTC'",
     )
