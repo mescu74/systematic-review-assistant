@@ -1,4 +1,5 @@
 """Old obsolete page, to be deleted."""
+
 from __future__ import annotations
 
 import pandas as pd
@@ -87,7 +88,7 @@ def screening_abstracts_page(review_id: UUID) -> None:
         for i in range(0, len(pending_results), batch_size):
             batch = pending_results[i : i + batch_size]
             status_text.text(
-                f"Screening papers {i+1}-{min(i+batch_size, len(pending_results))} of {len(pending_results)}..."
+                f"Screening papers {i + 1}-{min(i + batch_size, len(pending_results))} of {len(pending_results)}..."
             )
 
             # Prepare batch inputs

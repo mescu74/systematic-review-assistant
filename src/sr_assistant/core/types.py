@@ -59,46 +59,6 @@ type PMCID = t.Annotated[
 """PubMed Central ID (PMCID) - PMC followed by 1 to 8 digits."""
 
 
-type UtcDatetime = t.Annotated[
-    datetime,
-    at.Predicate(u.is_utc_datetime),
-    at.Timezone(timezone.utc),
-    WithJsonSchema(
-        {
-            "type": "string",
-            "format": "date-time",
-            "description": "UTC datetime",
-            "examples": ["2024-02-07T12:00:00Z"],
-        }
-    ),
-]
-
-type UUID7 = t.Annotated[
-    uuid6.UUID,
-    GetPydanticSchema(
-        get_pydantic_core_schema=lambda _,
-        handler: core_schema.with_info_plain_validator_function(
-            lambda val, info: u.validate_uuid(
-                uuid6.UUID(val) if info.mode == "json" else val, version=7
-            ),
-            serialization=core_schema.plain_serializer_function_ser_schema(
-                lambda val, info: str(val) if info.mode == "json" else val,
-                info_arg=True,
-            ),
-        ),
-        get_pydantic_json_schema=lambda _, handler: {
-            **handler(core_schema.str_schema()),
-            "format": "uuid7",
-        },
-    ),
-]
-"""Pydatic/SQLModel/SQLAlchemy compatible UUID7 type.
-
-Don't remember where this is from. A GitHub issue comment.
-- Could be improved with validators and maybe using TypeAdapter:
-``TypeAdapter(UUID7).validate_python(input)"""
-
-
 class ScreeningDecisionType(StrEnum):
     """Screening decision enum type.
 
@@ -2867,9 +2827,6 @@ class LogLevel(StrEnum):
         self.int = level_int
         return self
 
-    def __init__(self, *args: t.Any) -> None:
-        self.__class__.to_list = list(self.__class__.__members__)
-
     TRACE = auto(), 10
     DEBUG = auto(), 20
     INFO = auto(), 30
@@ -2877,3 +2834,51 @@ class LogLevel(StrEnum):
     WARNING = auto(), 30
     ERROR = auto(), 40
     CRITICAL = auto(), 50
+
+
+class SearchDatabaseSource(StrEnum):
+    """Enum for supported search database sources."""
+
+    PUBMED = "PubMed"
+    SCOPUS = "Scopus"
+    # Add EMBASE = "Embase" when needed
+
+
+type UtcDatetime = t.Annotated[
+    datetime,
+    at.Predicate(u.is_utc_datetime),
+    at.Timezone(timezone.utc),
+    WithJsonSchema(
+        {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC datetime",
+            "examples": ["2024-02-07T12:00:00Z"],
+        }
+    ),
+]
+
+type UUID7 = t.Annotated[
+    uuid6.UUID,
+    GetPydanticSchema(
+        get_pydantic_core_schema=lambda _,
+        handler: core_schema.with_info_plain_validator_function(
+            lambda val, info: u.validate_uuid(
+                uuid6.UUID(val) if info.mode == "json" else val, version=7
+            ),
+            serialization=core_schema.plain_serializer_function_ser_schema(
+                lambda val, info: str(val) if info.mode == "json" else val,
+                info_arg=True,
+            ),
+        ),
+        get_pydantic_json_schema=lambda _, handler: {
+            **handler(core_schema.str_schema()),
+            "format": "uuid7",
+        },
+    ),
+]
+"""Pydatic/SQLModel/SQLAlchemy compatible UUID7 type.
+
+Don't remember where this is from. A GitHub issue comment.
+- Could be improved with validators and maybe using TypeAdapter:
+``TypeAdapter(UUID7).validate_python(input)"""

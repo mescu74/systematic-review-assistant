@@ -62,8 +62,8 @@ class PostgresLogSink:
             function=serialized.get("function"),
             line=message.record["line"],
             extra=serialized.get("extra", {}),
-            process=f"{message.record["process"].name}:{message.record['process'].id}",  # pyright: ignore [reportCallIssue]
-            thread=f"{message.record["thread"].name}:{message.record['thread'].id}",  # pyright: ignore [reportCallIssue]
+            process=f"{message.record['process'].name}:{message.record['process'].id}",  # pyright: ignore [reportCallIssue]
+            thread=f"{message.record['thread'].name}:{message.record['thread'].id}",  # pyright: ignore [reportCallIssue]
             review_id=review_id,
             exception=serialized.get("exception"),
             record=serialized,  # pyright: ignore [reportCallIssue]
@@ -107,8 +107,8 @@ class AsyncPostgresLogSink:
             function=serialized.get("function"),
             line=message.record["line"],
             extra=serialized.get("extra", {}),
-            process=f"{message.record["process"].name}:{message.record['process'].id}",  # pyright: ignore [reportCallIssue]
-            thread=f"{message.record["thread"].name}:{message.record['thread'].id}",  # pyright: ignore [reportCallIssue]
+            process=f"{message.record['process'].name}:{message.record['process'].id}",  # pyright: ignore [reportCallIssue]
+            thread=f"{message.record['thread'].name}:{message.record['thread'].id}",  # pyright: ignore [reportCallIssue]
             review_id=review_id,
             exception=serialized.get("exception"),
             record=serialized,  # pyright: ignore [reportCallIssue]

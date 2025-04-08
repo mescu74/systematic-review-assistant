@@ -27,7 +27,9 @@ def sample_criteria() -> SystematicReview:
 
 
 @pytest.mark.integration
-def test_agent_suggestions(agent: SuggestionAgent, sample_criteria: SystematicReview) -> None:
+def test_agent_suggestions(
+    agent: SuggestionAgent, sample_criteria: SystematicReview
+) -> None:
     """Test that the agent provides suggestions and maintains message history."""
     # Get suggestions
     suggestions = agent.get_suggestions(sample_criteria)
@@ -80,7 +82,9 @@ def test_agent_multiple_interactions(
 
 
 @pytest.mark.integration
-def test_agent_clear_history(agent: SuggestionAgent, sample_criteria: SystematicReview) -> None:
+def test_agent_clear_history(
+    agent: SuggestionAgent, sample_criteria: SystematicReview
+) -> None:
     """Test that the agent can clear its message history."""
     # Get initial suggestions
     agent.get_suggestions(sample_criteria)
