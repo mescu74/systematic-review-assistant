@@ -8,10 +8,10 @@ import pytest
 from sqlalchemy import select
 from sqlmodel import Session, select
 
-# Assuming models are adjusted for resolver (ScreeningResolution, fields in PubMedResult)
+# Assuming models are adjusted for resolver (ScreeningResolution, fields in SearchResult)
 # These imports might need adjustment based on the final model locations/definitions
 from sr_assistant.core.models import (
-    PubMedResult,
+    SearchResult,
     ScreenAbstractResult,
     ScreeningResolution,
     SystematicReview,
@@ -44,7 +44,7 @@ def seed_data(db_session: Session):
     db_session.refresh(review)
 
     # Initialize without id=None for SQLModel
-    pubmed_res = PubMedResult(
+    pubmed_res = SearchResult(
         review_id=review.id,
         query="Test query",
         pmid="RESOLVER_TEST_1",
@@ -61,7 +61,7 @@ def seed_data(db_session: Session):
     conservative_res = ScreenAbstractResult(
         id=uuid.uuid4(),
         review_id=review.id,
-        pubmed_result_id=pubmed_res.id,
+        search_result_id=pubmed_res.id,
         trace_id=trace_id,
         decision=ScreeningDecisionType.INCLUDE,
         confidence_score=0.9,
@@ -76,7 +76,7 @@ def seed_data(db_session: Session):
     comprehensive_res = ScreenAbstractResult(
         id=uuid.uuid4(),
         review_id=review.id,
-        pubmed_result_id=pubmed_res.id,
+        search_result_id=pubmed_res.id,
         trace_id=trace_id,
         decision=ScreeningDecisionType.EXCLUDE,
         confidence_score=0.9,
@@ -94,7 +94,7 @@ def seed_data(db_session: Session):
     db_session.refresh(conservative_res)
     db_session.refresh(comprehensive_res)
 
-    # Update PubMedResult with screening IDs
+    # Update SearchResult with screening IDs
     pubmed_res.conservative_result_id = conservative_res.id
     pubmed_res.comprehensive_result_id = comprehensive_res.id
     db_session.add(pubmed_res)
@@ -104,7 +104,7 @@ def seed_data(db_session: Session):
     # Yield relevant IDs or objects needed by tests
     return {
         "review_id": review.id,
-        "pubmed_result_id": pubmed_res.id,
+        "search_result_id": pubmed_res.id,
         "conservative_result_id": conservative_res.id,
         "comprehensive_result_id": comprehensive_res.id,
         "pubmed_res_obj": pubmed_res,
@@ -130,7 +130,7 @@ def test_create_resolution_success(db_session: Session, seed_data: dict[str, Any
     # Initialize without id
     new_resolution = ScreeningResolution(
         review_id=seed_data["review_id"],
-        pubmed_result_id=seed_data["pubmed_result_id"],
+        search_result_id=seed_data["search_result_id"],
         conservative_result_id=seed_data["conservative_result_id"],
         comprehensive_result_id=seed_data["comprehensive_result_id"],
         resolver_decision=ScreeningDecisionType.INCLUDE,
@@ -153,7 +153,7 @@ def test_create_resolution_success(db_session: Session, seed_data: dict[str, Any
     assert retrieved_resolution is not None
     assert retrieved_resolution.id == resolution_id
     assert retrieved_resolution.review_id == seed_data["review_id"]
-    assert retrieved_resolution.pubmed_result_id == seed_data["pubmed_result_id"]
+    assert retrieved_resolution.search_result_id == seed_data["search_result_id"]
     assert retrieved_resolution.resolver_decision == ScreeningDecisionType.INCLUDE
     assert (
         retrieved_resolution.resolver_reasoning
@@ -168,11 +168,11 @@ def test_create_resolution_success(db_session: Session, seed_data: dict[str, Any
 def test_resolve_conflict_scenario_include(
     db_session: Session, seed_data: dict[str, Any]
 ):
-    """Test simulating a resolution where the final decision is INCLUDE and updating PubMedResult."""
+    """Test simulating a resolution where the final decision is INCLUDE and updating SearchResult."""
     # Initialize without id
     new_resolution = ScreeningResolution(
         review_id=seed_data["review_id"],
-        pubmed_result_id=seed_data["pubmed_result_id"],
+        search_result_id=seed_data["search_result_id"],
         conservative_result_id=seed_data["conservative_result_id"],
         comprehensive_result_id=seed_data["comprehensive_result_id"],
         resolver_decision=ScreeningDecisionType.INCLUDE,
@@ -186,18 +186,18 @@ def test_resolve_conflict_scenario_include(
     db_session.refresh(new_resolution)  # Refresh to get ID
     resolution_id = new_resolution.id
 
-    # 2. Update the PubMedResult
-    pubmed_result = db_session.get(PubMedResult, seed_data["pubmed_result_id"])
-    assert pubmed_result is not None
-    pubmed_result.resolution_id = resolution_id
-    # REMOVED: No final_decision field on PubMedResult
-    # pubmed_result.final_decision = resolver_decision
-    db_session.add(pubmed_result)
+    # 2. Update the SearchResult
+    search_result = db_session.get(SearchResult, seed_data["search_result_id"])
+    assert search_result is not None
+    search_result.resolution_id = resolution_id
+    # REMOVED: No final_decision field on SearchResult
+    # search_result.final_decision = resolver_decision
+    db_session.add(search_result)
     db_session.commit()
-    db_session.refresh(pubmed_result)
+    db_session.refresh(search_result)
 
-    # 3. Verify PubMedResult update
-    assert pubmed_result.resolution_id == resolution_id
+    # 3. Verify SearchResult update
+    assert search_result.resolution_id == resolution_id
 
     # 4. Verify Resolution record exists and has the correct decision
     retrieved_resolution = db_session.get(ScreeningResolution, resolution_id)
@@ -213,7 +213,7 @@ def test_resolve_conflict_scenario_exclude(
     # Initialize without id
     new_resolution = ScreeningResolution(
         review_id=seed_data["review_id"],
-        pubmed_result_id=seed_data["pubmed_result_id"],
+        search_result_id=seed_data["search_result_id"],
         conservative_result_id=seed_data["conservative_result_id"],
         comprehensive_result_id=seed_data["comprehensive_result_id"],
         resolver_decision=ScreeningDecisionType.EXCLUDE,
@@ -227,16 +227,16 @@ def test_resolve_conflict_scenario_exclude(
     db_session.refresh(new_resolution)  # Refresh to get ID
     resolution_id = new_resolution.id
 
-    # 2. Update the PubMedResult
-    pubmed_result = db_session.get(PubMedResult, seed_data["pubmed_result_id"])
-    assert pubmed_result is not None
-    pubmed_result.resolution_id = resolution_id
-    db_session.add(pubmed_result)
+    # 2. Update the SearchResult
+    search_result = db_session.get(SearchResult, seed_data["search_result_id"])
+    assert search_result is not None
+    search_result.resolution_id = resolution_id
+    db_session.add(search_result)
     db_session.commit()
-    db_session.refresh(pubmed_result)
+    db_session.refresh(search_result)
 
-    # 3. Verify PubMedResult update
-    assert pubmed_result.resolution_id == resolution_id
+    # 3. Verify SearchResult update
+    assert search_result.resolution_id == resolution_id
 
     # 4. Verify Resolution record exists and has the correct decision
     retrieved_resolution = db_session.get(ScreeningResolution, resolution_id)
@@ -252,7 +252,7 @@ def test_resolve_conflict_scenario_uncertain(
     # Initialize without id
     new_resolution = ScreeningResolution(
         review_id=seed_data["review_id"],
-        pubmed_result_id=seed_data["pubmed_result_id"],
+        search_result_id=seed_data["search_result_id"],
         conservative_result_id=seed_data["conservative_result_id"],
         comprehensive_result_id=seed_data["comprehensive_result_id"],
         resolver_decision=ScreeningDecisionType.UNCERTAIN,
@@ -266,16 +266,16 @@ def test_resolve_conflict_scenario_uncertain(
     db_session.refresh(new_resolution)  # Refresh to get ID
     resolution_id = new_resolution.id
 
-    # 2. Update the PubMedResult
-    pubmed_result = db_session.get(PubMedResult, seed_data["pubmed_result_id"])
-    assert pubmed_result is not None
-    pubmed_result.resolution_id = resolution_id
-    db_session.add(pubmed_result)
+    # 2. Update the SearchResult
+    search_result = db_session.get(SearchResult, seed_data["search_result_id"])
+    assert search_result is not None
+    search_result.resolution_id = resolution_id
+    db_session.add(search_result)
     db_session.commit()
-    db_session.refresh(pubmed_result)
+    db_session.refresh(search_result)
 
-    # 3. Verify PubMedResult update
-    assert pubmed_result.resolution_id == resolution_id
+    # 3. Verify SearchResult update
+    assert search_result.resolution_id == resolution_id
 
     # 4. Verify Resolution record exists and has the correct decision
     retrieved_resolution = db_session.get(ScreeningResolution, resolution_id)
@@ -291,7 +291,7 @@ def test_resolution_links_pubmed_and_abstracts(
     # Initialize without id
     new_resolution = ScreeningResolution(
         review_id=seed_data["review_id"],
-        pubmed_result_id=seed_data["pubmed_result_id"],
+        search_result_id=seed_data["search_result_id"],
         conservative_result_id=seed_data["conservative_result_id"],
         comprehensive_result_id=seed_data["comprehensive_result_id"],
         resolver_decision=ScreeningDecisionType.EXCLUDE,
@@ -309,10 +309,10 @@ def test_resolution_links_pubmed_and_abstracts(
     retrieved = db_session.get(ScreeningResolution, resolution_id)
     assert retrieved is not None
 
-    # Check PubMedResult link (assuming relationship name is 'pubmed_result')
+    # Check SearchResult link (assuming relationship name is 'search_result')
     # This relies on SQLAlchemy relationship loading (lazy by default)
-    assert retrieved.pubmed_result is not None
-    assert retrieved.pubmed_result.id == seed_data["pubmed_result_id"]
+    assert retrieved.search_result is not None
+    assert retrieved.search_result.id == seed_data["search_result_id"]
 
     # Check ScreenAbstractResult FOREIGN KEY IDs are correct
     assert retrieved.conservative_result_id == seed_data["conservative_result_id"]
@@ -325,7 +325,7 @@ def test_query_resolutions_by_review(db_session: Session, seed_data: dict[str, A
     # Initialize without id
     res1 = ScreeningResolution(
         review_id=seed_data["review_id"],
-        pubmed_result_id=seed_data["pubmed_result_id"],
+        search_result_id=seed_data["search_result_id"],
         conservative_result_id=seed_data["conservative_result_id"],
         comprehensive_result_id=seed_data["comprehensive_result_id"],
         resolver_decision=ScreeningDecisionType.INCLUDE,
@@ -337,7 +337,7 @@ def test_query_resolutions_by_review(db_session: Session, seed_data: dict[str, A
     # Initialize without id
     res2 = ScreeningResolution(
         review_id=seed_data["review_id"],
-        pubmed_result_id=seed_data["pubmed_result_id"],
+        search_result_id=seed_data["search_result_id"],
         conservative_result_id=seed_data["conservative_result_id"],
         comprehensive_result_id=seed_data["comprehensive_result_id"],
         resolver_decision=ScreeningDecisionType.EXCLUDE,  # Different decision

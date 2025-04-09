@@ -12,15 +12,15 @@ from sr_assistant.app.agents import screening_agents
 from sr_assistant.app.agents.screening_agents import (
     screen_abstracts_chain_on_end_cb,
 )
-from sr_assistant.core.models import PubMedResult, SystematicReview
+from sr_assistant.core.models import SearchResult, SystematicReview
 from sr_assistant.core.schemas import ScreeningResponse
 from sr_assistant.core.types import ScreeningDecisionType, ScreeningStrategyType
 
 
 @pytest.fixture
-def mock_pubmed_result() -> PubMedResult:
+def mock_search_result() -> SearchResult:
     """Create a mock PubMed result for testing."""
-    return PubMedResult(
+    return SearchResult(
         pmid="12345",
         title="Test Study on Machine Learning",
         journal="Journal of Testing",
@@ -46,9 +46,9 @@ def mock_systematic_review() -> SystematicReview:
 
 
 @pytest.fixture
-def mock_edge_case_pubmed_result() -> PubMedResult:
+def mock_edge_case_search_result() -> SearchResult:
     """Create a mock PubMed result with missing fields to test edge cases."""
-    return PubMedResult(
+    return SearchResult(
         pmid="54321",
         title="",
         journal="",
@@ -62,9 +62,9 @@ def mock_edge_case_pubmed_result() -> PubMedResult:
 
 
 @pytest.fixture
-def mock_non_relevant_pubmed_result() -> PubMedResult:
+def mock_non_relevant_search_result() -> SearchResult:
     """Create a mock PubMed result that should be excluded."""
-    return PubMedResult(
+    return SearchResult(
         pmid="98765",
         title="Impact of Diet on Heart Disease",
         journal="Journal of Cardiology",
@@ -116,11 +116,11 @@ def test_chain_structure():
     assert "comprehensive" in chain.steps
 
 
-def test_different_strategy_results(mock_pubmed_result, mock_systematic_review):
+def test_different_strategy_results(mock_search_result, mock_systematic_review):
     """Test that conservative and comprehensive strategies produce different results."""
     # Prepare input for the chain
     chain_input = screening_agents.make_screen_abstracts_chain_input(
-        [mock_pubmed_result], mock_systematic_review
+        [mock_search_result], mock_systematic_review
     )
 
     # Run the chain with batch
@@ -163,11 +163,11 @@ def test_different_strategy_results(mock_pubmed_result, mock_systematic_review):
         )
 
 
-def test_non_relevant_abstract(mock_non_relevant_pubmed_result, mock_systematic_review):
+def test_non_relevant_abstract(mock_non_relevant_search_result, mock_systematic_review):
     """Test that a non-relevant abstract is correctly classified as exclude."""
     # Prepare input for the chain
     chain_input = screening_agents.make_screen_abstracts_chain_input(
-        [mock_non_relevant_pubmed_result], mock_systematic_review
+        [mock_non_relevant_search_result], mock_systematic_review
     )
 
     # Run the chain with batch
@@ -197,11 +197,11 @@ def test_non_relevant_abstract(mock_non_relevant_pubmed_result, mock_systematic_
     )
 
 
-def test_edge_case_handling(mock_edge_case_pubmed_result, mock_systematic_review):
+def test_edge_case_handling(mock_edge_case_search_result, mock_systematic_review):
     """Test that the chain handles edge cases with missing data."""
     # Prepare input for the chain
     chain_input = screening_agents.make_screen_abstracts_chain_input(
-        [mock_edge_case_pubmed_result], mock_systematic_review
+        [mock_edge_case_search_result], mock_systematic_review
     )
 
     # Run the chain with batch
@@ -239,7 +239,7 @@ def test_batch_processing(mock_systematic_review, monkeypatch):
     batch = []
     for i in range(3):  # Keep the batch small for testing
         batch.append(
-            PubMedResult(
+            SearchResult(
                 pmid=str(10000 + i),
                 title=f"Test Study {i} on {'Machine Learning' if i % 2 == 0 else 'Healthcare'}",
                 journal=f"Journal of {'Testing' if i % 2 == 0 else 'Medicine'}",
@@ -289,7 +289,7 @@ def test_batch_processing(mock_systematic_review, monkeypatch):
 
 @patch("streamlit.session_state")
 def test_chain_callbacks(
-    mock_session_state, mock_pubmed_result, mock_systematic_review
+    mock_session_state, mock_search_result, mock_systematic_review
 ):
     """Test that chain callbacks correctly process results."""
     # Create a mock Run that simulates LangChain's RunTree
@@ -306,11 +306,11 @@ def test_chain_callbacks(
     mock_child_run.tags = ["map:key:conservative"]
 
     review_id = str(uuid.uuid4())
-    pubmed_result_id = str(mock_pubmed_result.id)
+    search_result_id = str(mock_search_result.id)
 
     mock_child_run.metadata = {
         "review_id": review_id,
-        "pubmed_result_id": pubmed_result_id,
+        "search_result_id": search_result_id,
     }
     mock_child_run.trace_id = str(uuid.uuid4())
     mock_child_run.start_time = datetime.now(timezone.utc)

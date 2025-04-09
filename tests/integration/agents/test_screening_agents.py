@@ -15,15 +15,15 @@ from sr_assistant.app.agents.screening_agents import (
     chain_on_error_listener_cb,
     screen_abstracts_chain_on_end_cb,
 )
-from sr_assistant.core.models import PubMedResult, SystematicReview
+from sr_assistant.core.models import SearchResult, SystematicReview
 from sr_assistant.core.schemas import ScreeningResponse, ScreeningResult
 from sr_assistant.core.types import ScreeningDecisionType, ScreeningStrategyType
 
 
 @pytest.fixture
-def mock_pubmed_result() -> PubMedResult:
+def mock_search_result() -> SearchResult:
     """Create a mock PubMed result for testing."""
-    return PubMedResult(
+    return SearchResult(
         pmid="12345",
         title="Test Study on Machine Learning",
         journal="Journal of Testing",
@@ -49,9 +49,9 @@ def mock_systematic_review() -> SystematicReview:
 
 
 @pytest.fixture
-def mock_edge_case_pubmed_result() -> PubMedResult:
+def mock_edge_case_search_result() -> SearchResult:
     """Create a mock PubMed result with missing fields to test edge cases."""
-    return PubMedResult(
+    return SearchResult(
         pmid="54321",
         title="",
         journal="",
@@ -65,9 +65,9 @@ def mock_edge_case_pubmed_result() -> PubMedResult:
 
 
 @pytest.fixture
-def mock_non_relevant_pubmed_result() -> PubMedResult:
+def mock_non_relevant_search_result() -> SearchResult:
     """Create a mock PubMed result that should be excluded."""
-    return PubMedResult(
+    return SearchResult(
         pmid="98765",
         title="Impact of Diet on Heart Disease",
         journal="Journal of Cardiology",
@@ -80,11 +80,11 @@ def mock_non_relevant_pubmed_result() -> PubMedResult:
     )
 
 
-def test_screen_abstracts_chain(mock_pubmed_result, mock_systematic_review):
+def test_screen_abstracts_chain(mock_search_result, mock_systematic_review):
     """Test that screen_abstracts_chain correctly processes a single abstract."""
     # Prepare input for the chain
     chain_input = screening_agents.make_screen_abstracts_chain_input(
-        [mock_pubmed_result], mock_systematic_review
+        [mock_search_result], mock_systematic_review
     )
 
     # Run the chain with batch
@@ -108,7 +108,7 @@ def test_screen_abstracts_chain(mock_pubmed_result, mock_systematic_review):
     assert 0 <= result["conservative"].confidence_score <= 1
     assert hasattr(result["conservative"], "id")
     assert hasattr(result["conservative"], "review_id")
-    assert hasattr(result["conservative"], "pubmed_result_id")
+    assert hasattr(result["conservative"], "search_result_id")
     assert hasattr(result["conservative"], "trace_id")
     assert hasattr(result["conservative"], "model_name")
     assert hasattr(result["conservative"], "screening_strategy")
@@ -124,7 +124,7 @@ def test_screen_abstracts_chain(mock_pubmed_result, mock_systematic_review):
     assert 0 <= result["comprehensive"].confidence_score <= 1
     assert hasattr(result["comprehensive"], "id")
     assert hasattr(result["comprehensive"], "review_id")
-    assert hasattr(result["comprehensive"], "pubmed_result_id")
+    assert hasattr(result["comprehensive"], "search_result_id")
     assert hasattr(result["comprehensive"], "trace_id")
     assert hasattr(result["comprehensive"], "model_name")
     assert hasattr(result["comprehensive"], "screening_strategy")
@@ -134,7 +134,7 @@ def test_screen_abstracts_chain(mock_pubmed_result, mock_systematic_review):
 
 
 def test_screen_abstracts_batch(
-    mock_pubmed_result, mock_systematic_review, monkeypatch
+    mock_search_result, mock_systematic_review, monkeypatch
 ):
     """Test that screen_abstracts_batch correctly processes a batch of abstracts."""
 
@@ -149,7 +149,7 @@ def test_screen_abstracts_batch(
     monkeypatch.setattr(st, "session_state", MockSessionState())
 
     # Create a batch of 2 identical results for testing
-    batch = [mock_pubmed_result, mock_pubmed_result]
+    batch = [mock_search_result, mock_search_result]
     batch_idx = 0
 
     # Run the batch screening
@@ -170,8 +170,8 @@ def test_screen_abstracts_batch(
         assert hasattr(res, "comprehensive_result")
 
         # Check search result
-        assert isinstance(res.search_result, PubMedResult)
-        assert res.search_result.pmid == mock_pubmed_result.pmid
+        assert isinstance(res.search_result, SearchResult)
+        assert res.search_result.pmid == mock_search_result.pmid
 
         # Check conservative result
         assert isinstance(res.conservative_result, ScreeningResult)
@@ -181,7 +181,7 @@ def test_screen_abstracts_batch(
         assert 0 <= res.conservative_result.confidence_score <= 1
         assert hasattr(res.conservative_result, "id")
         assert hasattr(res.conservative_result, "review_id")
-        assert hasattr(res.conservative_result, "pubmed_result_id")
+        assert hasattr(res.conservative_result, "search_result_id")
         assert hasattr(res.conservative_result, "trace_id")
         assert hasattr(res.conservative_result, "model_name")
         assert hasattr(res.conservative_result, "screening_strategy")
@@ -197,7 +197,7 @@ def test_screen_abstracts_batch(
         assert 0 <= res.comprehensive_result.confidence_score <= 1
         assert hasattr(res.comprehensive_result, "id")
         assert hasattr(res.comprehensive_result, "review_id")
-        assert hasattr(res.comprehensive_result, "pubmed_result_id")
+        assert hasattr(res.comprehensive_result, "search_result_id")
         assert hasattr(res.comprehensive_result, "trace_id")
         assert hasattr(res.comprehensive_result, "model_name")
         assert hasattr(res.comprehensive_result, "screening_strategy")
@@ -241,15 +241,15 @@ def test_chain_structure():
     chain = screening_agents.screen_abstracts_chain
 
     # Verify the top-level object is a RunnableBinding (due to .with_listeners)
-    assert isinstance(chain, RunnableBinding), (
-        "Chain should be wrapped by RunnableBinding due to .with_listeners"
-    )
+    assert isinstance(
+        chain, RunnableBinding
+    ), "Chain should be wrapped by RunnableBinding due to .with_listeners"
 
     # Access the original RunnableParallel bound by the listeners
     bound_parallel_chain = chain.bound
-    assert isinstance(bound_parallel_chain, RunnableParallel), (
-        "The bound object should be the original RunnableParallel"
-    )
+    assert isinstance(
+        bound_parallel_chain, RunnableParallel
+    ), "The bound object should be the original RunnableParallel"
 
     # Check that conservative and comprehensive steps exist in the parallel chain
     # Use steps__ as suggested by the AttributeError
@@ -260,11 +260,11 @@ def test_chain_structure():
     # Checking the type and the bound steps confirms the basic structure.
 
 
-def test_different_strategy_results(mock_pubmed_result, mock_systematic_review):
+def test_different_strategy_results(mock_search_result, mock_systematic_review):
     """Test that conservative and comprehensive strategies produce different results."""
     # Prepare input for the chain
     chain_input = screening_agents.make_screen_abstracts_chain_input(
-        [mock_pubmed_result], mock_systematic_review
+        [mock_search_result], mock_systematic_review
     )
 
     # Run the chain with batch
@@ -307,11 +307,11 @@ def test_different_strategy_results(mock_pubmed_result, mock_systematic_review):
         )
 
 
-def test_non_relevant_abstract(mock_non_relevant_pubmed_result, mock_systematic_review):
+def test_non_relevant_abstract(mock_non_relevant_search_result, mock_systematic_review):
     """Test that a non-relevant abstract is correctly classified as exclude."""
     # Prepare input for the chain
     chain_input = screening_agents.make_screen_abstracts_chain_input(
-        [mock_non_relevant_pubmed_result], mock_systematic_review
+        [mock_non_relevant_search_result], mock_systematic_review
     )
 
     # Run the chain with batch
@@ -338,11 +338,11 @@ def test_non_relevant_abstract(mock_non_relevant_pubmed_result, mock_systematic_
     )
 
 
-def test_edge_case_handling(mock_edge_case_pubmed_result, mock_systematic_review):
+def test_edge_case_handling(mock_edge_case_search_result, mock_systematic_review):
     """Test that the chain handles edge cases with missing data."""
     # Prepare input for the chain
     chain_input = screening_agents.make_screen_abstracts_chain_input(
-        [mock_edge_case_pubmed_result], mock_systematic_review
+        [mock_edge_case_search_result], mock_systematic_review
     )
 
     # Run the chain with batch
@@ -377,13 +377,13 @@ def test_edge_case_handling(mock_edge_case_pubmed_result, mock_systematic_review
 @patch("sr_assistant.app.agents.screening_agents.logger")
 @patch("sr_assistant.app.agents.screening_agents.ScreeningResult")
 def test_chain_on_end_callback_integration(
-    MockScreeningResult, mock_logger, mock_pubmed_result, mock_systematic_review
+    MockScreeningResult, mock_logger, mock_search_result, mock_systematic_review
 ):
     """Test the on_end callback correctly processes run outputs and metadata."""
     # --- Setup Mocks ---
     run_id = str(uuid.uuid4())
     review_id = str(uuid.uuid4())
-    pubmed_result_id = str(mock_pubmed_result.id or uuid.uuid4())
+    search_result_id = str(mock_search_result.id or uuid.uuid4())
 
     # Create mock raw responses (as if generated by the parallel chain branches)
     conservative_mock_response = ScreeningResponse(
@@ -423,7 +423,7 @@ def test_chain_on_end_callback_integration(
         mock_child_run.tags = [f"map:key:{strategy.value}"]
         mock_child_run.metadata = {
             "review_id": review_id,
-            "pubmed_result_id": pubmed_result_id,
+            "search_result_id": search_result_id,
         }
         mock_child_run.trace_id = str(uuid.uuid4())
         mock_child_run.start_time = datetime.now(timezone.utc)
@@ -483,13 +483,13 @@ def test_chain_on_end_callback_integration(
         ),
         None,
     )
-    assert conservative_call is not None, (
-        "ScreeningResult call for CONSERVATIVE strategy not found"
-    )
+    assert (
+        conservative_call is not None
+    ), "ScreeningResult call for CONSERVATIVE strategy not found"
     conservative_kwargs = conservative_call.kwargs
     assert conservative_kwargs["model_name"] == "mock_llm_model"
     assert conservative_kwargs["review_id"] == uuid.UUID(review_id)
-    assert conservative_kwargs["pubmed_result_id"] == uuid.UUID(pubmed_result_id)
+    assert conservative_kwargs["search_result_id"] == uuid.UUID(search_result_id)
     assert conservative_kwargs["decision"] == conservative_mock_response.decision
     assert (
         conservative_kwargs["confidence_score"]
@@ -514,13 +514,13 @@ def test_chain_on_end_callback_integration(
         ),
         None,
     )
-    assert comprehensive_call is not None, (
-        "ScreeningResult call for COMPREHENSIVE strategy not found"
-    )
+    assert (
+        comprehensive_call is not None
+    ), "ScreeningResult call for COMPREHENSIVE strategy not found"
     comprehensive_kwargs = comprehensive_call.kwargs
     assert comprehensive_kwargs["model_name"] == "mock_llm_model"
     assert comprehensive_kwargs["review_id"] == uuid.UUID(review_id)
-    assert comprehensive_kwargs["pubmed_result_id"] == uuid.UUID(pubmed_result_id)
+    assert comprehensive_kwargs["search_result_id"] == uuid.UUID(search_result_id)
     assert comprehensive_kwargs["decision"] == comprehensive_mock_response.decision
     assert (
         comprehensive_kwargs["confidence_score"]

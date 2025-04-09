@@ -208,7 +208,7 @@ MOCK_SCOPUS_RECORD_DUPLICATE = {
 
 
 @pytest.mark.integration
-def test_service_add_pubmed_results(
+def test_service_add_search_results(
     db_session: Session, test_review: models.SystematicReview
 ):
     """Test adding PubMed results via SearchService integration."""

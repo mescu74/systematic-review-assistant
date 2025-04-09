@@ -8,11 +8,11 @@ from sqlmodel import Session, create_engine
 
 from sr_assistant.app.agents.screening_agents import resolve_screening_conflict
 from sr_assistant.core.models import (
-    PubMedResult,
+    SearchResult,
     ScreeningResolution,
 )
 from sr_assistant.core.repositories import (
-    PubMedResultRepository,
+    SearchResultRepository,
     ScreenAbstractResultRepository,
     ScreeningResolutionRepository,
     SystematicReviewRepository,
@@ -53,7 +53,7 @@ def repositories(engine):
     )
     return {
         "review": SystematicReviewRepository(session_factory=test_session_factory),
-        "pubmed": PubMedResultRepository(session_factory=test_session_factory),
+        "pubmed": SearchResultRepository(session_factory=test_session_factory),
         "screening": ScreenAbstractResultRepository(
             session_factory=test_session_factory
         ),
@@ -63,9 +63,9 @@ def repositories(engine):
     }
 
 
-# Fixture to find a conflicting PubMedResult from the test data
+# Fixture to find a conflicting SearchResult from the test data
 @pytest.fixture(scope="function")
-def conflicting_pubmed_result(repositories):
+def conflicting_search_result(repositories):
     pubmed_repo = repositories["pubmed"]
     review_repo = repositories["review"]
     reviews = review_repo.get_all(limit=1)
@@ -73,12 +73,12 @@ def conflicting_pubmed_result(repositories):
         pytest.fail("No systematic reviews found in test data.")
     review_id = reviews[0].id
 
-    pubmed_results = pubmed_repo.get_by_review_id(review_id)
-    if not pubmed_results:
+    search_results = pubmed_repo.get_by_review_id(review_id)
+    if not search_results:
         pytest.fail(f"No PubMed results found for review {review_id} in test data.")
 
     conflict = None
-    for pm_res in pubmed_results:
+    for pm_res in search_results:
         # Reload with screening results
         pm_res_full = pubmed_repo.get_with_screening_results(pm_res.id)
         if (
@@ -115,7 +115,7 @@ def conflicting_pubmed_result(repositories):
 
 @pytest.mark.integration
 def test_resolve_screening_conflict_integration(
-    conflicting_pubmed_result: PubMedResult,
+    conflicting_search_result: SearchResult,
     repositories,
 ):
     """Test the full resolve_screening_conflict flow, including DB interaction."""
@@ -123,19 +123,19 @@ def test_resolve_screening_conflict_integration(
     resolution_repo = repositories["resolution"]
 
     # Ensure initial state: no resolution exists
-    assert conflicting_pubmed_result.resolution_id is None
-    assert conflicting_pubmed_result.final_decision is None
-    existing_resolution = resolution_repo.get_by_pubmed_id(conflicting_pubmed_result.id)
+    assert conflicting_search_result.resolution_id is None
+    assert conflicting_search_result.final_decision is None
+    existing_resolution = resolution_repo.get_by_pubmed_id(conflicting_search_result.id)
     assert existing_resolution is None
 
     # --- Act --- #
     try:
         # Use the actual agent function
         resolution_model = resolve_screening_conflict(
-            pubmed_result=conflicting_pubmed_result,
-            review=conflicting_pubmed_result.review,  # Access loaded review
-            conservative_result=conflicting_pubmed_result.conservative_result,
-            comprehensive_result=conflicting_pubmed_result.comprehensive_result,
+            search_result=conflicting_search_result,
+            review=conflicting_search_result.review,  # Access loaded review
+            conservative_result=conflicting_search_result.conservative_result,
+            comprehensive_result=conflicting_search_result.comprehensive_result,
         )
     except Exception as e:
         pytest.fail(f"resolve_screening_conflict raised an exception: {e}")
@@ -143,15 +143,15 @@ def test_resolve_screening_conflict_integration(
     # --- Assert: Check the returned model --- #
     assert isinstance(resolution_model, ScreeningResolution)
     assert resolution_model.id is not None
-    assert resolution_model.pubmed_result_id == conflicting_pubmed_result.id
-    assert resolution_model.review_id == conflicting_pubmed_result.review_id
+    assert resolution_model.search_result_id == conflicting_search_result.id
+    assert resolution_model.review_id == conflicting_search_result.review_id
     assert (
         resolution_model.conservative_result_id
-        == conflicting_pubmed_result.conservative_result_id
+        == conflicting_search_result.conservative_result_id
     )
     assert (
         resolution_model.comprehensive_result_id
-        == conflicting_pubmed_result.comprehensive_result_id
+        == conflicting_search_result.comprehensive_result_id
     )
     assert resolution_model.resolver_decision in ScreeningDecisionType
     assert isinstance(resolution_model.resolver_reasoning, str)
@@ -167,7 +167,7 @@ def test_resolve_screening_conflict_integration(
     saved_resolution = resolution_repo.get_by_id(resolution_model.id)
     assert saved_resolution is not None
     assert saved_resolution.id == resolution_model.id
-    assert saved_resolution.pubmed_result_id == conflicting_pubmed_result.id
+    assert saved_resolution.search_result_id == conflicting_search_result.id
     assert saved_resolution.resolver_decision == resolution_model.resolver_decision
     assert saved_resolution.resolver_reasoning == resolution_model.resolver_reasoning
     assert (
@@ -175,8 +175,8 @@ def test_resolve_screening_conflict_integration(
         == resolution_model.resolver_confidence_score
     )
 
-    # 2. Check if PubMedResult was updated
-    updated_pubmed_result = pubmed_repo.get_by_id(conflicting_pubmed_result.id)
-    assert updated_pubmed_result is not None
-    assert updated_pubmed_result.resolution_id == saved_resolution.id
-    assert updated_pubmed_result.final_decision == saved_resolution.resolver_decision
+    # 2. Check if SearchResult was updated
+    updated_search_result = pubmed_repo.get_by_id(conflicting_search_result.id)
+    assert updated_search_result is not None
+    assert updated_search_result.resolution_id == saved_resolution.id
+    assert updated_search_result.final_decision == saved_resolution.resolver_decision

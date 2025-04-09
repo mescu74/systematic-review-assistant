@@ -263,7 +263,7 @@ class TestScreenAbstractsChainOnEndCb:
         )
 
     @patch("sr_assistant.app.agents.screening_agents.logger")
-    def test_child_run_missing_pubmed_result_id(self, mock_logger: MagicMock) -> None:
+    def test_child_run_missing_search_result_id(self, mock_logger: MagicMock) -> None:
         """Test case where child run metadata is missing search_result_id."""
         # Create a mock Run object with outputs and a child run with missing search_result_id
         mock_run = MagicMock()
@@ -344,6 +344,6 @@ class TestScreenAbstractsChainOnEndCb:
             assert True
         except Exception as e:
             # If an exception is raised, the test fails
-            assert False, (
-                f"screen_abstracts_chain_on_end_cb raised {type(e).__name__}: {e}"
-            )
+            assert (
+                False
+            ), f"screen_abstracts_chain_on_end_cb raised {type(e).__name__}: {e}"
