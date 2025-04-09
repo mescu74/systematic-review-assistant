@@ -5,23 +5,29 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock, create_autospec
 
 import pytest
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlmodel import Session as SQLModelSession
 
 from sr_assistant.core.models import (
     LogRecord,
     ScreenAbstractResult,
     ScreeningDecisionType,
+    ScreeningResolution,
     ScreeningStrategyType,
+    SearchResult,
     SystematicReview,
 )
 from sr_assistant.core.repositories import (
+    ConstraintViolationError,
     LogRepository,
     RecordNotFoundError,
     RepositoryError,
     ScreenAbstractResultRepository,
+    ScreeningResolutionRepository,
+    SearchResultRepository,
     SystematicReviewRepository,
 )
+from sr_assistant.core.types import LogLevel, SearchDatabaseSource
 
 
 @pytest.fixture
@@ -35,343 +41,243 @@ def mock_session() -> MagicMock:
     return session
 
 
-def test_create_review(mock_session):
+def test_create_review(mock_session: MagicMock):
     repo = SystematicReviewRepository()
     review_id = uuid.uuid4()
-    repo.add(
-        SystematicReview(
-            id=review_id,
-            background="test bg",
-            research_question="test q",
-            inclusion_criteria="test inc",
-            exclusion_criteria="test exc",
-        )
+    review_to_add = SystematicReview(
+        id=review_id,
+        background="test bg",
+        research_question="test q",
+        exclusion_criteria="test exc",
     )
+    repo.add(mock_session, review_to_add)
+    mock_session.add.assert_called_once_with(review_to_add)
+    mock_session.flush.assert_called_once_with([review_to_add])
 
-    mock_session.add.assert_called_once()
-    mock_session.commit.assert_called_once()
 
-
-def test_get_review(mock_session):
+def test_get_review(mock_session: MagicMock):
     repo = SystematicReviewRepository()
     review_id = uuid.uuid4()
     expected = SystematicReview(
         id=review_id,
         background="test bg",
         research_question="test q",
-        inclusion_criteria="test inc",
         exclusion_criteria="test exc",
     )
-
     mock_session.exec.return_value.first.return_value = expected
-
-    result = repo.get_by_id(review_id)
+    result = repo.get_by_id(mock_session, review_id)
     assert result == expected
+    mock_session.exec.assert_called_once()
 
 
-def test_update_review(mock_session):
+def test_update_review(mock_session: MagicMock):
     repo = SystematicReviewRepository()
     review_id = uuid.uuid4()
-    review = SystematicReview(
-        id=review_id,
-        background="test bg",
-        research_question="test q",
-        inclusion_criteria="test inc",
-        exclusion_criteria="test exc",
+    existing_review = SystematicReview(
+        id=review_id, research_question="old q", exclusion_criteria="old exc"
     )
+    review_update_data = SystematicReview(
+        id=review_id, research_question="new q", exclusion_criteria="new exc"
+    )
+    mock_session.get.return_value = existing_review
+    mock_session.merge.return_value = review_update_data
+    result = repo.update(mock_session, review_update_data)
+    mock_session.get.assert_called_once_with(SystematicReview, review_id)
+    mock_session.merge.assert_called_once_with(review_update_data)
+    mock_session.flush.assert_called_once_with([review_update_data])
+    assert result.research_question == "new q"
 
-    mock_session.get.return_value = review
-    mock_session.merge.return_value = review
 
-    result = repo.update(review)
-    assert result == review
-
-    mock_session.get.assert_called_once()
-    mock_session.merge.assert_called_once_with(review)
-
-
-def test_delete_review(mock_session):
+def test_delete_review(mock_session: MagicMock):
     repo = SystematicReviewRepository()
     review_id = uuid.uuid4()
-    review = SystematicReview(
-        id=review_id,
-        background="test bg",
-        research_question="test q",
-        inclusion_criteria="test inc",
-        exclusion_criteria="test exc",
+    review_to_delete = SystematicReview(
+        id=review_id, research_question="test q", exclusion_criteria="test exc"
     )
-
-    mock_session.exec.return_value.first.return_value = review
-
-    repo.delete(review_id)
-
-    mock_session.delete.assert_called_once_with(review)
+    mock_session.exec.return_value.first.return_value = review_to_delete
+    repo.delete(mock_session, review_id)
+    mock_session.delete.assert_called_once_with(review_to_delete)
+    mock_session.flush.assert_called_once()
 
 
-def test_get_all_reviews(mock_session):
+def test_get_all_reviews(mock_session: MagicMock):
     repo = SystematicReviewRepository()
-
     expected = [
         SystematicReview(
-            id=uuid.uuid4(),
-            background="test bg 1",
-            research_question="test q 1",
-            inclusion_criteria="test inc 1",
-            exclusion_criteria="test exc 1",
+            id=uuid.uuid4(), research_question="test q 1", exclusion_criteria="exc 1"
         ),
         SystematicReview(
-            id=uuid.uuid4(),
-            background="test bg 2",
-            research_question="test q 2",
-            inclusion_criteria="test inc 2",
-            exclusion_criteria="test exc 2",
+            id=uuid.uuid4(), research_question="test q 2", exclusion_criteria="exc 2"
         ),
     ]
-
-    mock_session.exec.return_value = expected
-
-    result = repo.get_all()
-    assert result == expected
-
-
-def test_list_reviews(mock_session):
-    repo = SystematicReviewRepository()
-
-    expected = [
-        SystematicReview(
-            id=uuid.uuid4(),
-            background="test bg 1",
-            research_question="test q 1",
-            inclusion_criteria="test inc 1",
-            exclusion_criteria="test exc 1",
-        ),
-        SystematicReview(
-            id=uuid.uuid4(),
-            background="test bg 2",
-            research_question="test q 2",
-            inclusion_criteria="test inc 2",
-            exclusion_criteria="test exc 2",
-        ),
-    ]
-
     mock_session.exec.return_value.all.return_value = expected
-
-    result = repo.list()
+    result = repo.get_all(mock_session)
     assert result == expected
-
     mock_session.exec.assert_called_once()
 
 
-def test_get_review_with_pubmed_results(mock_session):
+def test_list_reviews(mock_session: MagicMock):
+    repo = SystematicReviewRepository()
+    expected = [
+        SystematicReview(
+            id=uuid.uuid4(), research_question="test q 1", exclusion_criteria="exc 1"
+        ),
+        SystematicReview(
+            id=uuid.uuid4(), research_question="test q 2", exclusion_criteria="exc 2"
+        ),
+    ]
+    mock_session.exec.return_value.all.return_value = expected
+    result = repo.list(mock_session)
+    assert result == expected
+    mock_session.exec.assert_called_once()
+
+
+def test_get_review_with_search_results(mock_session: MagicMock):
     repo = SystematicReviewRepository()
     review_id = uuid.uuid4()
-
     expected = SystematicReview(
         id=review_id,
         background="test bg",
         research_question="test q",
-        inclusion_criteria="test inc",
         exclusion_criteria="test exc",
     )
-    expected.pubmed_results = [
-        PubMedResult(
+    search_results_data = [
+        SearchResult(
             id=uuid.uuid4(),
             review_id=review_id,
-            pubmed_id="12345",
+            source_db=SearchDatabaseSource.PUBMED,
+            source_id="12345",
             title="Test Article 1",
-            abstract="Test abstract 1",
-        ),
-        PubMedResult(
-            id=uuid.uuid4(),
-            review_id=review_id,
-            pubmed_id="67890",
-            title="Test Article 2",
-            abstract="Test abstract 2",
         ),
     ]
-
     mock_session.exec.return_value.first.return_value = expected
-
-    result = repo.get_with_pubmed_results(review_id)
+    result = repo.get_with_search_results(mock_session, review_id)
     assert result == expected
-    assert len(result.pubmed_results) == 2
-
     mock_session.exec.assert_called_once()
 
 
-def test_get_review_with_all(mock_session):
+def test_get_review_with_all(mock_session: MagicMock):
     repo = SystematicReviewRepository()
     review_id = uuid.uuid4()
-
     expected = SystematicReview(
         id=review_id,
         background="test bg",
         research_question="test q",
-        inclusion_criteria="test inc",
         exclusion_criteria="test exc",
     )
-
-    pubmed_result_1 = PubMedResult(
+    search_result_1 = SearchResult(
         id=uuid.uuid4(),
         review_id=review_id,
-        pubmed_id="12345",
+        source_db=SearchDatabaseSource.PUBMED,
+        source_id="12345",
         title="Test Article 1",
-        abstract="Test abstract 1",
     )
-    pubmed_result_2 = PubMedResult(
-        id=uuid.uuid4(),
-        review_id=review_id,
-        pubmed_id="67890",
-        title="Test Article 2",
-        abstract="Test abstract 2",
-    )
-    expected.pubmed_results = [pubmed_result_1, pubmed_result_2]
-
-    pubmed_result_1.conservative_result = ScreenAbstractResult(
-        id=uuid.uuid4(),
-        review_id=review_id,
-        pubmed_result_id=pubmed_result_1.id,
-        strategy=ScreeningStrategyType.CONSERVATIVE,
-        decision=ScreeningDecisionType.INCLUDE,
-        confidence_score=0.9,
-        rationale="Test rationale 1",
-    )
-    pubmed_result_2.comprehensive_result = ScreenAbstractResult(
-        id=uuid.uuid4(),
-        review_id=review_id,
-        pubmed_result_id=pubmed_result_2.id,
-        strategy=ScreeningStrategyType.COMPREHENSIVE,
-        decision=ScreeningDecisionType.EXCLUDE,
-        confidence_score=0.8,
-        rationale="Test rationale 2",
-    )
-
-    expected.log_records = [
-        LogRecord(
-            id=uuid.uuid4(),
-            review_id=review_id,
-            level="INFO",
-            message="Test log 1",
-            timestamp=datetime.now(tz=timezone.utc),
-        ),
-        LogRecord(
-            id=uuid.uuid4(),
-            review_id=review_id,
-            level="WARNING",
-            message="Test log 2",
-            timestamp=datetime.now(tz=timezone.utc),
-        ),
-    ]
-
     mock_session.exec.return_value.first.return_value = expected
-
-    result = repo.get_with_all(review_id)
+    result = repo.get_with_all(mock_session, review_id)
     assert result == expected
-    assert len(result.pubmed_results) == 2
-    assert len(result.log_records) == 2
-    assert result.pubmed_results[0].conservative_result is not None
-    assert result.pubmed_results[1].comprehensive_result is not None
-
     mock_session.exec.assert_called_once()
 
 
-def test_log_repository_get_by_review_id(mock_session):
+def test_log_repository_get_by_review_id(mock_session: MagicMock):
     repo = LogRepository()
     review_id = uuid.uuid4()
-
     expected = [
         LogRecord(
-            id=uuid.uuid4(),
-            review_id=review_id,
-            level="INFO",
+            level=LogLevel.INFO,
             message="Test log 1",
             timestamp=datetime.now(tz=timezone.utc),
         ),
         LogRecord(
-            id=uuid.uuid4(),
-            review_id=review_id,
-            level="WARNING",
+            level=LogLevel.WARNING,
             message="Test log 2",
             timestamp=datetime.now(tz=timezone.utc),
         ),
     ]
-
-    mock_session.exec.return_value = expected
-
-    result = repo.get_by_review_id(review_id)
+    mock_session.exec.return_value.all.return_value = expected
+    result = repo.get_by_review_id(mock_session, review_id)
     assert result == expected
-
     mock_session.exec.assert_called_once()
 
 
-def test_log_repository_add(mock_session):
+def test_log_repository_add(mock_session: MagicMock):
     repo = LogRepository()
-    review_id = uuid.uuid4()
-
-    log = LogRecord(
-        id=uuid.uuid4(),
-        review_id=review_id,
-        level="INFO",
-        message="Test log",
-        timestamp=datetime.now(tz=timezone.utc),
+    log_record = LogRecord(
+        level=LogLevel.INFO, message="Test", timestamp=datetime.now(tz=timezone.utc)
     )
-
-    mock_session.add.return_value = log
-    mock_session.commit.return_value = log
-    mock_session.refresh.return_value = log
-
-    result = repo.add(log)
-
-    mock_session.add.assert_called_once_with(log)
-    mock_session.commit.assert_called_once()
-    mock_session.refresh.assert_called_once_with(log)
-    assert result == log
+    repo.add(mock_session, log_record)
+    mock_session.add.assert_called_once_with(log_record)
+    mock_session.flush.assert_called_once_with([log_record])
 
 
-def test_log_repository_add_all(mock_session):
+def test_log_repository_add_all(mock_session: MagicMock):
     repo = LogRepository()
-    review_id = uuid.uuid4()
-
     logs = [
         LogRecord(
-            id=uuid.uuid4(),
-            review_id=review_id,
-            level="INFO",
+            level=LogLevel.INFO,
             message="Test log 1",
             timestamp=datetime.now(tz=timezone.utc),
         ),
         LogRecord(
-            id=uuid.uuid4(),
-            review_id=review_id,
-            level="WARNING",
+            level=LogLevel.WARNING,
             message="Test log 2",
             timestamp=datetime.now(tz=timezone.utc),
         ),
     ]
-
-    mock_session.add_all.return_value = logs
-    mock_session.commit.return_value = logs
-
-    result = repo.add_all(logs)
-
+    repo.add_all(mock_session, logs)
     mock_session.add_all.assert_called_once_with(logs)
-    mock_session.commit.assert_called_once()
-    assert result == logs
-    for log in logs:
-        mock_session.refresh.assert_any_call(log)
+    mock_session.flush.assert_called_once_with(logs)
 
 
-def test_screen_repo_get_by_review_id(mock_session):
+def test_search_result_repo_get_by_review_id(mock_session: MagicMock):
+    repo = SearchResultRepository()
+    review_id = uuid.uuid4()
+    expected_results = [
+        SearchResult(
+            id=uuid.uuid4(),
+            review_id=review_id,
+            source_db=SearchDatabaseSource.PUBMED,
+            source_id="1",
+            title="Title 1",
+        ),
+        SearchResult(
+            id=uuid.uuid4(),
+            review_id=review_id,
+            source_db=SearchDatabaseSource.SCOPUS,
+            source_id="2",
+            title="Title 2",
+        ),
+    ]
+    mock_session.exec.return_value.all.return_value = expected_results
+    results = repo.get_by_review_id(mock_session, review_id)
+    assert results == expected_results
+    mock_session.exec.assert_called_once()
+
+
+def test_search_result_repo_get_by_source_details(mock_session: MagicMock):
+    repo = SearchResultRepository()
+    review_id = uuid.uuid4()
+    source_db = SearchDatabaseSource.PUBMED
+    source_id = "12345"
+    expected_result = SearchResult(
+        id=uuid.uuid4(),
+        review_id=review_id,
+        source_db=source_db,
+        source_id=source_id,
+        title="Specific Title",
+    )
+    mock_session.exec.return_value.first.return_value = expected_result
+    result = repo.get_by_source_details(mock_session, review_id, source_db, source_id)
+    assert result == expected_result
+    mock_session.exec.assert_called_once()
+
+
+def test_screen_repo_get_by_review_id(mock_session: MagicMock):
     repo = ScreenAbstractResultRepository()
     review_id = uuid.uuid4()
-    search_result_id_1 = uuid.uuid4()
-    search_result_id_2 = uuid.uuid4()
-
     expected = [
         ScreenAbstractResult(
             id=uuid.uuid4(),
             review_id=review_id,
-            search_result_id=search_result_id_1,
             screening_strategy=ScreeningStrategyType.CONSERVATIVE,
             decision=ScreeningDecisionType.INCLUDE,
             confidence_score=0.9,
@@ -381,7 +287,6 @@ def test_screen_repo_get_by_review_id(mock_session):
         ScreenAbstractResult(
             id=uuid.uuid4(),
             review_id=review_id,
-            search_result_id=search_result_id_2,
             screening_strategy=ScreeningStrategyType.COMPREHENSIVE,
             decision=ScreeningDecisionType.EXCLUDE,
             confidence_score=0.8,
@@ -395,29 +300,7 @@ def test_screen_repo_get_by_review_id(mock_session):
     mock_session.exec.assert_called_once()
 
 
-def test_screen_repo_get_by_search_result(mock_session):
-    repo = ScreenAbstractResultRepository()
-    review_id = uuid.uuid4()
-    search_result_id = uuid.uuid4()
-    expected = [
-        ScreenAbstractResult(
-            id=uuid.uuid4(),
-            review_id=review_id,
-            search_result_id=search_result_id,
-            screening_strategy=ScreeningStrategyType.CONSERVATIVE,
-            decision=ScreeningDecisionType.INCLUDE,
-            confidence_score=0.9,
-            rationale="Test rationale",
-            model_name="test_model",
-        )
-    ]
-    mock_session.exec.return_value.all.return_value = expected
-    results = repo.get_by_search_result(mock_session, review_id, search_result_id)
-    assert results == expected
-    mock_session.exec.assert_called_once()
-
-
-def test_screen_repo_get_by_strategy(mock_session):
+def test_screen_repo_get_by_strategy(mock_session: MagicMock):
     repo = ScreenAbstractResultRepository()
     review_id = uuid.uuid4()
     strategy = ScreeningStrategyType.CONSERVATIVE
@@ -425,7 +308,6 @@ def test_screen_repo_get_by_strategy(mock_session):
         ScreenAbstractResult(
             id=uuid.uuid4(),
             review_id=review_id,
-            search_result_id=uuid.uuid4(),
             screening_strategy=strategy,
             decision=ScreeningDecisionType.INCLUDE,
             confidence_score=0.9,
@@ -439,7 +321,7 @@ def test_screen_repo_get_by_strategy(mock_session):
     mock_session.exec.assert_called_once()
 
 
-def test_screen_repo_get_by_exclusion_category(mock_session):
+def test_screen_repo_get_by_exclusion_category(mock_session: MagicMock):
     repo = ScreenAbstractResultRepository()
     review_id = uuid.uuid4()
     exclusion_reason = "Non-human subjects"
@@ -447,7 +329,6 @@ def test_screen_repo_get_by_exclusion_category(mock_session):
         ScreenAbstractResult(
             id=uuid.uuid4(),
             review_id=review_id,
-            search_result_id=uuid.uuid4(),
             screening_strategy=ScreeningStrategyType.CONSERVATIVE,
             decision=ScreeningDecisionType.EXCLUDE,
             confidence_score=0.9,
@@ -464,53 +345,55 @@ def test_screen_repo_get_by_exclusion_category(mock_session):
     mock_session.exec.assert_called_once()
 
 
-def test_screen_repo_get_by_response_metadata(mock_session):
-    repo = ScreenAbstractResultRepository()
-    review_id = uuid.uuid4()
-    metadata = {"model": "gpt-4", "temperature": 0.0}
-    expected = [
-        ScreenAbstractResult(
-            id=uuid.uuid4(),
-            review_id=review_id,
-            search_result_id=uuid.uuid4(),
-            screening_strategy=ScreeningStrategyType.CONSERVATIVE,
-            decision=ScreeningDecisionType.INCLUDE,
-            confidence_score=0.9,
-            rationale="Test rationale",
-            model_name="test_model",
-            response_metadata=metadata,
-        ),
-    ]
-    mock_session.exec.return_value.all.return_value = expected
-    result = repo.get_by_response_metadata(mock_session, review_id, metadata)
+def test_resolution_repo_get_by_search_result_id(mock_session: MagicMock):
+    repo = ScreeningResolutionRepository()
+    search_result_id = uuid.uuid4()
+    expected = ScreeningResolution(
+        id=uuid.uuid4(),
+        review_id=uuid.uuid4(),
+        resolver_decision=ScreeningDecisionType.INCLUDE,
+        resolver_reasoning="Conflict resolved",
+        resolver_confidence_score=1.0,
+    )
+    mock_session.exec.return_value.first.return_value = expected
+    result = repo.get_by_search_result_id(mock_session, search_result_id)
     assert result == expected
     mock_session.exec.assert_called_once()
 
 
-def test_systematic_review_repository_error_handling(mock_session):
+def test_systematic_review_repository_error_handling(mock_session: MagicMock):
     repo = SystematicReviewRepository()
-    mock_session.exec.side_effect = SQLAlchemyError("Database error")
-    with pytest.raises(
-        RepositoryError,
-        match=f"Database error in get_with_pubmed_results for {repo.model_cls.__name__}: Database error",
-    ):
-        repo.get_with_pubmed_results(uuid.uuid4())
+    review_id = uuid.uuid4()
+    mock_session.exec.side_effect = SQLAlchemyError("DB error")
+    with pytest.raises(RepositoryError, match="get_by_id.*DB error"):
+        repo.get_with_search_results(mock_session, review_id)
 
-    mock_session.exec.side_effect = SQLAlchemyError("Database error")
-    with pytest.raises(
-        RepositoryError,
-        match=f"Database error in get_with_all for {repo.model_cls.__name__}: Database error",
-    ):
-        repo.get_with_all(uuid.uuid4())
+    mock_session.exec.side_effect = None
+    mock_session.exec.return_value.first.return_value = None
+    mock_session.exec.side_effect = SQLAlchemyError("DB error")
+
+    with pytest.raises(RepositoryError, match="get_by_id.*DB error"):
+        repo.get_with_all(mock_session, review_id)
 
 
-def test_delete_record_not_found(mock_session):
+def test_delete_record_not_found(mock_session: MagicMock):
     repo = SystematicReviewRepository()
     review_id = uuid.uuid4()
     mock_session.exec.return_value.first.return_value = None
-
     with pytest.raises(RecordNotFoundError, match="not found for deletion"):
         repo.delete(mock_session, review_id)
-
     mock_session.delete.assert_not_called()
     mock_session.flush.assert_not_called()
+
+
+def test_base_repo_add_constraint_error(mock_session: MagicMock):
+    repo = SystematicReviewRepository()
+    review_to_add = SystematicReview(
+        id=uuid.uuid4(), research_question="test q", exclusion_criteria="test exc"
+    )
+    mock_session.flush.side_effect = IntegrityError(
+        "duplicate key", params=None, orig=None
+    )
+    with pytest.raises(ConstraintViolationError, match="duplicate key"):
+        repo.add(mock_session, review_to_add)
+    mock_session.add.assert_called_once_with(review_to_add)

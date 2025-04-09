@@ -51,6 +51,7 @@ from loguru import logger
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlmodel import Session, and_, col, or_, select
 
+from sr_assistant.core import models
 from sr_assistant.core.models import (
     Base,
     LogRecord,
@@ -91,15 +92,59 @@ class BaseRepository[T: Base]:
     Repositories do not manage transactions (commit/rollback).
     """
 
+    _model_cls: type[T] | None = None  # Cache for resolved model class
+
     @property
     def model_cls(self) -> type[T]:
-        """Get the model class associated with the repository."""
-        for base in getattr(type(self), "__orig_bases__", []):
-            if getattr(base, "__origin__", None) is BaseRepository:
-                args = getattr(base, "__args__", [])
-                if args:
-                    return args[0]
-        raise TypeError("Could not determine model class for repository")
+        """Get the model class associated with the repository, resolving forward refs."""
+        if self._model_cls is None:
+            # Get the generic type argument T
+            orig_bases = getattr(type(self), "__orig_bases__", [])
+            model_type_arg = None
+            for base in orig_bases:
+                if getattr(base, "__origin__", None) is BaseRepository:
+                    args = getattr(base, "__args__", [])
+                    if args:
+                        model_type_arg = args[0]
+                        break
+
+            if model_type_arg is None:
+                raise TypeError(
+                    "Could not determine model class argument for repository"
+                )
+
+            if isinstance(model_type_arg, t.ForwardRef):
+                # Resolve the forward reference string using models module namespace
+                model_namespace = models.__dict__
+                local_ns = None
+                try:
+                    resolved_type = model_type_arg._evaluate(
+                        model_namespace, local_ns, frozenset()
+                    )
+                    if resolved_type is None:
+                        raise TypeError(
+                            f"Forward reference {model_type_arg!r} resolved to None"
+                        )
+                    self._model_cls = resolved_type
+                except NameError as e:
+                    raise TypeError(
+                        f"Could not resolve forward reference {model_type_arg!r} in models namespace: {e}"
+                    ) from e
+                except Exception as e:
+                    raise TypeError(
+                        f"Error evaluating forward reference {model_type_arg!r}: {e}"
+                    ) from e
+            elif isinstance(model_type_arg, type) and issubclass(model_type_arg, Base):
+                self._model_cls = model_type_arg  # It was already a type
+            else:
+                raise TypeError(
+                    f"Unexpected type argument for repository: {model_type_arg!r}"
+                )
+
+        if self._model_cls is None:  # Should not happen if logic above is correct
+            raise TypeError("Failed to set _model_cls")
+
+        return self._model_cls
 
     def _construct_get_stmt(self, id: uuid.UUID) -> SelectOfScalar[T]:
         Model = self.model_cls
@@ -345,28 +390,6 @@ class ScreenAbstractResultRepository(BaseRepository[ScreenAbstractResult]):
             logger.exception(msg)
             raise RepositoryError(msg) from exc
 
-    def get_by_search_result(
-        self,
-        session: Session,
-        review_id: uuid.UUID,
-        search_result_id: uuid.UUID,
-    ) -> Sequence[ScreenAbstractResult]:
-        """Get screening results for a specific SearchResult."""
-        try:
-            query = (
-                select(self.model_cls).where(
-                    self.model_cls.review_id == review_id,
-                    self.model_cls.search_result_id == search_result_id,
-                )
-                # Remove loading - relationship commented out in model
-                # .options(selectinload(self.model_cls.search_result))
-            )
-            return session.exec(query).all()
-        except SQLAlchemyError as exc:
-            msg = f"Failed to fetch screening results for search result {search_result_id}: {exc}"
-            logger.exception(msg)
-            raise RepositoryError(msg) from exc
-
     def get_by_strategy(
         self,
         session: Session,
@@ -443,6 +466,24 @@ class ScreenAbstractResultRepository(BaseRepository[ScreenAbstractResult]):
             return session.exec(query).all()
         except SQLAlchemyError as exc:
             msg = f"Failed to fetch records by response metadata for {review_id}: {exc}"
+            logger.exception(msg)
+            raise RepositoryError(msg) from exc
+
+    def get_by_review_strategy(
+        self,
+        session: Session,
+        review_id: uuid.UUID,
+        strategy: ScreeningStrategyType,
+    ) -> Sequence[ScreenAbstractResult]:
+        """Gets screening results for a specific review and strategy."""
+        try:
+            stmt = select(self.model_cls).where(
+                self.model_cls.review_id == review_id,
+                self.model_cls.screening_strategy == strategy,
+            )
+            return session.exec(stmt).all()
+        except SQLAlchemyError as exc:
+            msg = f"Failed to fetch ScreenAbstractResult by review/strategy: {exc}"
             logger.exception(msg)
             raise RepositoryError(msg) from exc
 

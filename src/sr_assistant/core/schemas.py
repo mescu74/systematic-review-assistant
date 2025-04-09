@@ -9,21 +9,25 @@ Todo:
 
 from __future__ import annotations
 
+import typing as t
 import uuid
 from typing import TypedDict
 
-from pydantic import BaseModel, ConfigDict, Field
-from pydantic.types import AwareDatetime, JsonValue, PositiveInt  # noqa: TC002
+from pydantic import BaseModel, ConfigDict, Field, JsonValue
+from pydantic.types import AwareDatetime, PositiveInt  # noqa: TC002
 
 from sr_assistant.core.types import (
     ComparisonExclusionReason,
+    CriteriaFramework,
     InterventionExclusionReason,
     OutcomeExclusionReason,
     PopulationExclusionReason,
     ReportingExclusionReason,
     ScreeningDecisionType,
     ScreeningStrategyType,
+    SearchDatabaseSource,
     StudyDesignExclusionReason,
+    UtcDatetime,
 )
 
 
@@ -314,3 +318,109 @@ class ScreeningResolutionSchema(BaseSchema):
         default=None,
         description="ID of the comprehensive screening result. Will be populated by the caller.",
     )
+
+
+# --- Systematic Review Schemas ---
+
+
+class SystematicReviewBase(BaseSchema):
+    """Base schema for Systematic Review, common fields."""
+
+    background: str | None = None
+    research_question: str
+    criteria_framework: CriteriaFramework | None = None
+    criteria_framework_answers: t.MutableMapping[str, JsonValue] = Field(
+        default_factory=dict
+    )
+    inclusion_criteria: str | None = None
+    exclusion_criteria: str  # Mandatory for creation based on model
+    review_metadata: t.MutableMapping[str, JsonValue] = Field(default_factory=dict)
+
+
+class SystematicReviewCreate(SystematicReviewBase):
+    """Schema for creating a new Systematic Review."""
+
+    # Inherits all fields from Base
+    # No additional fields needed for creation usually
+
+
+class SystematicReviewUpdate(SystematicReviewBase):
+    """Schema for updating a Systematic Review (all fields optional)."""
+
+    background: str | None = None
+    research_question: str | None = None  # Make optional for update
+    criteria_framework: CriteriaFramework | None = None
+    criteria_framework_answers: t.MutableMapping[str, JsonValue] | None = (
+        None  # Make optional
+    )
+    inclusion_criteria: str | None = None
+    exclusion_criteria: str | None = None  # Make optional for update
+    review_metadata: t.MutableMapping[str, JsonValue] | None = None  # Make optional
+
+
+class SystematicReviewRead(SystematicReviewBase):
+    """Schema for reading/returning a Systematic Review."""
+
+    id: uuid.UUID
+    created_at: UtcDatetime | None = None
+    updated_at: UtcDatetime | None = None
+    # Add relationships if needed for read operations, using nested schemas
+    # e.g., search_results: list["SearchResultRead"] = []
+
+
+# --- SearchResult Schemas ---
+# (Define Read/Create/Update schemas if needed)
+class SearchResultRead(BaseSchema):
+    id: uuid.UUID
+    review_id: uuid.UUID
+    source_db: SearchDatabaseSource
+    source_id: str
+    doi: str | None
+    title: str
+    abstract: str | None
+    journal: str | None
+    year: int | None  # Assuming int based on model correction
+    authors: list[str] | None
+    keywords: list[str] | None
+    raw_data: t.Mapping[str, JsonValue]
+    source_metadata: t.Mapping[str, JsonValue]
+    created_at: UtcDatetime | None
+    updated_at: UtcDatetime | None
+    # Add relationships if needed
+    # resolution: Optional["ScreeningResolutionRead"] = None
+    # conservative_result: Optional["ScreenAbstractResultRead"] = None
+    # comprehensive_result: Optional["ScreenAbstractResultRead"] = None
+
+
+# --- ScreenAbstractResult Schemas ---
+# ...
+
+# --- ScreeningResolution Schemas ---
+# ...
+
+# --- LogRecord Schemas ---
+# ...
+
+# --- ScreeningResponse (likely from Agent Output Parsing) ---
+
+
+class ExclusionReasons(BaseSchema):
+    """Represents PRISMA 2020 exclusion reasons categories."""
+
+    population_exclusion_reasons: list[str] = Field(default_factory=list)
+    intervention_exclusion_reasons: list[str] = Field(default_factory=list)
+    comparator_exclusion_reasons: list[str] = Field(default_factory=list)
+    outcomes_exclusion_reasons: list[str] = Field(default_factory=list)
+    setting_exclusion_reasons: list[str] = Field(default_factory=list)
+    study_design_exclusion_reasons: list[str] = Field(default_factory=list)
+    other_exclusion_reasons: list[str] = Field(default_factory=list)
+
+
+class ScreeningResponse(BaseSchema):
+    """Output schema for screening agents."""
+
+    decision: ScreeningDecisionType
+    confidence_score: float = Field(ge=0.0, le=1.0)
+    rationale: str
+    extracted_quotes: list[str] | None = None
+    exclusion_reason_categories: ExclusionReasons | None = None
