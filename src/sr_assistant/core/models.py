@@ -72,7 +72,7 @@ class SystematicReview(SQLModelBase, table=True):
     generate input to screening chain/agent.
 
     Notes:
-        - In Python, pubmed_results field links to list of PubMedResult which again
+        - In Python, search_results field links to list of SearchResult which again
           have conservative_result and comprehensive_result fields pointing to the
           abstracts screening results table.
 
@@ -401,7 +401,7 @@ class ScreenAbstractResult(SQLModelBase, table=True):
         exclusion_reason_categories: ExclusionReasons
         id: uuid.UUID (run id)
         review_id: uuid.UUID
-        pubmed_result_id: uuid.UUID
+        search_result_id: uuid.UUID
         trace_id: uuid.UUID
         model_name: str
         start_time: datetime (UTC)

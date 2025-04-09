@@ -30,7 +30,7 @@ class PubMedRepository:
 
     def store_results(
         self, review_id: UUID, query: str, records: dict[str, t.Any]
-    ) -> list[models.PubMedResult]:
+    ) -> list[models.SearchResult]:
         """Store PubMed search results."""
         try:
             results = []
@@ -39,7 +39,7 @@ class PubMedRepository:
                     article_info = extract_article_info(record)
                     if not article_info:
                         continue
-                    result = models.PubMedResult(
+                    result = models.SearchResult(
                         review_id=review_id,
                         query=query,
                         pmid=article_info["pmid"],
@@ -67,26 +67,26 @@ class PubMedRepository:
                 for result in results
             ]
 
-            ret = self.supabase.table("pubmed_results").insert(data).execute()
+            ret = self.supabase.table("search_results").insert(data).execute()
             logger.info(f"Stored {len(ret.data)} PubMed results for review {review_id}")
-            # should link st.session_state.review (Review) to below models.PubMedResults
+            # should link st.session_state.review (Review) to below models.SearchResults
             # Supabase returns UUID as string
-            return [models.PubMedResult.model_validate(r) for r in ret.data]
+            return [models.SearchResult.model_validate(r) for r in ret.data]
 
         except (PostgrestAPIError, ValidationError):
             logger.opt(exception=True).error("Failed to store search results")
             raise
 
-    def get_search_results(self, review_id: UUID) -> list[models.PubMedResult]:
+    def get_search_results(self, review_id: UUID) -> list[models.SearchResult]:
         """Get all results for a review."""
         try:
             ret = (
-                self.supabase.table("pubmed_results")
+                self.supabase.table("search_results")
                 .select("*")
                 .eq("review_id", str(review_id))
                 .execute()
             )
-            return [models.PubMedResult.model_validate(r) for r in ret.data]
+            return [models.SearchResult.model_validate(r) for r in ret.data]
         except Exception as e:
             logger.error(f"Failed to get results for review {review_id}: {e!r}")
             raise

@@ -186,7 +186,7 @@ conclusion."""
 # Injected:
 # - id uuid.UUID (run id)
 # - review_id uuid.UUID
-# - pubmed_result_id uuid.UUID
+# - search_result_id uuid.UUID
 # - screening_strategy ScreeningStrategyType
 # - trace_id uuid.UUID
 # - model_name str (passed to langchain wrapper)
@@ -225,10 +225,10 @@ Can also be read from `st.session_state.review_id."""
 
     # TODO: should we remove this to break the circular relationship? Alembic warns
     # about it.
-    pubmed_result_id: uuid.UUID
-    """PubMedResult.id associated with this screening result.
+    search_result_id: uuid.UUID
+    """SearchResult.id associated with this screening result.
 
-Read from RunnableConfig metadata['pubmed_result_id'] passed by the invoker."""
+Read from RunnableConfig metadata['search_result_id'] passed by the invoker."""
 
     trace_id: uuid.UUID
     """LangSmith `langsmith.RunTree`.trace_id, per input in batch, so for given \
@@ -289,7 +289,7 @@ class ScreeningResolutionSchema(BaseSchema):
     """
 
     resolver_decision: ScreeningDecisionType = Field(
-        description="The decision made by the resolver for this PubMed result. Should be one of: INCLUDE, EXCLUDE, or UNCERTAIN."
+        description="The decision made by the resolver for this search result. Should be one of: INCLUDE, EXCLUDE, or UNCERTAIN."
     )
     resolver_reasoning: str = Field(
         description="Detailed reasoning for the resolver's decision. Explain your thought process clearly."
@@ -306,9 +306,9 @@ class ScreeningResolutionSchema(BaseSchema):
         default=None,
         description="ID of the systematic review. Will be populated by the caller.",
     )
-    pubmed_result_id: uuid.UUID | None = Field(
+    search_result_id: uuid.UUID | None = Field(
         default=None,
-        description="ID of the PubMed search result. Will be populated by the caller.",
+        description="ID of the search search result. Will be populated by the caller.",
     )
     conservative_result_id: uuid.UUID | None = Field(
         default=None,

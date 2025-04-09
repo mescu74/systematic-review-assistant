@@ -67,7 +67,7 @@ class TestScreeningError:
 
     def test_init_with_minimal_args(self) -> None:
         """Test initialization with minimal arguments."""
-        search_result = MagicMock(spec=models.PubMedResult)
+        search_result = MagicMock(spec=models.SearchResult)
         error = MagicMock()
 
         screening_error = ScreeningError(
@@ -81,7 +81,7 @@ class TestScreeningError:
 
     def test_init_with_message(self) -> None:
         """Test initialization with explicit message."""
-        search_result = MagicMock(spec=models.PubMedResult)
+        search_result = MagicMock(spec=models.SearchResult)
         error = MagicMock()
         message = "Test error message"
 
@@ -97,7 +97,7 @@ class TestScreeningError:
 
     def test_validator_with_screening_result(self) -> None:
         """Test _validate_error_and_message with ScreeningResult as error."""
-        search_result = MagicMock(spec=models.PubMedResult)
+        search_result = MagicMock(spec=models.SearchResult)
         error = MagicMock(spec=ScreeningResult)
 
         screening_error = ScreeningError(
@@ -109,7 +109,7 @@ class TestScreeningError:
 
     def test_validator_with_screening_response(self) -> None:
         """Test _validate_error_and_message with ScreeningResponse as error."""
-        search_result = MagicMock(spec=models.PubMedResult)
+        search_result = MagicMock(spec=models.SearchResult)
         error = MagicMock(spec=ScreeningResponse)
 
         screening_error = ScreeningError(
@@ -128,7 +128,7 @@ class TestScreenAbstractResultTuple:
 
     def test_creation(self) -> None:
         """Test creating a ScreenAbstractResultTuple."""
-        search_result = MagicMock(spec=models.PubMedResult)
+        search_result = MagicMock(spec=models.SearchResult)
         conservative_result = MagicMock(spec=ScreeningResult)
         comprehensive_result = MagicMock(spec=ScreeningError)
 
@@ -147,8 +147,8 @@ class TestMakeScreenAbstractsChainInput:
     """Tests for make_screen_abstracts_chain_input function."""
 
     def test_empty_batch(self) -> None:
-        """Test with empty pubmed results batch."""
-        pubmed_results_batch: list[models.PubMedResult] = []
+        """Test with empty search results batch."""
+        search_results_batch: list[models.SearchResult] = []
         mock_review = MagicMock(spec=models.SystematicReview)
         mock_review.id = uuid.uuid4()
         mock_review.background = "Test background"
@@ -156,7 +156,7 @@ class TestMakeScreenAbstractsChainInput:
         mock_review.inclusion_criteria = "Test inclusion"
         mock_review.exclusion_criteria = "Test exclusion"
 
-        result = make_screen_abstracts_chain_input(pubmed_results_batch, mock_review)
+        result = make_screen_abstracts_chain_input(search_results_batch, mock_review)
 
         assert isinstance(result, dict)
         assert "inputs" in result
@@ -165,15 +165,15 @@ class TestMakeScreenAbstractsChainInput:
         assert len(result["config"]) == 0
 
     def test_single_item_batch(self) -> None:
-        """Test with a batch containing a single PubMedResult."""
-        mock_pubmed_result = MagicMock(spec=models.PubMedResult)
-        mock_pubmed_result.id = uuid.uuid4()
-        mock_pubmed_result.title = "Test title"
-        mock_pubmed_result.journal = "Test journal"
-        mock_pubmed_result.year = "2023"
-        mock_pubmed_result.abstract = "Test abstract"
+        """Test with a batch containing a single SearchResult."""
+        mock_search_result = MagicMock(spec=models.SearchResult)
+        mock_search_result.id = uuid.uuid4()
+        mock_search_result.title = "Test title"
+        mock_search_result.journal = "Test journal"
+        mock_search_result.year = "2023"
+        mock_search_result.abstract = "Test abstract"
 
-        pubmed_results_batch = [mock_pubmed_result]
+        search_results_batch = [mock_search_result]
 
         mock_review = MagicMock(spec=models.SystematicReview)
         mock_review.id = uuid.uuid4()
@@ -182,7 +182,7 @@ class TestMakeScreenAbstractsChainInput:
         mock_review.inclusion_criteria = "Test inclusion"
         mock_review.exclusion_criteria = "Test exclusion"
 
-        result = make_screen_abstracts_chain_input(pubmed_results_batch, mock_review)
+        result = make_screen_abstracts_chain_input(search_results_batch, mock_review)
 
         assert isinstance(result, dict)
         assert "inputs" in result
@@ -205,28 +205,28 @@ class TestMakeScreenAbstractsChainInput:
         config_item = result["config"][0]
         assert "metadata" in config_item
         assert config_item["metadata"]["review_id"] == str(mock_review.id)
-        assert config_item["metadata"]["pubmed_result_id"] == str(mock_pubmed_result.id)
+        assert config_item["metadata"]["search_result_id"] == str(mock_search_result.id)
 
         # Check tags
         assert "tags" in config_item
         assert f"sra:review_id:{mock_review.id}" in config_item["tags"]
-        assert f"sra:pubmed_result_id:{mock_pubmed_result.id}" in config_item["tags"]
+        assert f"sra:search_result_id:{mock_search_result.id}" in config_item["tags"]
         assert "sra:screen_abstracts_chain:i:0" in config_item["tags"]
 
     def test_multi_item_batch(self) -> None:
-        """Test with a batch containing multiple PubMedResults."""
-        # Create mock PubMedResults
-        mock_pubmed_results = []
+        """Test with a batch containing multiple SearchResults."""
+        # Create mock SearchResults
+        mock_search_results = []
         for i in range(3):
-            mock_pubmed_result = MagicMock(spec=models.PubMedResult)
-            mock_pubmed_result.id = uuid.uuid4()
-            mock_pubmed_result.title = f"Test title {i}"
-            mock_pubmed_result.journal = f"Test journal {i}"
-            mock_pubmed_result.year = f"202{i}"
-            mock_pubmed_result.abstract = f"Test abstract {i}"
-            mock_pubmed_results.append(mock_pubmed_result)
+            mock_search_result = MagicMock(spec=models.SearchResult)
+            mock_search_result.id = uuid.uuid4()
+            mock_search_result.title = f"Test title {i}"
+            mock_search_result.journal = f"Test journal {i}"
+            mock_search_result.year = f"202{i}"
+            mock_search_result.abstract = f"Test abstract {i}"
+            mock_search_results.append(mock_search_result)
 
-        pubmed_results_batch = mock_pubmed_results
+        search_results_batch = mock_search_results
 
         mock_review = MagicMock(spec=models.SystematicReview)
         mock_review.id = uuid.uuid4()
@@ -235,7 +235,7 @@ class TestMakeScreenAbstractsChainInput:
         mock_review.inclusion_criteria = "Test inclusion"
         mock_review.exclusion_criteria = "Test exclusion"
 
-        result = make_screen_abstracts_chain_input(pubmed_results_batch, mock_review)
+        result = make_screen_abstracts_chain_input(search_results_batch, mock_review)
 
         assert isinstance(result, dict)
         assert "inputs" in result
@@ -258,15 +258,15 @@ class TestMakeScreenAbstractsChainInput:
         for i, config_item in enumerate(result["config"]):
             assert "metadata" in config_item
             assert config_item["metadata"]["review_id"] == str(mock_review.id)
-            assert config_item["metadata"]["pubmed_result_id"] == str(
-                mock_pubmed_results[i].id
+            assert config_item["metadata"]["search_result_id"] == str(
+                mock_search_results[i].id
             )
 
             # Check tags
             assert "tags" in config_item
             assert f"sra:review_id:{mock_review.id}" in config_item["tags"]
             assert (
-                f"sra:pubmed_result_id:{mock_pubmed_results[i].id}"
+                f"sra:search_result_id:{mock_search_results[i].id}"
                 in config_item["tags"]
             )
             assert f"sra:screen_abstracts_chain:i:{i}" in config_item["tags"]

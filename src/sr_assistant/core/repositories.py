@@ -35,9 +35,9 @@ Examples:
     created = review_repo.add(review)
 
     # Get with relationships
-    review_with_search_results = review_repo.get_with_pubmed_results(created.id)
+    review_with_search_results = review_repo.get_with_search_results(created.id)
     full_review = review_repo.get_with_all(created.id) # search, logs, screening results
-    full_review.pubmed_results ...
+    full_review.search_results ...
     full_review.screen_abstract_results ...
     full_review.log_records ...
     ```
@@ -278,10 +278,10 @@ class SystematicReviewRepository(BaseRepository[SystematicReview]):
         repo = SystematicReviewRepository()
 
         # Get review with all relationships
-        review = repo.get_with_pubmed_results(review_id)
+        review = repo.get_with_search_results(review_id)
 
         # Access relationships
-        for result in review.pubmed_results:
+        for result in review.search_results:
             print(f"Title: {result.title}")
             if result.conservative_result:
                 print(f"Conservative: {result.conservative_result.decision}")
@@ -358,9 +358,7 @@ class ScreenAbstractResultRepository(BaseRepository[ScreenAbstractResult]):
         results = repo.get_by_review_id(review_id)
 
         # Get results by strategy
-        conservative = repo.get_by_strategy(
-            review_id, ScreeningStrategyType.CONSERVATIVE
-        )
+        conservative = repo.get_by_strategy(review_id, ScreeningStrategyType.CONSERVATIVE)
 
         # Query by JSONB fields (exclusion reasons)
         wrong_population = repo.get_by_exclusion_category(

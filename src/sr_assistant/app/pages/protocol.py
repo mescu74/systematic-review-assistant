@@ -333,7 +333,7 @@ if st.button("Save Protocol"):
                 st.json(review.model_dump(mode="json"))
                 st.page_link(
                     "pages/search.py",
-                    label="Next: PubMed Search",
+                    label="Next: Database Search",
                     icon=":material/search:",
                 )
             except Exception as e:

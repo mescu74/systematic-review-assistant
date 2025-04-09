@@ -19,11 +19,11 @@ from sr_assistant.app.agents.screening_agents import (
     screen_abstracts_chain,
 )
 from sr_assistant.core.models import (
-    PubMedResult,
+    SearchResult,
     SystematicReview,
 )
 from sr_assistant.core.repositories import (
-    PubMedResultRepository,
+    SearchResultRepository,
     ScreenAbstractResultRepository,
     ScreeningResolutionRepository,
     SystematicReviewRepository,
@@ -31,11 +31,11 @@ from sr_assistant.core.repositories import (
 from sr_assistant.core.schemas import ScreeningDecisionType
 
 
-def init_pubmed_repository() -> PubMedResultRepository:
-    if "repo_pubmed" not in st.session_state:
-        repo = PubMedResultRepository()
-        st.session_state.repo_pubmed = repo
-    return st.session_state.repo_pubmed
+def init_pubmed_repository() -> SearchResultRepository:
+    if "search_repo" not in st.session_state:
+        repo = SearchResultRepository()
+        st.session_state.search_repo = repo
+    return st.session_state.search_repo
 
 
 def init_review_repository() -> SystematicReviewRepository:
@@ -96,13 +96,13 @@ def render_df() -> None:
     """
     # exclusion categories, compute metrics
     results = t.cast(
-        list[tuple[PubMedResult, ScreeningResult]],
+        list[tuple[SearchResult, ScreeningResult]],
         st.session_state.screen_abstracts_results,
     )
     df_data = [
         {
-            "PMID": pubmed_result.pmid,
-            "Title": pubmed_result.title,
+            "PMID": search_result.pmid,
+            "Title": search_result.title,
             "Strategy": screening_result.screening_strategy,
             "Decision": screening_result.decision,
             "Confidence": screening_result.confidence_score,
@@ -110,47 +110,47 @@ def render_df() -> None:
             "Rationale": screening_result.rationale,
             "Extracted quotes": screening_result.extracted_quotes,
             "Result ID": str(screening_result.id),
-            "Final Decision": pubmed_result.final_decision,
-            "Resolved": bool(pubmed_result.resolution_id),
+            "Final Decision": search_result.final_decision,
+            "Resolved": bool(search_result.resolution_id),
             "Resolver Reasoning": None,
         }
-        for pubmed_result, screening_result in results
+        for search_result, screening_result in results
     ]
     if len(df_data) > 0:
         st.subheader("Results")
         st.dataframe(df_data, use_container_width=True, hide_index=True)
 
         if pmid := st.selectbox("View details:", [pm.pmid for pm, _ in results]):
-            pubmed_result, conservative_screening_result = next(
-                (pubmed_result, screening_result)
-                for pubmed_result, screening_result in results
-                if pubmed_result.pmid == pmid
+            search_result, conservative_screening_result = next(
+                (search_result, screening_result)
+                for search_result, screening_result in results
+                if search_result.pmid == pmid
                 and screening_result.screening_strategy
                 == ScreeningStrategyType.CONSERVATIVE
             )
-            pubmed_result, comprehensive_screening_result = next(
-                (pubmed_result, screening_result)
-                for pubmed_result, screening_result in results
-                if pubmed_result.pmid == pmid
+            search_result, comprehensive_screening_result = next(
+                (search_result, screening_result)
+                for search_result, screening_result in results
+                if search_result.pmid == pmid
                 and screening_result.screening_strategy
                 == ScreeningStrategyType.COMPREHENSIVE
             )
-            st.subheader(f"{pubmed_result.pmid}: {pubmed_result.title}")
-            st.text(f"{pubmed_result.journal} ({pubmed_result.year})")
+            st.subheader(f"{search_result.pmid}: {search_result.title}")
+            st.text(f"{search_result.journal} ({search_result.year})")
             st.markdown(
-                f"[PubMedResult](https://pubmed.ncbi.nlm.nih.gov/{pubmed_result.pmid})"
+                f"[SearchResult](https://pubmed.ncbi.nlm.nih.gov/{search_result.pmid})"
             )
-            st.json(pubmed_result.model_dump(mode="json"))
+            st.json(search_result.model_dump(mode="json"))
             if conservative_screening_result:
                 st.markdown(
-                    f"[Conservative Screening Result](https://pubmed.ncbi.nlm.nih.gov/{pubmed_result.pmid})"
+                    f"[Conservative Screening Result](https://pubmed.ncbi.nlm.nih.gov/{search_result.pmid})"
                 )
                 st.json(conservative_screening_result.model_dump(mode="json"))
             else:
                 st.warning("No conservative screening result")
             if comprehensive_screening_result:
                 st.markdown(
-                    f"[Comprehensive Screening Result](https://pubmed.ncbi.nlm.nih.gov/{pubmed_result.pmid})"
+                    f"[Comprehensive Screening Result](https://pubmed.ncbi.nlm.nih.gov/{search_result.pmid})"
                 )
                 st.json(comprehensive_screening_result.model_dump(mode="json"))
             else:
@@ -179,45 +179,45 @@ def render_df() -> None:
         if pmid := st.selectbox(
             "View details", [row["PMID"] for row in df_conflicts_data]
         ):
-            pubmed_result = st.session_state.repo_pubmed.get_by_pmid(
+            search_result = st.session_state.search_repo.get_by_pmid(
                 pmid, st.session_state.review_id
             )
             (
-                pubmed_result,
+                search_result,
                 conservative_screening_result,
                 comprehensive_screening_result,
             ) = next(
                 (
-                    pubmed_result,
+                    search_result,
                     conservative_screening_result,
                     comprehensive_screening_result,
                 )
                 for (
-                    pubmed_result,
+                    search_result,
                     conservative_screening_result,
                     comprehensive_screening_result,
                 ) in st.session_state.screen_abstracts_conflicts
-                if pubmed_result.pmid == pmid
+                if search_result.pmid == pmid
             )
-            st.subheader(f"{pubmed_result.pmid}: {pubmed_result.title}")
-            st.text(f"{pubmed_result.journal} ({pubmed_result.year})")
-            pubmed_result.conservative_result_id = conservative_screening_result.id
-            pubmed_result.comprehensive_result_id = comprehensive_screening_result.id
+            st.subheader(f"{search_result.pmid}: {search_result.title}")
+            st.text(f"{search_result.journal} ({search_result.year})")
+            search_result.conservative_result_id = conservative_screening_result.id
+            search_result.comprehensive_result_id = comprehensive_screening_result.id
             st.markdown(
-                f"[PubMedResult](https://pubmed.ncbi.nlm.nih.gov/{pubmed_result.pmid})"
+                f"[SearchResult](https://pubmed.ncbi.nlm.nih.gov/{search_result.pmid})"
             )
-            st.json(pubmed_result.model_dump(mode="json"))
+            st.json(search_result.model_dump(mode="json"))
 
             if conservative_screening_result:
                 st.markdown(
-                    f"[Conservative Screening Result](https://pubmed.ncbi.nlm.nih.gov/{pubmed_result.pmid})"
+                    f"[Conservative Screening Result](https://pubmed.ncbi.nlm.nih.gov/{search_result.pmid})"
                 )
                 st.json(conservative_screening_result.model_dump(mode="json"))
             else:
                 st.warning("No conservative screening result")
             if comprehensive_screening_result:
                 st.markdown(
-                    f"[Comprehensive Screening Result](https://pubmed.ncbi.nlm.nih.gov/{pubmed_result.pmid})"
+                    f"[Comprehensive Screening Result](https://pubmed.ncbi.nlm.nih.gov/{search_result.pmid})"
                 )
                 st.json(comprehensive_screening_result.model_dump(mode="json"))
             else:
@@ -272,7 +272,7 @@ def render_metrics() -> None:
         st.metric("Mean Screening latency", f"{latency:.2f} s")
 
 
-def _calculate_latency(results: list[tuple[PubMedResult, ScreeningResult]]) -> float:
+def _calculate_latency(results: list[tuple[SearchResult, ScreeningResult]]) -> float:
     durations = 0
     durations = [(r.end_time - r.start_time).total_seconds() for _, r in results]
     if not durations:
@@ -299,7 +299,7 @@ def render_progress_bar() -> None:
 
 @logger.catch(onerror=lambda exc: st.error(exc) if ut.in_streamlit() else None)  # pyright: ignore [reportArgumentType]
 def screen_abstracts(  # noqa: C901
-    search_results: list[PubMedResult],
+    search_results: list[SearchResult],
     review: SystematicReview,
 ) -> None:
     ut.init_state_key("screen_abstracts_results", [])
@@ -439,14 +439,14 @@ def screen_abstracts(  # noqa: C901
                 try:
                     st.write(f"Resolving conflict for PMID: {pm_result.pmid}")
                     resolution = resolve_screening_conflict(
-                        pubmed_result=pm_result,
+                        search_result=pm_result,
                         review=review,
                         conservative_result=cons_res,
                         comprehensive_result=comp_res,
                     )
                     # Save resolution
                     saved_resolution = resolution_repo.add(resolution)
-                    # Update PubMedResult
+                    # Update SearchResult
                     pm_result.final_decision = saved_resolution.resolver_decision
                     pm_result.resolution_id = saved_resolution.id
                     pubmed_repo.update(pm_result)  # Use update method
@@ -497,8 +497,8 @@ def screen_abstracts_page(review_id: uuid.UUID | None = None) -> None:
 
     screening_notification_widget = st.empty()
     # Get search results and existing screening decisions
-    if "pubmed_results" not in st.session_state:
-        st.session_state.pubmed_results = st.session_state.repo_pubmed.get_by_review_id(
+    if "search_results" not in st.session_state:
+        st.session_state.search_results = st.session_state.search_repo.get_by_review_id(
             review_id
         )
 
@@ -506,10 +506,10 @@ def screen_abstracts_page(review_id: uuid.UUID | None = None) -> None:
     st.json(review.model_dump(mode="json"), expanded=False)
 
     ut.init_state_key(
-        "screen_abstracts_to_be_screened", len(st.session_state.pubmed_results)
+        "screen_abstracts_to_be_screened", len(st.session_state.search_results)
     )
     col1, col2, col3 = st.columns(3)
-    col1.write(f"Abstracts to be screened: {len(st.session_state.pubmed_results)}")
+    col1.write(f"Abstracts to be screened: {len(st.session_state.search_results)}")
     st.session_state.screen_abstracts_batch_size = col2.slider(
         "Batch size", min_value=1, max_value=40, value=10
     )
@@ -528,8 +528,8 @@ def screen_abstracts_page(review_id: uuid.UUID | None = None) -> None:
         st.session_state.screen_abstracts_total_cost = 0.0
         st.session_state.screen_abstracts_successful_requests = 0
 
-        pubmed_results = st.session_state.pubmed_results
-        if not pubmed_results:
+        search_results = st.session_state.search_results
+        if not search_results:
             st.error("No PubMed results found, please run a PubMed search first.")
             st.page_link(
                 "pages/search.py", label="PubMed Search", icon=":material/search:"
@@ -537,7 +537,7 @@ def screen_abstracts_page(review_id: uuid.UUID | None = None) -> None:
             st.stop()
 
         # renders metrics, progress bar, dataframe fragments for results, and errors (TODO: not working)
-        screen_abstracts(pubmed_results, review)
+        screen_abstracts(search_results, review)
 
         result_count = len(st.session_state.screen_abstracts_results)
         conflict_count = len(st.session_state.screen_abstracts_conflicts)
@@ -573,8 +573,8 @@ if "review" not in st.session_state:
     logger.info(f"review: {review!r}")
     st.session_state.review = review
 init_pubmed_repository()
-if "pubmed_results" not in st.session_state:
-    st.session_state.pubmed_results = st.session_state.repo_pubmed.get_by_review_id(
+if "search_results" not in st.session_state:
+    st.session_state.search_results = st.session_state.search_repo.get_by_review_id(
         st.session_state.review_id
     )
 screen_abstracts_page()

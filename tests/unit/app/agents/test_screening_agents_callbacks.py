@@ -42,7 +42,7 @@ class TestChainOnErrorListenerCb:
         chain_on_error_listener_cb(test_error, run=mock_run)
 
         # Get the list of calls made to the mock_logger and its returned mocks
-        calls = mock_logger.mock_calls
+        # calls = mock_logger.mock_calls # Removed unused variable
 
         # Expected sequence of calls:
         expected_calls = [
@@ -264,8 +264,8 @@ class TestScreenAbstractsChainOnEndCb:
 
     @patch("sr_assistant.app.agents.screening_agents.logger")
     def test_child_run_missing_pubmed_result_id(self, mock_logger: MagicMock) -> None:
-        """Test case where child run metadata is missing pubmed_result_id."""
-        # Create a mock Run object with outputs and a child run with missing pubmed_result_id
+        """Test case where child run metadata is missing search_result_id."""
+        # Create a mock Run object with outputs and a child run with missing search_result_id
         mock_run = MagicMock()
         mock_run.id = str(uuid.uuid4())
         mock_run.name = "test_run"
@@ -284,11 +284,11 @@ class TestScreenAbstractsChainOnEndCb:
         # Call the function
         screen_abstracts_chain_on_end_cb(mock_run)
 
-        # Should log an error for the child run with missing pubmed_result_id
+        # Should log an error for the child run with missing search_result_id
         bound_logger = mock_logger.bind.return_value
         assert bound_logger.error.called
         assert any(
-            "Missing pubmed_result_id in metadata" in str(call)
+            "Missing search_result_id in metadata" in str(call)
             for call in bound_logger.error.call_args_list
         )
 
@@ -301,10 +301,10 @@ class TestScreenAbstractsChainOnEndCb:
         can process a valid input without raising exceptions.
         """
         # Create a mock Run object with all required fields
-        run_id = str(uuid.uuid4())
+        # run_id = str(uuid.uuid4()) # Removed unused variable
         trace_id = str(uuid.uuid4())
         review_id = str(uuid.uuid4())
-        pubmed_result_id = str(uuid.uuid4())
+        search_result_id = str(uuid.uuid4())  # Updated variable name
 
         # Create mocks with minimum required fields
         mock_run = MagicMock()
@@ -317,7 +317,7 @@ class TestScreenAbstractsChainOnEndCb:
         mock_child_run.tags = ["map:key:conservative"]
         mock_child_run.metadata = {
             "review_id": review_id,
-            "pubmed_result_id": pubmed_result_id,
+            "search_result_id": search_result_id,
         }
         mock_child_run.trace_id = trace_id
         mock_child_run.start_time = datetime.now(timezone.utc)

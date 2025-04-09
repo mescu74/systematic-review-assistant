@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 
 from sr_assistant.core.models import CriteriaFramework, SystematicReview
 from sr_assistant.core.repositories import (
-    PubMedResultRepository,
+    SearchResultRepository,
     SystematicReviewRepository,
 )
 from sr_assistant.step2.pubmed_integration import pubmed_fetch_details, pubmed_search
@@ -127,11 +127,11 @@ def init_review_repository() -> SystematicReviewRepository:
     return st.session_state.repo_review
 
 
-def init_pubmed_repository() -> PubMedResultRepository:
-    if "repo_pubmed" not in st.session_state:
-        repo = PubMedResultRepository()
-        st.session_state.repo_pubmed = repo
-    return st.session_state.repo_pubmed
+def init_pubmed_repository() -> SearchResultRepository:
+    if "search_repo" not in st.session_state:
+        repo = SearchResultRepository()
+        st.session_state.search_repo = repo
+    return st.session_state.search_repo
 
 
 def search_page(review_id: uuid.UUID | None = None) -> None:
@@ -230,7 +230,7 @@ def search_page(review_id: uuid.UUID | None = None) -> None:
 
     if st.button("Clear search results"):
         repo.delete_by_review_id(review_id)
-        st.session_state.pubmed_results = []  # Clear local state too
+        st.session_state.search_results = []  # Clear local state too
         st.success("Search results cleared")
         st.rerun()  # Rerun to reflect cleared results
 
@@ -240,7 +240,7 @@ def search_page(review_id: uuid.UUID | None = None) -> None:
         st.info("No search results available for this review yet.")
         st.stop()  # Stop if no results
 
-    st.session_state.pubmed_results = existing
+    st.session_state.search_results = existing
 
     st.divider()
     df_data = [
