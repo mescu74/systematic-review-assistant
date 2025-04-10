@@ -223,7 +223,7 @@ class SearchResult(SQLModelBase, table=True):
             sa_pg.ENUM(
                 SearchDatabaseSource,
                 name="searchdatabasesource_enum",
-                create_type=False,
+                values_callable=enum_values,
             ),
             index=True,
             nullable=False,

@@ -3,6 +3,7 @@
 import uuid
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
+import typing as t
 
 import pytest
 import streamlit as st
@@ -17,22 +18,32 @@ from sr_assistant.app.agents.screening_agents import (
 )
 from sr_assistant.core.models import SearchResult, SystematicReview
 from sr_assistant.core.schemas import ScreeningResponse, ScreeningResult
-from sr_assistant.core.types import ScreeningDecisionType, ScreeningStrategyType
+from sr_assistant.core.types import (
+    ScreeningDecisionType,
+    ScreeningStrategyType,
+    SearchDatabaseSource,
+)
 
 
 @pytest.fixture
 def mock_search_result() -> SearchResult:
-    """Create a mock PubMed result for testing."""
+    """Create a mock SearchResult for testing."""
     return SearchResult(
-        pmid="12345",
+        id=uuid.uuid4(),
+        review_id=uuid.uuid4(),
+        source_db=SearchDatabaseSource.PUBMED,
+        source_id="PM12345",
         title="Test Study on Machine Learning",
         journal="Journal of Testing",
         year="2023",
         abstract="This is a test abstract about machine learning and its applications.",
-        authors="Test Author",
+        authors=["Test Author"],
         keywords=["machine learning", "testing"],
-        mesh_terms=["Artificial Intelligence", "Software Testing"],
-        publication_types=["Journal Article"],
+        raw_data={
+            "pmid": "12345",
+            "mesh_terms": ["Artificial Intelligence", "Software Testing"],
+        },
+        source_metadata={"publication_types": ["Journal Article"]},
     )
 
 
@@ -40,9 +51,9 @@ def mock_search_result() -> SearchResult:
 def mock_systematic_review() -> SystematicReview:
     """Create a mock systematic review for testing."""
     return SystematicReview(
-        title="Test Review",
-        background="Testing background for systematic review",
+        id=uuid.uuid4(),
         research_question="What are the effects of machine learning on testing?",
+        background="Testing background for systematic review",
         inclusion_criteria="Studies must be about machine learning and testing",
         exclusion_criteria="Studies not in English, studies before 2000",
     )
@@ -50,37 +61,49 @@ def mock_systematic_review() -> SystematicReview:
 
 @pytest.fixture
 def mock_edge_case_search_result() -> SearchResult:
-    """Create a mock PubMed result with missing fields to test edge cases."""
+    """Create a mock SearchResult with missing fields to test edge cases."""
     return SearchResult(
-        pmid="54321",
+        id=uuid.uuid4(),
+        review_id=uuid.uuid4(),
+        source_db=SearchDatabaseSource.PUBMED,
+        source_id="PM54321",
         title="",
-        journal="",
-        year="",
-        abstract="",
-        authors="",
+        journal=None,
+        year=None,
+        abstract=None,
+        authors=[],
         keywords=[],
-        mesh_terms=[],
-        publication_types=[],
+        raw_data={},
+        source_metadata={},
     )
 
 
 @pytest.fixture
 def mock_non_relevant_search_result() -> SearchResult:
-    """Create a mock PubMed result that should be excluded."""
+    """Create a mock SearchResult that should be excluded."""
     return SearchResult(
-        pmid="98765",
+        id=uuid.uuid4(),
+        review_id=uuid.uuid4(),
+        source_db=SearchDatabaseSource.PUBMED,
+        source_id="PM98765",
         title="Impact of Diet on Heart Disease",
         journal="Journal of Cardiology",
-        year="1995",  # Before 2000, should be excluded
+        year="1995",
         abstract="This study examines the relationship between diet and heart disease.",
-        authors="Heart Researcher",
+        authors=["Heart Researcher"],
         keywords=["diet", "heart disease", "nutrition"],
-        mesh_terms=["Diet", "Heart Diseases", "Nutrition"],
-        publication_types=["Journal Article"],
+        raw_data={
+            "pmid": "98765",
+            "mesh_terms": ["Diet", "Heart Diseases", "Nutrition"],
+        },
+        source_metadata={"publication_types": ["Journal Article"]},
     )
 
 
-def test_screen_abstracts_chain(mock_search_result, mock_systematic_review):
+@pytest.mark.integration
+def test_screen_abstracts_chain(
+    mock_search_result: SearchResult, mock_systematic_review: SystematicReview
+):
     """Test that screen_abstracts_chain correctly processes a single abstract."""
     # Prepare input for the chain
     chain_input = screening_agents.make_screen_abstracts_chain_input(
@@ -89,7 +112,7 @@ def test_screen_abstracts_chain(mock_search_result, mock_systematic_review):
 
     # Run the chain with batch
     results = screening_agents.screen_abstracts_chain.batch(
-        inputs=chain_input["inputs"],
+        inputs=t.cast(list[dict[str, t.Any]], chain_input["inputs"]),
         config=chain_input["config"],
     )
     assert len(results) == 1
@@ -100,6 +123,7 @@ def test_screen_abstracts_chain(mock_search_result, mock_systematic_review):
     assert "conservative" in result
     assert "comprehensive" in result
 
+    # FIXME: This is so stupid I have no words. The chain returns A PYDANTIC MODEL. And you test with hasattr? Fired.
     # Check conservative reviewer result
     assert isinstance(result["conservative"], ScreeningResult)
     assert hasattr(result["conservative"], "decision")
@@ -133,8 +157,12 @@ def test_screen_abstracts_chain(mock_search_result, mock_systematic_review):
     assert hasattr(result["comprehensive"], "response_metadata")
 
 
+# FIXME: Dumbest I've seen in a while. Actually read the code you're supposed to test. Or else.
+@pytest.mark.integration
 def test_screen_abstracts_batch(
-    mock_search_result, mock_systematic_review, monkeypatch
+    mock_search_result: SearchResult,
+    mock_systematic_review: SystematicReview,
+    monkeypatch: pytest.MonkeyPatch,
 ):
     """Test that screen_abstracts_batch correctly processes a batch of abstracts."""
 
@@ -171,7 +199,7 @@ def test_screen_abstracts_batch(
 
         # Check search result
         assert isinstance(res.search_result, SearchResult)
-        assert res.search_result.pmid == mock_search_result.pmid
+        assert res.search_result.source_id == mock_search_result.source_id
 
         # Check conservative result
         assert isinstance(res.conservative_result, ScreeningResult)
@@ -211,6 +239,10 @@ def test_screen_abstracts_batch(
     assert cb.total_tokens > 0
 
 
+# FIXME: What is this? If you want to test a prompt, get the damn template, feed it input vars,
+# format it, and compare THE WHOLE THING TO EXPECTED STATE. 100% or 0%. This is useless.
+# The prompts could be utterly broken and this lazy crap would pass. UNACCEPTABLE!
+@pytest.mark.integration
 def test_chain_prompts():
     """Test that chain prompts are correctly configured."""
     # Test conservative reviewer prompt
@@ -236,6 +268,8 @@ def test_chain_prompts():
     assert "abstract" in screening_agents.task_prompt_text.lower()
 
 
+# FIXME: Do explain how this is an integration test. Do point out the integration points. Go ahead. Do it. !!
+@pytest.mark.integration
 def test_chain_structure():
     """Test that the chain is correctly structured."""
     chain = screening_agents.screen_abstracts_chain
@@ -260,7 +294,15 @@ def test_chain_structure():
     # Checking the type and the bound steps confirms the basic structure.
 
 
-def test_different_strategy_results(mock_search_result, mock_systematic_review):
+# FIXME: the entire premise of this "test" is utterly flawed and it fails 100% time.
+# Your reasoning how outputs should differ betweeen reviewers IS WRONG.
+# THERE IS ZERO REASON WHY CONFIDENCE SHOULD BE DIFFERENT. It can be, but there is no reason why it _should_ be.
+# Confidence scores are calibrated on a rough scale, so reviewers often output same levels, e.g., 0.9 or 0.95.
+# UNDERSTAND THAT THE PROMPT INPUT FOR BOTH IS THE SAME, ONLY PROMPT INSTRUCTIONS DIFFER. REVIEWERS SEE THE SAME DATA!
+@pytest.mark.integration
+def test_different_strategy_results(
+    mock_search_result: SearchResult, mock_systematic_review: SystematicReview
+):
     """Test that conservative and comprehensive strategies produce different results."""
     # Prepare input for the chain
     chain_input = screening_agents.make_screen_abstracts_chain_input(
@@ -269,7 +311,7 @@ def test_different_strategy_results(mock_search_result, mock_systematic_review):
 
     # Run the chain with batch
     results = screening_agents.screen_abstracts_chain.batch(
-        inputs=chain_input["inputs"],
+        inputs=t.cast(list[dict[str, t.Any]], chain_input["inputs"]),
         config=chain_input["config"],
     )
     assert len(results) == 1
@@ -307,6 +349,7 @@ def test_different_strategy_results(mock_search_result, mock_systematic_review):
         )
 
 
+@pytest.mark.integration
 def test_non_relevant_abstract(mock_non_relevant_search_result, mock_systematic_review):
     """Test that a non-relevant abstract is correctly classified as exclude."""
     # Prepare input for the chain
@@ -338,6 +381,7 @@ def test_non_relevant_abstract(mock_non_relevant_search_result, mock_systematic_
     )
 
 
+@pytest.mark.integration
 def test_edge_case_handling(mock_edge_case_search_result, mock_systematic_review):
     """Test that the chain handles edge cases with missing data."""
     # Prepare input for the chain
@@ -350,6 +394,7 @@ def test_edge_case_handling(mock_edge_case_search_result, mock_systematic_review
         inputs=chain_input["inputs"],
         config=chain_input["config"],
     )
+    # FIXME: WRONG!! READ THE CODE AND FIX THIS. HINT: TWO REVIEWERS, BATCH CALL, GUESS HOW MANY RESULTS? HINT: NOT ONE!!
     assert len(results) == 1
     result = results[0]
 
@@ -373,6 +418,7 @@ def test_edge_case_handling(mock_edge_case_search_result, mock_systematic_review
         assert comprehensive_result.confidence_score < 0.8
 
 
+@pytest.mark.integration
 @patch("streamlit.session_state", MagicMock())
 @patch("sr_assistant.app.agents.screening_agents.logger")
 @patch("sr_assistant.app.agents.screening_agents.ScreeningResult")
@@ -543,6 +589,7 @@ def test_chain_on_end_callback_integration(
     assert bound_logger_mock.debug.call_count >= 2
 
 
+@pytest.mark.integration
 @patch("streamlit.session_state", MagicMock())
 @patch("sr_assistant.app.agents.screening_agents.logger")
 def test_chain_on_error_callback_integration(mock_logger):

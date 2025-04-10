@@ -144,36 +144,27 @@ class ScreeningResponse(BaseSchema):
 
     decision: ScreeningDecisionType = Field(
         ...,
+        description="The systematic review abstracts screening decision. Should this study be included or not? Or are you uncertain? If your confidence score is below 0.8, assign 'uncertain'.",
     )
-    """The systematic review abstracts screening decision. Should this study be \
-included or not? Or are you uncertain? If your confidence score is below 0.8, assign \
-'uncertain'."""
-
     confidence_score: float = Field(
         ...,
+        description="The systematic review abstracts screening confidence score [0.0, 1.0]. Should this study be included or not? Or are you uncertain? If your confidence score is below 0.8, assign 'uncertain'.",
     )
-    """The systematic review abstracts screening confidence score. Should this study be \
-included or not? Or are you uncertain? If your confidence score is below 0.8, assign \
-'uncertain'."""
 
     rationale: str = Field(
         ...,
+        description="The rationale for the decision. Be specific. Explainable AI is imporant. Don't just reiterate the category/categories, but explain how and why you reached this conclusion.",
     )
-    """The rationale for the decision. Be specific. Explainable AI is imporant. \
-Don't just reiterate the category/categories, but explain how and why you reached this \
-conclusion."""
 
     extracted_quotes: list[str] | None = Field(
         default=None,
+        description="The supporting quotes from the title/abstract. Can be omitted if uncertain.",
     )
-    """The supporting quotes from the title/abstract. Can be omitted if uncertain."""
 
     exclusion_reason_categories: ExclusionReasons | None = Field(
         default=None,
+        description="The PRISMA exclusion reason categories for the decision. Must be set if decision is 'exclude'. Omit if the decision is 'include'. If the decision is 'exclude' or 'uncertain', This complements the 'rationale' field.",
     )
-    """The PRISMA exclusion reason categories for the decision. Must be set if decision is \
-'exclude'. Omit if the decision is 'include'. If the decision is 'exclude' or \
-'uncertain',  This complements the 'rationale' field."""
 
 
 # response fields:
@@ -392,18 +383,6 @@ class SearchResultRead(BaseSchema):
     # comprehensive_result: Optional["ScreenAbstractResultRead"] = None
 
 
-# --- ScreenAbstractResult Schemas ---
-# ...
-
-# --- ScreeningResolution Schemas ---
-# ...
-
-# --- LogRecord Schemas ---
-# ...
-
-# --- ScreeningResponse (likely from Agent Output Parsing) ---
-
-
 class ExclusionReasons(BaseSchema):
     """Represents PRISMA 2020 exclusion reasons categories."""
 
@@ -414,13 +393,3 @@ class ExclusionReasons(BaseSchema):
     setting_exclusion_reasons: list[str] = Field(default_factory=list)
     study_design_exclusion_reasons: list[str] = Field(default_factory=list)
     other_exclusion_reasons: list[str] = Field(default_factory=list)
-
-
-class ScreeningResponse(BaseSchema):
-    """Output schema for screening agents."""
-
-    decision: ScreeningDecisionType
-    confidence_score: float = Field(ge=0.0, le=1.0)
-    rationale: str
-    extracted_quotes: list[str] | None = None
-    exclusion_reason_categories: ExclusionReasons | None = None

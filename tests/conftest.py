@@ -9,10 +9,6 @@ import sqlalchemy as sa
 from dotenv import load_dotenv
 from sqlmodel import Session, SQLModel, create_engine
 
-# Remove sys.path modification
-
-# Remove incorrect import
-
 
 @pytest.fixture(scope="session")
 def db_engine() -> Generator[sa.Engine, None, None]:
@@ -49,47 +45,14 @@ def clean_db(db_engine: sa.Engine, request: pytest.FixtureRequest):
         conn.execute(sa.text("DROP SCHEMA public CASCADE;"))
         conn.execute(sa.text("CREATE SCHEMA public;"))
         # Grant permissions if necessary for your test user/role
+        # TODO: dump public from local supabase and seed with that
         conn.execute(sa.text("GRANT ALL ON SCHEMA public TO postgres;"))
         conn.execute(sa.text("GRANT ALL ON SCHEMA public TO public;"))
         conn.commit()
     print("Public schema dropped and recreated.")
 
-    # Create all enum types first
-    with db_engine.connect() as conn:
-        # Create the SearchDatabaseSource enum
-        conn.execute(
-            sa.text(
-                "CREATE TYPE searchdatabasesource_enum AS ENUM ('PUBMED', 'SCOPUS');"
-            )
-        )
-        # Create the ScreeningDecisionType enum
-        conn.execute(
-            sa.text(
-                "CREATE TYPE screeningdecisiontype AS ENUM ('INCLUDE', 'EXCLUDE', 'UNCERTAIN');"
-            )
-        )
-        # Create the ScreeningStrategyType enum
-        conn.execute(
-            sa.text(
-                "CREATE TYPE screeningstrategytype AS ENUM ('CONSERVATIVE', 'COMPREHENSIVE');"
-            )
-        )
-        # Create the CriteriaFramework enum
-        conn.execute(
-            sa.text(
-                "CREATE TYPE criteriaframework_enum AS ENUM ('PICO', 'SPIDER', 'CUSTOM');"
-            )
-        )
-        # Create LogLevel enum
-        conn.execute(
-            sa.text(
-                "CREATE TYPE loglevel_enum AS ENUM ('DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL');"
-            )
-        )
-        conn.commit()
-    print("Enum types created.")
-
     # Recreate tables
+    # TODO: run alembic instead
     print("Recreating all tables...")
     SQLModel.metadata.create_all(db_engine)
     print("Table recreation complete.")
@@ -97,7 +60,7 @@ def clean_db(db_engine: sa.Engine, request: pytest.FixtureRequest):
     print("DB cleanup fixture finished.")
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def db_session(db_engine: sa.Engine, clean_db: Any) -> Generator[Session, None, None]:
     """Yields a DB session with transaction management for a test function."""
     with Session(db_engine) as session:

@@ -75,7 +75,7 @@ def pubmed_search(query: str, max_results: int = 1000) -> list[str]:
             msg = "No results found for query: {!r}"
             logger.warning(msg, query)
 
-        return cast(list[str], pmid_list)
+        return cast("list[str]", pmid_list)
 
     except Exception as e:
         msg = f"PubMed search failed: {e!s}"
@@ -211,43 +211,84 @@ def extract_article_info(article: dict[str, Any]) -> dict[str, str]:
     """
     try:
         pmc = doi = ""
-        for v in article["PubmedData"]["ArticleIdList"]:
-            if v.attributes.get("IdType") == "pmc":
-                pmc = str(v)
-            elif v.attributes.get("IdType") == "doi":
-                doi = str(v)
+        article_id_list = article.get("PubmedData", {}).get("ArticleIdList", [])
+        for v in article_id_list:
+            if isinstance(v, dict):
+                id_type = v.get("IdType")
+                if id_type == "pmc":
+                    pmc = v.get("value", pmc)
+                elif id_type == "doi":
+                    doi = v.get("value", doi)
 
-        medline = article["MedlineCitation"]
-        article_info = medline["Article"]
+        medline = article.get("MedlineCitation", {})
+        article_info = medline.get("Article", {})
 
-        # Handle PMID correctly (it's a string element)
-        pmid = str(medline["PMID"])
+        pmid = medline.get("PMID", "No PMID")
 
-        # Handle abstract (might be a list of StringElements)
-        abstract_text = article_info.get("Abstract", {}).get(
-            "AbstractText", ["No abstract"]
+        abstract_data = article_info.get("Abstract", {}).get(
+            "AbstractText", "No abstract"
         )
-        if isinstance(abstract_text, list):
-            abstract = "".join(str(text) for text in abstract_text)
+        if isinstance(abstract_data, list):
+            abstract = " ".join(str(text) for text in abstract_data)
         else:
-            abstract = str(abstract_text)
+            abstract = str(abstract_data)
+
+        journal_title = article_info.get("Journal", {}).get("Title", "No journal")
+
+        year = (
+            article_info.get("Journal", {})
+            .get("JournalIssue", {})
+            .get("PubDate", {})
+            .get("Year", "No year")
+        )
+
+        author_list_data = article_info.get("AuthorList", [])
+        authors = []
+        if isinstance(author_list_data, list):
+            for author in author_list_data:
+                if isinstance(author, dict):
+                    last_name = author.get("LastName", "")
+                    fore_name = author.get("ForeName", "")
+                    initials = author.get("Initials", "")
+                    if last_name:
+                        authors.append(
+                            f"{last_name}, {initials}" if initials else last_name
+                        )
+        authors_str = "; ".join(authors) if authors else "No authors"
+
+        keyword_list_data = medline.get("KeywordList", [])
+        keywords = []
+        if isinstance(keyword_list_data, list):
+            for kw_group in keyword_list_data:
+                if isinstance(kw_group, list):
+                    keywords.extend([str(kw) for kw in kw_group if isinstance(kw, str)])
+                elif isinstance(kw_group, str):
+                    keywords.append(kw_group)
+        keywords_list = keywords if keywords else []
 
         return {
-            "pmid": pmid,
-            "pmc": pmc,
-            "doi": doi,
+            "pmid": str(pmid),
+            "pmc": str(pmc) if pmc else "",
+            "doi": str(doi) if doi else "",
             "title": str(article_info.get("ArticleTitle", "No title")),
             "abstract": abstract,
-            "journal": str(article_info.get("Journal", {}).get("Title", "No journal")),
-            "year": str(
-                article_info.get("Journal", {})
-                .get("JournalIssue", {})
-                .get("PubDate", {})
-                .get("Year", "No year")
-            ),
+            "journal": str(journal_title),
+            "year": str(year),
+            "authors": authors_str,
+            "keywords": keywords_list,
         }
 
-    except KeyError:
-        msg = "Could not extract article information"
+    except Exception as e:
+        msg = f"Could not extract article information: {e}"
         logger.opt(exception=True).error(msg)
-        raise
+        return {
+            "pmid": "Error",
+            "pmc": "",
+            "doi": "",
+            "title": "Error extracting data",
+            "abstract": "",
+            "journal": "",
+            "year": "",
+            "authors": "",
+            "keywords": [],
+        }

@@ -98,7 +98,6 @@ class BaseRepository[T: Base]:
     def model_cls(self) -> type[T]:
         """Get the model class associated with the repository, resolving forward refs."""
         if self._model_cls is None:
-            # Get the generic type argument T
             orig_bases = getattr(type(self), "__orig_bases__", [])
             model_type_arg = None
             for base in orig_bases:
@@ -113,36 +112,58 @@ class BaseRepository[T: Base]:
                     "Could not determine model class argument for repository"
                 )
 
-            if isinstance(model_type_arg, t.ForwardRef):
-                # Resolve the forward reference string using models module namespace
-                model_namespace = models.__dict__
-                local_ns = None
+            # Resolve the type argument (which might be a string/ForwardRef)
+            resolved_type = None
+            if isinstance(model_type_arg, type) and issubclass(model_type_arg, Base):
+                resolved_type = model_type_arg  # It was already a resolved type
+            elif isinstance(model_type_arg, (str, t.ForwardRef)):
+                # Need to resolve string or ForwardRef
                 try:
-                    resolved_type = model_type_arg._evaluate(
-                        model_namespace, local_ns, frozenset()
-                    )
-                    if resolved_type is None:
-                        raise TypeError(
-                            f"Forward reference {model_type_arg!r} resolved to None"
+                    # Use get_type_hints on a temporary namespace
+                    temp_globals = models.__dict__.copy()
+                    temp_locals = (
+                        locals()
+                    )  # Include local scope if needed, though usually not for models
+
+                    # Directly evaluate the ForwardRef if possible, or use get_type_hints
+                    if isinstance(model_type_arg, t.ForwardRef):
+                        # Pass recursive_guard as an empty set for older Python versions compatibility if needed
+                        # For Python 3.9+, frozenset() is correct.
+                        resolved_type = model_type_arg._evaluate(
+                            temp_globals, temp_locals, frozenset()
                         )
-                    self._model_cls = resolved_type
+                    elif isinstance(model_type_arg, str):
+                        # Use eval if it's just a string name
+                        resolved_type = eval(model_type_arg, temp_globals, temp_locals)
+
+                    if not (
+                        isinstance(resolved_type, type)
+                        and issubclass(resolved_type, Base)
+                    ):
+                        raise TypeError(
+                            f"Resolved type {resolved_type!r} is not a valid Base model subclass."
+                        )
+
                 except NameError as e:
                     raise TypeError(
-                        f"Could not resolve forward reference {model_type_arg!r} in models namespace: {e}"
+                        f"Could not resolve type name '{model_type_arg}': {e}"
                     ) from e
                 except Exception as e:
+                    # Catch potential errors during resolution
                     raise TypeError(
-                        f"Error evaluating forward reference {model_type_arg!r}: {e}"
+                        f"Error resolving type argument {model_type_arg!r}: {e}"
                     ) from e
-            elif isinstance(model_type_arg, type) and issubclass(model_type_arg, Base):
-                self._model_cls = model_type_arg  # It was already a type
             else:
                 raise TypeError(
                     f"Unexpected type argument for repository: {model_type_arg!r}"
                 )
 
-        if self._model_cls is None:  # Should not happen if logic above is correct
-            raise TypeError("Failed to set _model_cls")
+            if resolved_type is None:
+                raise TypeError(
+                    f"Failed to resolve model class from {model_type_arg!r}"
+                )
+
+            self._model_cls = resolved_type
 
         return self._model_cls
 

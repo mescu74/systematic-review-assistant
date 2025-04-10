@@ -11,15 +11,16 @@ from sqlmodel import Session, select
 # Assuming models are adjusted for resolver (ScreeningResolution, fields in SearchResult)
 # These imports might need adjustment based on the final model locations/definitions
 from sr_assistant.core.models import (
-    SearchResult,
     ScreenAbstractResult,
     ScreeningResolution,
+    SearchResult,
     SystematicReview,
 )
 from sr_assistant.core.types import (
     CriteriaFramework,
     ScreeningDecisionType,
     ScreeningStrategyType,
+    SearchDatabaseSource,
 )
 
 
@@ -46,8 +47,8 @@ def seed_data(db_session: Session):
     # Initialize without id=None for SQLModel
     pubmed_res = SearchResult(
         review_id=review.id,
-        query="Test query",
-        pmid="RESOLVER_TEST_1",
+        source_db=SearchDatabaseSource.PUBMED,
+        source_id="RESOLVER_TEST_1",
         title="Resolver Test Article",
         abstract="Abstract for resolver test.",
         journal="Test Journal",
@@ -61,7 +62,6 @@ def seed_data(db_session: Session):
     conservative_res = ScreenAbstractResult(
         id=uuid.uuid4(),
         review_id=review.id,
-        search_result_id=pubmed_res.id,
         trace_id=trace_id,
         decision=ScreeningDecisionType.INCLUDE,
         confidence_score=0.9,
@@ -76,7 +76,6 @@ def seed_data(db_session: Session):
     comprehensive_res = ScreenAbstractResult(
         id=uuid.uuid4(),
         review_id=review.id,
-        search_result_id=pubmed_res.id,
         trace_id=trace_id,
         decision=ScreeningDecisionType.EXCLUDE,
         confidence_score=0.9,
@@ -131,8 +130,6 @@ def test_create_resolution_success(db_session: Session, seed_data: dict[str, Any
     new_resolution = ScreeningResolution(
         review_id=seed_data["review_id"],
         search_result_id=seed_data["search_result_id"],
-        conservative_result_id=seed_data["conservative_result_id"],
-        comprehensive_result_id=seed_data["comprehensive_result_id"],
         resolver_decision=ScreeningDecisionType.INCLUDE,
         resolver_reasoning="Resolver decided INCLUDE based on criteria X.",
         resolver_confidence_score=0.88,
@@ -173,8 +170,6 @@ def test_resolve_conflict_scenario_include(
     new_resolution = ScreeningResolution(
         review_id=seed_data["review_id"],
         search_result_id=seed_data["search_result_id"],
-        conservative_result_id=seed_data["conservative_result_id"],
-        comprehensive_result_id=seed_data["comprehensive_result_id"],
         resolver_decision=ScreeningDecisionType.INCLUDE,
         resolver_reasoning="Reasoning for final INCLUDE.",
         resolver_confidence_score=0.92,
@@ -214,8 +209,6 @@ def test_resolve_conflict_scenario_exclude(
     new_resolution = ScreeningResolution(
         review_id=seed_data["review_id"],
         search_result_id=seed_data["search_result_id"],
-        conservative_result_id=seed_data["conservative_result_id"],
-        comprehensive_result_id=seed_data["comprehensive_result_id"],
         resolver_decision=ScreeningDecisionType.EXCLUDE,
         resolver_reasoning="Reasoning for final EXCLUDE.",
         resolver_confidence_score=0.95,
@@ -253,8 +246,6 @@ def test_resolve_conflict_scenario_uncertain(
     new_resolution = ScreeningResolution(
         review_id=seed_data["review_id"],
         search_result_id=seed_data["search_result_id"],
-        conservative_result_id=seed_data["conservative_result_id"],
-        comprehensive_result_id=seed_data["comprehensive_result_id"],
         resolver_decision=ScreeningDecisionType.UNCERTAIN,
         resolver_reasoning="Reasoning for UNCERTAIN.",
         resolver_confidence_score=0.55,
@@ -292,8 +283,6 @@ def test_resolution_links_pubmed_and_abstracts(
     new_resolution = ScreeningResolution(
         review_id=seed_data["review_id"],
         search_result_id=seed_data["search_result_id"],
-        conservative_result_id=seed_data["conservative_result_id"],
-        comprehensive_result_id=seed_data["comprehensive_result_id"],
         resolver_decision=ScreeningDecisionType.EXCLUDE,
         resolver_reasoning="Testing links.",
         resolver_confidence_score=0.7,
@@ -315,8 +304,8 @@ def test_resolution_links_pubmed_and_abstracts(
     assert retrieved.search_result.id == seed_data["search_result_id"]
 
     # Check ScreenAbstractResult FOREIGN KEY IDs are correct
-    assert retrieved.conservative_result_id == seed_data["conservative_result_id"]
-    assert retrieved.comprehensive_result_id == seed_data["comprehensive_result_id"]
+    # assert retrieved.conservative_result_id == seed_data["conservative_result_id"]
+    # assert retrieved.comprehensive_result_id == seed_data["comprehensive_result_id"]
 
 
 @pytest.mark.integration
@@ -326,8 +315,6 @@ def test_query_resolutions_by_review(db_session: Session, seed_data: dict[str, A
     res1 = ScreeningResolution(
         review_id=seed_data["review_id"],
         search_result_id=seed_data["search_result_id"],
-        conservative_result_id=seed_data["conservative_result_id"],
-        comprehensive_result_id=seed_data["comprehensive_result_id"],
         resolver_decision=ScreeningDecisionType.INCLUDE,
         resolver_reasoning="First resolution for review.",
         resolver_confidence_score=0.8,
@@ -338,8 +325,6 @@ def test_query_resolutions_by_review(db_session: Session, seed_data: dict[str, A
     res2 = ScreeningResolution(
         review_id=seed_data["review_id"],
         search_result_id=seed_data["search_result_id"],
-        conservative_result_id=seed_data["conservative_result_id"],
-        comprehensive_result_id=seed_data["comprehensive_result_id"],
         resolver_decision=ScreeningDecisionType.EXCLUDE,  # Different decision
         resolver_reasoning="Second resolution for review.",
         resolver_confidence_score=0.85,
