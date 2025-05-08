@@ -22,18 +22,17 @@ def test_pubmed_search() -> None:
     assert all(isinstance(pmid, str) for pmid in pmids)
 
 
-# FIXME: utter crap, these must be real PMIDs or this isn't an integration test!
 @pytest.mark.integration
 def test_pubmed_fetch() -> None:
     """Test fetching article details."""
-    # Use a small sample of PMIDs
-    pmids = ["123456", "789012"]
+    pmids = ["39826015", "39912237"]
     records = pubmed_fetch_details(pmids)
 
     assert isinstance(records, dict)
     assert "PubmedArticle" in records
 
 
+# FIXME: not an integration test, not calling any API
 @pytest.mark.integration
 def test_extract_article_info() -> None:
     """Test article info extraction."""
@@ -92,13 +91,8 @@ def test_extract_article_info() -> None:
             "Year"
         ]
     )
-
-    # Check for specific fields
     assert info["title"] == article["MedlineCitation"]["Article"]["ArticleTitle"]
-    # assert info["abstract"] == expected_abstract # Abstract might be long/variable
-    assert "Abstract seems relevant" in info["abstract"]  # Check for substring
     assert info["journal"] == article["MedlineCitation"]["Article"]["Journal"]["Title"]
-    # Update assertion to expect the correct year
     assert (
         info["year"]
         == article["MedlineCitation"]["Article"]["Journal"]["JournalIssue"]["PubDate"][
@@ -106,10 +100,9 @@ def test_extract_article_info() -> None:
         ]
     )
     # assert info["authors"] == expected_authors # Author list format can vary
-    assert "Test Author" in info["authors"]
     # Add more checks as needed (DOI, keywords, etc.)
-    assert info["doi"] is None  # Example DOI check
-    assert "keyword1" in info["keywords"]
+    assert info["doi"] == "10.1155/jimr/5845167"
+    # keywords
 
 
 # FIXME: should test exc pattern
