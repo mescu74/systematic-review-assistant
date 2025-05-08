@@ -22,24 +22,25 @@ class TestChainOnErrorListenerCb:
         run_id = str(uuid.uuid4())
         mock_run.id = run_id
         mock_run.name = "test_run"
+        # Define the error and attach it to the run object
+        test_error = ValueError("Simulated error for testing")
+        mock_run.error = test_error
 
         mock_child_run1 = MagicMock(name="MockChildRun1")
         mock_child_run1.id = str(uuid.uuid4())
         mock_child_run1.name = "child_run1"
+        mock_child_run1.error = None  # No error for child 1
 
         mock_child_run2 = MagicMock(name="MockChildRun2")
         mock_child_run2.id = str(uuid.uuid4())
         mock_child_run2.name = "child_run2"
+        child_error_2 = TypeError("Child error")
+        mock_child_run2.error = child_error_2  # Error for child 2
 
         mock_run.child_runs = [mock_child_run1, mock_child_run2]
 
-        # Define the error
-        test_error = ValueError("Simulated error for testing")
-
-        # Call the function with the error and the run object in kwargs
-        # Note: The original callback signature might have been different previously
-        # Ensure this call matches the signature in screening_agents.py
-        chain_on_error_listener_cb(test_error, run=mock_run)
+        # Call the function with just the run object
+        chain_on_error_listener_cb(mock_run)
 
         # Get the list of calls made to the mock_logger and its returned mocks
         # calls = mock_logger.mock_calls # Removed unused variable
@@ -48,15 +49,11 @@ class TestChainOnErrorListenerCb:
         expected_calls = [
             # 1. Initial bind for parent run
             call.bind(run_id=run_id, run_name=mock_run.name),
-            # 2. Exception log on the bound logger
+            # 2. Exception log for parent run error
             call.bind().exception(
-                f"Error during chain execution: run_id={run_id}, error={test_error!r}, kwargs={{'run': {mock_run!r}}}",
-                error=test_error,
-                kwargs={
-                    "run": mock_run
-                },  # Note: The actual kwargs dict might vary slightly based on test execution context
+                f"Error during chain execution: {test_error!r}", error=test_error
             ),
-            # 3. Error log for parent run object
+            # 3. Error log for parent run object details
             call.bind().error("Associated run object: {run_obj!r}", run_obj=mock_run),
             # 4. Bind for first child run
             call.bind(
@@ -65,8 +62,10 @@ class TestChainOnErrorListenerCb:
                 parent_run_id=run_id,
                 parent_run_name=mock_run.name,
             ),
-            # 5. Error log for first child run
-            call.bind().error("Associated child run: {cr!r}", cr=mock_child_run1),
+            # 5. Error log for first child run details (no error)
+            call.bind().error(
+                "Associated child run details: {cr!r}", cr=mock_child_run1
+            ),
             # 6. Bind for second child run
             call.bind(
                 run_id=mock_child_run2.id,
@@ -74,8 +73,12 @@ class TestChainOnErrorListenerCb:
                 parent_run_id=run_id,
                 parent_run_name=mock_run.name,
             ),
-            # 7. Error log for second child run
-            call.bind().error("Associated child run: {cr!r}", cr=mock_child_run2),
+            # 7. Exception log for second child run error
+            call.bind().exception(
+                f"Associated child run failed: {child_error_2!r}",
+                error=child_error_2,
+                cr=mock_child_run2,
+            ),
         ]
 
         # Use assert_has_calls to check if these calls occurred in sequence.
@@ -344,6 +347,6 @@ class TestScreenAbstractsChainOnEndCb:
             assert True
         except Exception as e:
             # If an exception is raised, the test fails
-            assert (
-                False
-            ), f"screen_abstracts_chain_on_end_cb raised {type(e).__name__}: {e}"
+            assert False, (
+                f"screen_abstracts_chain_on_end_cb raised {type(e).__name__}: {e}"
+            )

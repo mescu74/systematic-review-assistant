@@ -37,10 +37,11 @@ from __future__ import annotations
 import os
 import typing as t
 import uuid
+from copy import deepcopy
 from datetime import datetime, timezone
 
 import streamlit as st
-from langchain_community.callbacks import OpenAICallbackHandler
+from langchain_community.callbacks.manager import get_openai_callback
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableConfig, RunnableParallel
 from langchain_openai import ChatOpenAI
@@ -61,209 +62,17 @@ from sr_assistant.core.schemas import (
     ScreeningResponse,
     ScreeningResult,
 )
-from sr_assistant.core.types import (
-    ScreeningDecisionType,
-    ScreeningStrategyType,
-)
+from sr_assistant.core.types import ScreeningStrategyType
 
 if t.TYPE_CHECKING:
     from langchain_community.callbacks.openai_info import OpenAICallbackHandler
     from langchain_core.tracers.schemas import Run
 
-
-# Resolver model and chain for resolving disagreements between reviewers
-RESOLVER_MODEL = ChatOpenAI(
+resolver_model = ChatOpenAI(
     model=os.getenv("SRA_RESOLVER_MODEL", "o3-mini-high"),
     api_key=SecretStr(os.getenv("OPENAI_API_KEY") or ""),
     temperature=0.0,
-)
-
-resolver_prompt = ChatPromptTemplate.from_messages(
-    [
-        (
-            "system",
-            """\
-You are an expert systematic review screening assistant, built to resolve disputes between reviewers with confidence.
-
-We've two reviewers disagreeing on whether a given Database search result should be included in a systematic review.
-
-one is using a "comprehensive" screening strategy, and the other is using a "conservative" screening strategy. These prioritize sensitivity and accuracy as different human reviewers might.
-
-You will be given the search result, the systematic review, and the two reviewers' screening results.""",
-        ),
-        (
-            "human",
-            """\
-<search_result>
-{search_result}
-</search_result>
-
-<systematic_review>
-{systematic_review}
-</systematic_review>
-
-<comprehensive_reviewer_result>
-{comprehensive_reviewer_result}
-</comprehensive_reviewer_result>
-
-<conservative_reviewer_result>
-{conservative_reviewer_result}
-</conservative_reviewer_result>
-
-<resolver_output>
-{resolver_output}
-</resolver_output>""",
-        ),
-    ]
-)
-
-# Create resolver chain with structured output
-resolver_model_struct_output = RESOLVER_MODEL.with_structured_output(
-    ScreeningResolutionSchema
-)
-resolver_chain = resolver_prompt | resolver_model_struct_output
-
-
-def make_resolver_chain_input(
-    search_result: models.SearchResult,
-    review: models.SystematicReview,
-    conservative_result: ScreeningResult,
-    comprehensive_result: ScreeningResult,
-) -> dict[str, str]:
-    """Create input dict for screening conflict resolver chain.
-
-    Args:
-        search_result: The Database search result with conflicting screening decisions
-        review: The systematic review
-        conservative_result: The screening result from the conservative reviewer
-        comprehensive_result: The screening result from the comprehensive reviewer
-
-    Returns:
-        dict: Input variables for the resolver prompt
-    """
-    # Format search result for the prompt
-    search_result_formatted = f"""
-Title: {search_result.title}
-Source ID: {search_result.source_id}
-Journal: {search_result.journal or "<No Journal>"}
-Year: {search_result.year or "<No Year>"}
-Abstract: {search_result.abstract or "<No Abstract>"}
-"""
-    # Format systematic review for the prompt
-    systematic_review_formatted = f"""
-Background: {review.background or "<No Background>"}
-Research Question: {review.research_question}
-Inclusion Criteria: {review.inclusion_criteria or "<Not Specified>"}
-Exclusion Criteria: {review.exclusion_criteria or "<Not Specified>"}
-"""
-    # Format conservative result for the prompt
-    conservative_reviewer_result_formatted = f"""
-Decision: {conservative_result.decision.value}
-Confidence Score: {conservative_result.confidence_score}
-Rationale: {conservative_result.rationale}
-"""
-    if conservative_result.extracted_quotes:
-        conservative_reviewer_result_formatted += (
-            f"Extracted Quotes: {', '.join(conservative_result.extracted_quotes)}\n"
-        )
-
-    # Format comprehensive result for the prompt
-    comprehensive_reviewer_result_formatted = f"""
-Decision: {comprehensive_result.decision.value}
-Confidence Score: {comprehensive_result.confidence_score}
-Rationale: {comprehensive_result.rationale}
-"""
-    if comprehensive_result.extracted_quotes:
-        comprehensive_reviewer_result_formatted += (
-            f"Extracted Quotes: {', '.join(comprehensive_result.extracted_quotes)}\n"
-        )
-
-    return {
-        "search_result": search_result_formatted,
-        "systematic_review": systematic_review_formatted,
-        "conservative_reviewer_result": conservative_reviewer_result_formatted,
-        "comprehensive_reviewer_result": comprehensive_reviewer_result_formatted,
-    }
-
-
-def resolve_screening_conflict(
-    search_result: models.SearchResult,
-    review: models.SystematicReview,
-    conservative_result: ScreeningResult,
-    comprehensive_result: ScreeningResult,
-) -> models.ScreeningResolution:
-    """Resolve screening conflict using LLM chain.
-
-    Args:
-        search_result: Database search result with conflicting screening decisions
-        review: Systematic review
-        conservative_result: Screening result from the conservative reviewer
-        comprehensive_result: Screening result from the comprehensive reviewer
-
-    Returns:
-        models.ScreeningResolution: The resolution decision
-
-    Raises:
-        Exception: If the resolver chain fails
-    """
-    logger.info(
-        f"Resolving screening conflict for Source ID: {search_result.source_id}, conservative: {conservative_result.decision}, comprehensive: {comprehensive_result.decision}"
-    )
-
-    chain_input = make_resolver_chain_input(
-        search_result=search_result,
-        review=review,
-        conservative_result=conservative_result,
-        comprehensive_result=comprehensive_result,
-    )
-    try:
-        # Assuming resolver_chain is defined and returns ScreeningResolutionSchema
-        response: ScreeningResolutionSchema = resolver_chain.invoke(
-            chain_input,
-            config=RunnableConfig(
-                run_name="resolve_screening_conflict",
-                tags=[
-                    "sra:resolver",
-                    f"sra:review_id:{review.id}",
-                    f"sra:search_result_id:{search_result.id}",
-                ],
-                metadata={
-                    "review_id": str(review.id),
-                    "search_result_id": str(search_result.id),
-                    "conservative_result_id": str(conservative_result.id),
-                    "comprehensive_result_id": str(comprehensive_result.id),
-                },
-            ),
-        )
-        logger.info(f"Resolver response: {response!r}")
-        resolution = models.ScreeningResolution(
-            # id=uuid.uuid4(), # Let DB generate default ID
-            review_id=review.id,
-            search_result_id=search_result.id,
-            conservative_result_id=conservative_result.id,
-            comprehensive_result_id=comprehensive_result.id,
-            resolver_decision=response.resolver_decision,
-            resolver_reasoning=response.resolver_reasoning,
-            resolver_confidence_score=response.resolver_confidence_score,
-            response_metadata={"raw_output": response.model_dump()},
-        )
-        return resolution
-    except Exception as e:
-        logger.exception(
-            f"Error resolving screening conflict for Source ID: {search_result.source_id}",
-            exc_info=e,
-        )
-        return models.ScreeningResolution(
-            # id=uuid.uuid4(), # Let DB generate default ID
-            review_id=review.id,
-            search_result_id=search_result.id,
-            conservative_result_id=conservative_result.id,
-            comprehensive_result_id=comprehensive_result.id,
-            resolver_decision=ScreeningDecisionType.UNCERTAIN,
-            resolver_reasoning=f"Error during resolution: {e}",
-            resolver_confidence_score=0.0,
-            response_metadata={"error": str(e)},
-        )
+).with_structured_output(ScreeningResolutionSchema)
 
 
 class ScreenAbstractsChainOutputDict(t.TypedDict):
@@ -291,10 +100,10 @@ class ScreenAbstractsChainInput(BaseModel):
         research_question (str): Research question of the systematic review.
         inclusion_criteria (str): Inclusion criteria of the systematic review.
         exclusion_criteria (str): Exclusion criteria of the systematic review.
-        title (str): Title of the SearchResult.
-        journal (str | None): Journal of the SearchResult.
-        year (str | None): Year of the SearchResult.
-        abstract (str | None): Abstract of the SearchResult.
+        title (str): Title of the PubMed search result.
+        journal (str): Journal of the PubMed search result.
+        year (str): Year of the PubMed search result.
+        abstract (str): Abstract of the PubMed search result.
 
     Todo:
         - Use prompt .get_input_schema():
@@ -315,11 +124,11 @@ class ScreenAbstractsChainInput(BaseModel):
     research_question: str
     inclusion_criteria: str
     exclusion_criteria: str
-    # Search result - Ensure types allow None
+    # Search result
     title: str
-    journal: str | None = None  # Allow None
-    year: str | None = None  # Allow None
-    abstract: str | None = None  # Allow None
+    journal: str
+    year: str
+    abstract: str
 
 
 class ScreenAbstractsChainInputDict(t.TypedDict):
@@ -330,10 +139,10 @@ class ScreenAbstractsChainInputDict(t.TypedDict):
         research_question (str): Research question of the systematic review.
         inclusion_criteria (str): Inclusion criteria of the systematic review.
         exclusion_criteria (str): Exclusion criteria of the systematic review.
-        title (str): Title of the SearchResult.
-        journal (NotRequired[str]): Journal of the SearchResult.
-        year (NotRequired[str]): Year of the SearchResult.
-        abstract (NotRequired[str]): Abstract of the SearchResult.
+        title (str): Title of the PubMed search result.
+        journal (str): Journal of the PubMed search result.
+        year (str): Year of the PubMed search result.
+        abstract (str): Abstract of the PubMed search result.
 
     Todo:
         - Generate from schema
@@ -348,9 +157,9 @@ class ScreenAbstractsChainInputDict(t.TypedDict):
     inclusion_criteria: str
     exclusion_criteria: str
     title: str
-    journal: t.NotRequired[str | None]  # Allow None
-    year: t.NotRequired[str | None]  # Allow None
-    abstract: t.NotRequired[str | None]  # Allow None
+    journal: str
+    year: str
+    abstract: str
 
 
 screen_abstracts_chain_input_dict_adapter = TypeAdapter(ScreenAbstractsChainInputDict)
@@ -414,31 +223,39 @@ class ScreenAbstractResultTuple(t.NamedTuple):
 
 
 @logger.catch(onerror=lambda exc: st.error(exc) if ut.in_streamlit() else None)  # pyright: ignore [reportArgumentType]
-def chain_on_error_listener_cb(error: BaseException, **kwargs: t.Any) -> None:
-    """Listener for Runnable sequence on_error events."""
-    run_obj = kwargs.get("run")
-    run_id = getattr(run_obj, "id", "unknown")
-    run_name = getattr(run_obj, "name", "unknown")
-    cb_logger = logger.bind(run_id=run_id, run_name=run_name)
-    # Use logger.exception to include traceback
-    # Simplify the main log message to avoid f-string issues with nested braces
-    log_message = f"Error during chain execution: run_id={run_id}, error={error!r}"
-    cb_logger.exception(
-        log_message,
-        error=error,
-        kwargs=kwargs,  # Log kwargs separately in the record
-    )
-    # Optionally log child runs if needed, checking if run_obj exists and has child_runs
-    if run_obj and hasattr(run_obj, "child_runs") and run_obj.child_runs:
-        cb_logger.error("Associated run object: {run_obj!r}", run_obj=run_obj)
-        for cr in run_obj.child_runs:
-            cb_cr_logger = logger.bind(
-                run_id=getattr(cr, "id", "unknown"),
-                run_name=getattr(cr, "name", "unknown"),
-                parent_run_id=run_id,
-                parent_run_name=run_name,
+def chain_on_error_listener_cb(run_obj: Run) -> None:
+    # Get the error from the run object
+    error = run_obj.error
+    cb_logger = logger.bind(run_id=run_obj.id, run_name=run_obj.name)
+
+    if error:
+        # Log the exception if an error exists
+        cb_logger.exception(f"Error during chain execution: {error!r}", error=error)
+    else:
+        # Log a general error message if run_obj.error is None for some reason
+        cb_logger.error(
+            "Chain execution failed, but error details not found in run object."
+        )
+
+    # Log the associated run object details
+    cb_logger.error("Associated run object: {run_obj!r}", run_obj=run_obj)
+    for cr in run_obj.child_runs:
+        cb_cr_logger = logger.bind(
+            run_id=cr.id,
+            run_name=cr.name,
+            parent_run_id=run_obj.id,
+            parent_run_name=run_obj.name,
+        )
+        # Log child run errors if they exist
+        child_error = cr.error
+        if child_error:
+            cb_cr_logger.exception(
+                f"Associated child run failed: {child_error!r}",
+                error=child_error,
+                cr=cr,
             )
-            cb_cr_logger.error("Associated child run: {cr!r}", cr=cr)
+        else:
+            cb_cr_logger.error("Associated child run details: {cr!r}", cr=cr)
 
 
 @logger.catch(onerror=lambda exc: st.error(exc) if ut.in_streamlit() else None)  # pyright: ignore [reportArgumentType]
@@ -495,6 +312,7 @@ def screen_abstracts_chain_on_end_cb(run_obj: Run) -> None:  # noqa: C901
             continue
         orig_resp_model = cr.outputs.get("output")
         if not isinstance(orig_resp_model, ScreeningResponse):
+            # We simply return the output as is and let caller make it a ScreeningError
             cr_logger.error(f"Unknown response type: {orig_resp_model!r}")
             continue
         review_id = cr.metadata.get("review_id")
@@ -508,40 +326,37 @@ def screen_abstracts_chain_on_end_cb(run_obj: Run) -> None:  # noqa: C901
             continue
         search_result_id = uuid.UUID(search_result_id)
         result_id = cr.id
-        trace_id = cr.trace_id
+        trace_id = cr.trace_id  # this is shared between invocations with same input
         inputs = cr.inputs
         start_time = cr.start_time
         end_time = cr.end_time
         if not end_time:
             cr_logger.warning("No end time for run: {cr!r}, setting to now")
             end_time = datetime.now(tz=timezone.utc)
-        resp_metadata = {}
+        resp_metadata = {}  # FIXME: these don't work
         invocation_params = {}
-        model_name = "not_found"
         for ccr in cr.child_runs:
+            # TODO: parse model_id from openai metadata
             if ccr.run_type == "chat_model":
                 resp_metadata = ccr.extra.get("metadata", {})
-                invocation_params = ccr.extra.get("invocation_params", {})
-                model_name = (
-                    resp_metadata.get("ls_model_name")
-                    or invocation_params.get("model_name")
-                    or model_name
-                )
                 if not resp_metadata:
                     cr_logger.warning(
-                        f"No response metadata for chat_model child run: {ccr!r}",
+                        "No response metadata for chat_model child child run: {ccr!r}",
                         ccr=ccr,
                     )
+                invocation_params = ccr.extra.get("invocation_params", {})
                 if not invocation_params:
                     cr_logger.warning(
-                        f"No invocation_params for chat_model child run: {ccr!r}",
+                        "No invocation_params for chat_model child child run:  {ccr!r}",
                         ccr=ccr,
                     )
                 cr_logger.debug(f"chat_model child child run: {ccr!r}")
-
+        model_name = resp_metadata.get(
+            "ls_model_name", invocation_params.get("model_name", "not_found")
+        )
         screening_result = ScreeningResult(
             id=result_id,
-            trace_id=trace_id,
+            trace_id=trace_id,  # this is shared between invocations with same input
             review_id=review_id,
             search_result_id=search_result_id,
             start_time=start_time,
@@ -559,12 +374,8 @@ def screen_abstracts_chain_on_end_cb(run_obj: Run) -> None:  # noqa: C901
         cr.metadata["screening_strategy"] = output_key
 
         strategy_tag = f"sra:screening_strategy:{output_key}"
-        if cr.tags is None:
-            cr.tags = []
         cr.tags.append(strategy_tag)
-        if run_obj.tags is None:
-            run_obj.tags = []
-        if strategy_tag not in run_obj.tags:
+        if run_obj.tags and strategy_tag not in run_obj.tags:
             run_obj.tags.append(strategy_tag)
 
         if output_key not in run_obj.outputs:
@@ -574,7 +385,7 @@ def screen_abstracts_chain_on_end_cb(run_obj: Run) -> None:  # noqa: C901
         run_obj.outputs[output_key] = screening_result
 
 
-@logger.catch(onerror=lambda exc: st.error(exc) if ut.in_streamlit() else None)
+@logger.catch(onerror=lambda exc: st.error(exc) if ut.in_streamlit() else None)  # pyright: ignore [reportArgumentType]
 def make_screen_abstracts_chain_input(
     search_results_batch: list[models.SearchResult],
     review: models.SystematicReview,
@@ -599,7 +410,9 @@ def make_screen_abstracts_chain_input(
             Can be passed directly to chain.batch(**this)
     """
     logger.info(f"Creating batch input for {len(search_results_batch)} search results")
-    chain_inputs: list[ScreenAbstractsChainInputDict] = []
+    chain_inputs: list[
+        ScreenAbstractsChainInputDict
+    ] = []  # input is same regardless of strategy, same prompt variables
     configs: list[RunnableConfig] = []
     for i, search_result in enumerate(search_results_batch):
         configs.append(
@@ -616,26 +429,23 @@ def make_screen_abstracts_chain_input(
                     f"sra:review_id:{review.id}",
                     f"sra:search_result_id:{search_result.id}",
                     f"sra:screen_abstracts_chain:i:{i}",
-                ],
+                ],  # sra:screening_strategy:comprehensive|conservative # added by listener
             )
         )
-        # Ensure None values are handled for prompt keys, providing empty strings
-        # Chain input expects specific keys, don't exclude None here.
-        chain_input_data = ScreenAbstractsChainInput(
-            background=review.background,
-            research_question=review.research_question,
-            inclusion_criteria=review.inclusion_criteria or "",
-            exclusion_criteria=review.exclusion_criteria or "",
-            title=search_result.title or "<No Title>",  # Provide default if None
-            journal=search_result.journal or "<No Journal>",  # Provide default if None
-            year=search_result.year or "<No Year>",  # Provide default if None
-            abstract=search_result.abstract
-            or "<No Abstract>",  # Provide default if None
-        )
         chain_inputs.append(
-            t.cast("ScreenAbstractsChainInputDict", chain_input_data.model_dump())
-        )  # Dump after defaults
-
+            ScreenAbstractsChainInputDict(
+                **ScreenAbstractsChainInput(
+                    background=review.background,
+                    research_question=review.research_question,
+                    inclusion_criteria=review.inclusion_criteria or "",
+                    exclusion_criteria=review.exclusion_criteria or "",
+                    title=search_result.title or "",
+                    journal=search_result.journal or "",
+                    year=search_result.year or "",
+                    abstract=search_result.abstract or "",
+                ).model_dump()
+            )
+        )
         logger.info(
             f"Created chain input for search result {i}: config: {configs[-1]!r}, input: {chain_inputs[-1]!r}"
         )
@@ -782,7 +592,7 @@ class ScreenAbstractsBatchOutput(t.NamedTuple):
 def screen_abstracts_batch(
     batch: list[models.SearchResult], batch_idx: int, review: models.SystematicReview
 ) -> ScreenAbstractsBatchOutput | None:
-    """Invoke screen_abstracts_chain on a batch of SearchResult objects.
+    """Invoke screen_abstracts_chain on a batch of PubMed results.
 
     Results and errors are also written to ``st.session_state.screen_abstracts_results``
     and ``st.session_state.screen_abstracts_errors``.
@@ -797,105 +607,142 @@ def screen_abstracts_batch(
 
     Returns:
         tuple[list[ScreenAbstractResultTuple], OpenAICallbackHandler]:
-             list of screened search results and OpenAI cb for the batch run.
-             None if an uncaught exception occurred (check the logs).
+            list of screened search results and OpenAI cb for the batch run.
+            None if an uncaught exception occured (check the logs).
     """
-    batch_logger = logger.bind(batch_idx=batch_idx, review_id=review.id)
-    if not batch:
-        batch_logger.warning("Empty batch received, skipping.")
-        return None
+    batch_logger = logger.bind(batch_idx=batch_idx)
+    chain_inputs = make_screen_abstracts_chain_input(batch, review)
+    chain_outputs: list[ScreenAbstractResultTuple] = []
 
-    batch_logger.info(f"Screening batch {batch_idx} with {len(batch)} results.")
-    cb = OpenAICallbackHandler()
-    batch_input = make_screen_abstracts_chain_input(batch, review)
-    try:
-        res = screen_abstracts_chain.batch(
-            t.cast("list[dict[str, t.Any]]", batch_input["inputs"]),
-            config=batch_input["config"],
-            callbacks=[cb],
-            return_exceptions=True,
-        )
-        batch_logger.success(f"Batch {batch_idx} completed.")
-        screened_results: list[ScreenAbstractResultTuple] = []
+    with get_openai_callback() as cb:
+        res = st.session_state.screen_abstracts_chain.batch(**chain_inputs)
+        if len(res) < len(batch):
+            pad_size = len(batch) - len(res)
+            res += [None] * pad_size
+            batch_logger.warning(
+                f"screen_abstracts_chain returned {len(res)} results, expected {len(batch)}, padding with None"
+            )
+
         for i, parallel_invocation in enumerate(res):
             search_result = batch[i]
-            if isinstance(parallel_invocation, Exception):
-                batch_logger.error(
-                    f"Exception for item {i} in batch: {parallel_invocation}"
+            if isinstance(parallel_invocation, dict):
+                conservative = parallel_invocation.get(
+                    ScreeningStrategyType.CONSERVATIVE, parallel_invocation
                 )
-                error_obj = ScreeningError(
-                    search_result=search_result,
-                    error=parallel_invocation,
-                    message=str(parallel_invocation),
+                comprehensive = parallel_invocation.get(
+                    ScreeningStrategyType.COMPREHENSIVE, parallel_invocation
                 )
-                conservative = error_obj
-                comprehensive = error_obj
-            elif not isinstance(parallel_invocation, dict):
-                batch_logger.error(
-                    f"Unknown result type for item {i} in batch: {parallel_invocation}"
-                )
-                error_obj = ScreeningError(
-                    search_result=search_result,
-                    error=parallel_invocation,
-                    message="Unknown result type",
-                )
-                conservative = error_obj
-                comprehensive = error_obj
             else:
-                conservative = parallel_invocation.get("conservative")
-                comprehensive = parallel_invocation.get("comprehensive")
+                conservative = parallel_invocation
+                comprehensive = parallel_invocation
 
-            if isinstance(conservative, Exception):
+            if not isinstance(conservative, ScreeningResult):
                 conservative = ScreeningError(
                     search_result=search_result,
                     error=conservative,
-                    message=str(conservative),
                 )
-                batch_logger.error(
-                    f"Conservative reviewer error (exception): {conservative!r}"
-                )
-            elif not isinstance(conservative, ScreeningResult):
-                if not isinstance(conservative, ScreeningError):
-                    conservative = ScreeningError(
-                        search_result=search_result,
-                        error=conservative,
-                        message="Invalid conservative result type",
-                    )
-                batch_logger.error(
-                    f"Conservative reviewer error (invalid type): {conservative!r}"
-                )
+                batch_logger.error(f"Conservative reviewer error: {conservative!r}")
+            else:
+                search_result.conservative_result_id = conservative.id
 
-            if isinstance(comprehensive, Exception):
+            if not isinstance(comprehensive, ScreeningResult):
                 comprehensive = ScreeningError(
                     search_result=search_result,
                     error=comprehensive,
-                    message=str(comprehensive),
                 )
-                batch_logger.error(
-                    f"Comprehensive reviewer error (exception): {comprehensive!r}"
-                )
-            elif not isinstance(comprehensive, ScreeningResult):
-                if not isinstance(comprehensive, ScreeningError):
-                    comprehensive = ScreeningError(
-                        search_result=search_result,
-                        error=comprehensive,
-                        message="Invalid comprehensive result type",
-                    )
-                batch_logger.error(
-                    f"Comprehensive reviewer error (invalid type): {comprehensive!r}"
-                )
+                batch_logger.error(f"Comprehensive reviewer error: {comprehensive!r}")
+            else:
+                search_result.comprehensive_result_id = comprehensive.id
 
             res_tuple = ScreenAbstractResultTuple(
                 search_result=search_result,
                 conservative_result=conservative,
                 comprehensive_result=comprehensive,
             )
-            screened_results.append(res_tuple)
+            chain_outputs.append(res_tuple)
 
-        return ScreenAbstractsBatchOutput(results=screened_results, cb=cb)
-
-    except Exception as e:
-        batch_logger.exception(
-            f"Uncaught exception during batch {batch_idx} processing: {e}"
+        return ScreenAbstractsBatchOutput(
+            results=chain_outputs,
+            cb=deepcopy(cb),
         )
-        return None
+
+
+# TODO: update
+# @logger.catch(onerror=lambda exc: st.error(exc) if ut.in_streamlit() else None) # pyright: ignore [reportArgumentType]
+# async def ascreen_abstracts_batch(batch: list[models.PubMedResult], batch_idx: int) -> ScreenAbstractsBatchOutput | None:
+#    """Invoke screen_abstracts_chain on a batch of PubMed results.
+#
+#    Results and errors are also written to ``st.session_state.screen_abstracts_results``
+#    and ``st.session_state.screen_abstracts_errors``.
+#
+#    Caller should set ``st.session_state.screen_abstracts_batch_idx`` though it will
+#    be set if missing.
+#
+#    Args:
+#        batch (list[models.PubMedResult]): list of pubmed results to be screened
+#        batch_idx (int): index of the batch
+#
+#    Returns:
+#        tuple[list[ScreenAbstractResultTuple], OpenAICallbackHandler]:
+#            list of screened pubmed results and OpenAI cb for the batch run.
+#            None if an uncaught exception occured (check the logs).
+#    """
+#    ut.init_state_key("screen_abstracts_batch_idx", batch_idx)
+#    ut.init_state_key("screen_abstracts_results", [])
+#    ut.init_state_key("screen_abstracts_errors", [])
+#    ut.init_state_key("screen_abstracts_chain", screen_abstracts_chain)
+#    #ut.init_state_key("screen_abstracts_total_tokens", 0)
+#    #ut.init_state_key("screen_abstracts_successful_requests", 0)
+#    #ut.init_state_key("screen_abstracts_total_cost", 0.0)
+#
+#    batch_logger = logger.bind(batch_idx=batch_idx)
+#    chain_inputs = make_screen_abstracts_chain_input(batch)
+#    chain_outputs: list[ScreenAbstractResultTuple] = []
+#
+#    with get_openai_callback() as cb:
+#        res =  await st.session_state.screen_abstracts_chain.abatch(**chain_inputs)
+#    if len(res) != len(batch):
+#        pad_size = len(batch) - len(res)
+#        res += [None] * pad_size
+#        batch_logger.warning(f"screen_abstracts_chain returned {len(res)} results, expected {len(batch)}")
+#    for i, parallel_invocation in enumerate(res):
+#        if isinstance(parallel_invocation, dict):
+#            conservative = parallel_invocation.get(ScreeningStrategyType.CONSERVATIVE, parallel_invocation)
+#            comprehensive = parallel_invocation.get(ScreeningStrategyType.COMPREHENSIVE, parallel_invocation)
+#        else:
+#            conservative = parallel_invocation
+#            comprehensive = parallel_invocation
+#        if not isinstance(conservative, ScreeningResult):
+#            conservative = ScreeningError(
+#                search_result=batch[i],
+#                error=conservative,
+#            )
+#            if ut.is_streamlit():
+#                st.session_state.screen_abstracts_errors.append(conservative)
+#            batch_logger.warning(f"Conservative reviewer error: {conservative!r}")
+#        else:
+#            if ut.is_streamlit():
+#                st.session_state.screen_abstracts_results.append(conservative)
+#
+#        if not isinstance(comprehensive, ScreeningResult):
+#            comprehensive = ScreeningError(
+#                search_result=batch[i],
+#                error=comprehensive,
+#            )
+#            if ut.is_streamlit():
+#                st.session_state.screen_abstracts_errors.append(comprehensive)
+#            batch_logger.warning(f"Comprehensive reviewer error: {comprehensive!r}")
+#        else:
+#            if ut.is_streamlit():
+#                st.session_state.screen_abstracts_results.append(comprehensive)
+#
+#        res_tuple = ScreenAbstractResultTuple(
+#            search_result=batch[i],
+#            conservative_result=conservative,
+#            comprehensive_result=comprehensive,
+#        )
+#        chain_outputs.append(res_tuple)
+#    return ScreenAbstractsBatchOutput(
+#        results=chain_outputs,
+#        cb=cb,
+#    )

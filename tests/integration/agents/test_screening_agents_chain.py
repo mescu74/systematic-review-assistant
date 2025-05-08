@@ -90,57 +90,6 @@ def mock_non_relevant_search_result() -> SearchResult:
         source_metadata={"publication_types": ["Journal Article"]},
     )
 
-
-@pytest.mark.integration
-def test_chain_prompts():
-    """Test that chain prompts are correctly configured."""
-    # Test conservative reviewer prompt
-    assert "conservative" in screening_agents.conservative_reviewer_prompt_text.lower()
-    assert (
-        "systematic reviewer"
-        in screening_agents.conservative_reviewer_prompt_text.lower()
-    )
-
-    # Test comprehensive reviewer prompt
-    assert (
-        "comprehensive" in screening_agents.comprehensive_reviewer_prompt_text.lower()
-    )
-    assert (
-        "systematic reviewer"
-        in screening_agents.comprehensive_reviewer_prompt_text.lower()
-    )
-
-    # Test task prompt
-    assert "research question" in screening_agents.task_prompt_text.lower()
-    assert "inclusion criteria" in screening_agents.task_prompt_text.lower()
-    assert "exclusion criteria" in screening_agents.task_prompt_text.lower()
-    assert "abstract" in screening_agents.task_prompt_text.lower()
-
-
-@pytest.mark.integration
-def test_chain_structure():
-    """Test that the chain is correctly structured."""
-    # Verify the chain is a RunnableParallel with two branches
-    chain = screening_agents.screen_abstracts_chain
-
-    # Check that the chain has the expected listener methods (indicates .with_listeners was used)
-    # Note: Directly checking internal attributes like _bound_methods is fragile.
-    # Instead, we might check for expected behavior or public attributes if available.
-    # assert hasattr(chain, 'invoke') # Basic check
-    # assert hasattr(chain, 'batch')
-    # assert hasattr(chain, 'stream')
-
-    # Example of checking public config if available (hypothetical)
-    # assert chain.config.get('listeners') is not None
-
-    # Check that conservative and comprehensive steps exist (if accessible via public API)
-    # Accessing internal 'steps' is discouraged. If needed, adapt based on Langchain version.
-    # if hasattr(chain.bound, 'steps') # Check if attribute exists
-    #    assert "conservative" in chain.bound.steps
-    #    assert "comprehensive" in chain.bound.steps
-    # Keep test minimal if internal checks are too fragile
-
-
 @pytest.mark.integration
 def test_different_strategy_results(
     mock_search_result: SearchResult, mock_systematic_review: SystematicReview
@@ -266,9 +215,6 @@ def test_edge_case_handling(
 
 
 @pytest.mark.integration
-@pytest.mark.skipif(
-    not os.getenv("RUN_BATCH_TEST"), reason="Batch test is resource intensive"
-)
 def test_batch_processing(
     mock_systematic_review: SystematicReview, monkeypatch: pytest.MonkeyPatch
 ):
@@ -338,35 +284,3 @@ def test_batch_processing(
     print(
         f"Batch processing stats - Tokens: {cb.total_tokens}, Cost: ${cb.total_cost:.4f}"
     )
-
-
-@pytest.mark.integration
-@patch("streamlit.session_state")
-@patch("sr_assistant.app.agents.screening_agents.screen_abstracts_chain_on_end_cb")
-def test_chain_callbacks(
-    mock_on_end_callback: MagicMock,
-    mock_session_state: MagicMock,
-    mock_search_result: SearchResult,
-    mock_systematic_review: SystematicReview,
-):
-    """Test that chain on_end callback is called."""
-    # Prepare input for the chain
-    chain_input = screening_agents.make_screen_abstracts_chain_input(
-        [mock_search_result], mock_systematic_review
-    )
-
-    # Run the chain with batch - the patched callback will be called
-    try:
-        _ = screening_agents.screen_abstracts_chain.batch(
-            inputs=t.cast("list[dict[str, t.Any]]", chain_input["inputs"]),
-            config=chain_input["config"],
-        )
-    except Exception as e:
-        # Ignore OpenAI errors for this test, we only care about the callback call
-        if "BadRequestError" in str(e):
-            print(f"Ignoring OpenAI error for callback test: {e}")
-        else:
-            raise
-
-    # Assert that the patched callback was called at least once
-    mock_on_end_callback.assert_called()

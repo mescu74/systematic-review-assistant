@@ -1,5 +1,6 @@
 """Unit tests for screening agents module."""
 
+import typing as t
 import uuid
 from unittest.mock import MagicMock
 
@@ -191,7 +192,7 @@ class TestMakeScreenAbstractsChainInput:
         assert len(result["config"]) == 1
 
         # Check content of inputs
-        input_item = result["inputs"][0]
+        input_item = t.cast("dict[str, t.Any]", result["inputs"][0])
         assert input_item["background"] == "Test background"
         assert input_item["research_question"] == "Test question"
         assert input_item["inclusion_criteria"] == "Test inclusion"
@@ -244,7 +245,8 @@ class TestMakeScreenAbstractsChainInput:
         assert len(result["config"]) == 3
 
         # Check content of each input item
-        for i, input_item in enumerate(result["inputs"]):
+        for i, item in enumerate(result["inputs"]):
+            input_item = t.cast("dict[str, t.Any]", item)
             assert input_item["background"] == "Test background"
             assert input_item["research_question"] == "Test question"
             assert input_item["inclusion_criteria"] == "Test inclusion"
