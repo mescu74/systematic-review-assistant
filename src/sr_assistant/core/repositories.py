@@ -45,32 +45,38 @@ Examples:
 
 from __future__ import annotations
 
+import types
 import typing as t
+import uuid
 
 from loguru import logger
+from pydantic.types import JsonValue
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlmodel import Session, and_, col, or_, select
+from sqlmodel.sql.expression import SelectOfScalar
 
-from sr_assistant.core import models
 from sr_assistant.core.models import (
     Base,
     LogRecord,
     ScreenAbstractResult,
     ScreeningResolution,
+    SearchResult,
     SystematicReview,
 )
 from sr_assistant.core.schemas import ExclusionReasons
 from sr_assistant.core.types import (
     LogLevel,
     ScreeningStrategyType,
+    SearchDatabaseSource,
 )
 
 if t.TYPE_CHECKING:
-    import uuid
     from collections.abc import Sequence
 
-    from pydantic.types import JsonValue
-    from sqlmodel.sql.expression import SelectOfScalar
+
+# Define a protocol for models with an ID
+class ModelWithID(t.Protocol):
+    id: uuid.UUID
 
 
 class RepositoryError(Exception):
@@ -92,83 +98,35 @@ class BaseRepository[T: Base]:
     Repositories do not manage transactions (commit/rollback).
     """
 
-    _model_cls: type[T] | None = None  # Cache for resolved model class
-
     @property
     def model_cls(self) -> type[T]:
-        """Get the model class associated with the repository, resolving forward refs."""
-        if self._model_cls is None:
-            orig_bases = getattr(type(self), "__orig_bases__", [])
-            model_type_arg = None
-            for base in orig_bases:
-                if getattr(base, "__origin__", None) is BaseRepository:
-                    args = getattr(base, "__args__", [])
-                    if args:
-                        model_type_arg = args[0]
-                        break
+        """Get the model class associated with the repository."""
+        # Assumes direct inheritance like: class SubRepo(BaseRepository[ActualModel]):
+        # Determine the generic base type (BaseRepository[ActualModel])
+        generic_base = next(
+            (
+                base
+                for base in types.get_original_bases(type(self))
+                if t.get_origin(base) is BaseRepository
+            ),
+            None,
+        )
+        if generic_base is None:
+            raise TypeError(
+                f"Could not determine the generic base for {type(self).__name__}"
+            )
 
-            if model_type_arg is None:
-                raise TypeError(
-                    "Could not determine model class argument for repository"
-                )
-
-            # Resolve the type argument (which might be a string/ForwardRef)
-            resolved_type = None
-            if isinstance(model_type_arg, type) and issubclass(model_type_arg, Base):
-                resolved_type = model_type_arg  # It was already a resolved type
-            elif isinstance(model_type_arg, (str, t.ForwardRef)):
-                # Need to resolve string or ForwardRef
-                try:
-                    # Use get_type_hints on a temporary namespace
-                    temp_globals = models.__dict__.copy()
-                    temp_locals = (
-                        locals()
-                    )  # Include local scope if needed, though usually not for models
-
-                    # Directly evaluate the ForwardRef if possible, or use get_type_hints
-                    if isinstance(model_type_arg, t.ForwardRef):
-                        # Pass recursive_guard as an empty set for older Python versions compatibility if needed
-                        # For Python 3.9+, frozenset() is correct.
-                        resolved_type = model_type_arg._evaluate(
-                            temp_globals, temp_locals, frozenset()
-                        )
-                    elif isinstance(model_type_arg, str):
-                        # Use eval if it's just a string name
-                        resolved_type = eval(model_type_arg, temp_globals, temp_locals)
-
-                    if not (
-                        isinstance(resolved_type, type)
-                        and issubclass(resolved_type, Base)
-                    ):
-                        raise TypeError(
-                            f"Resolved type {resolved_type!r} is not a valid Base model subclass."
-                        )
-
-                except NameError as e:
-                    raise TypeError(
-                        f"Could not resolve type name '{model_type_arg}': {e}"
-                    ) from e
-                except Exception as e:
-                    # Catch potential errors during resolution
-                    raise TypeError(
-                        f"Error resolving type argument {model_type_arg!r}: {e}"
-                    ) from e
-            else:
-                raise TypeError(
-                    f"Unexpected type argument for repository: {model_type_arg!r}"
-                )
-
-            if resolved_type is None:
-                raise TypeError(
-                    f"Failed to resolve model class from {model_type_arg!r}"
-                )
-
-            self._model_cls = resolved_type
-
-        return self._model_cls
+        # Extract the type argument (ActualModel)
+        model_arg = t.get_args(generic_base)[0]
+        if not isinstance(model_arg, type):
+            raise TypeError(
+                f"Expected a type argument for BaseRepository, got {model_arg}"
+            )
+        return model_arg
 
     def _construct_get_stmt(self, id: uuid.UUID) -> SelectOfScalar[T]:
         Model = self.model_cls
+        # Now T is bound to Base, which implicitly has 'id' via SQLModel
         return select(Model).where(Model.id == id)
 
     def get_by_id(self, session: Session, id: uuid.UUID) -> T | None:
@@ -261,11 +219,11 @@ class BaseRepository[T: Base]:
             session.flush([merged_record])
             return merged_record
         except IntegrityError as exc:
-            msg = f"Constraint violation updating {Model.__name__} with id {record_id}: {exc}"
+            msg = f"Constraint violation updating {self.model_cls.__name__} with id {record_id}: {exc}"
             logger.exception(msg)
             raise ConstraintViolationError(msg) from exc
         except SQLAlchemyError as exc:
-            msg = f"Database error updating {Model.__name__} with id {record_id}: {exc}"
+            msg = f"Database error updating {self.model_cls.__name__} with id {record_id}: {exc}"
             logger.exception(msg)
             raise RepositoryError(msg) from exc
 
@@ -324,7 +282,7 @@ class SystematicReviewRepository(BaseRepository[SystematicReview]):
         return self.get_by_id(session, id)
 
 
-class SearchResultRepository(BaseRepository["SearchResult"]):
+class SearchResultRepository(BaseRepository[SearchResult]):
     """Repository for SearchResult model operations."""
 
     def get_by_review_id(
@@ -379,7 +337,9 @@ class ScreenAbstractResultRepository(BaseRepository[ScreenAbstractResult]):
         results = repo.get_by_review_id(review_id)
 
         # Get results by strategy
-        conservative = repo.get_by_strategy(review_id, ScreeningStrategyType.CONSERVATIVE)
+        conservative = repo.get_by_strategy(
+            review_id, ScreeningStrategyType.CONSERVATIVE
+        )
 
         # Query by JSONB fields (exclusion reasons)
         wrong_population = repo.get_by_exclusion_category(
