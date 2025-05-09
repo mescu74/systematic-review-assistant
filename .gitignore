@@ -260,3 +260,4 @@ tags
 *-nogit
 # browser client for db design, wasm, a submodule
 toosl/database-build/
+.DS_Store
