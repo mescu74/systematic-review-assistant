@@ -24,13 +24,13 @@ MD004:
 MD005: true
 
 # MD007/ul-indent : Unordered list indentation : https://github.com/DavidAnson/markdownlint/blob/v0.37.4/doc/md007.md
-MD007:
-  # Spaces for indent
-  indent: 2
-  # Whether to indent the first level of the list
-  start_indented: false
-  # Spaces for first level indent (when start_indented is set)
-  start_indent: 2
+MD007: false
+#  # Spaces for indent
+#  indent: 2
+#  # Whether to indent the first level of the list
+#  start_indented: false
+#  # Spaces for first level indent (when start_indented is set)
+#  start_indent: 2
 
 # MD009/no-trailing-spaces : Trailing spaces : https://github.com/DavidAnson/markdownlint/blob/v0.37.4/doc/md009.md
 MD009:
@@ -59,23 +59,23 @@ MD012:
   maximum: 1
 
 # MD013/line-length : Line length : https://github.com/DavidAnson/markdownlint/blob/v0.37.4/doc/md013.md
-MD013:
-  # Number of characters
-  line_length: 80
-  # Number of characters for headings
-  heading_line_length: 80
-  # Number of characters for code blocks
-  code_block_line_length: 80
-  # Include code blocks
-  code_blocks: true
-  # Include tables
-  tables: false
-  # Include headings
-  headings: true
-  # Strict length checking
-  strict: false
-  # Stern length checking
-  stern: false
+MD013: false
+#  # Number of characters
+#  line_length: 80
+#  # Number of characters for headings
+#  heading_line_length: 80
+#  # Number of characters for code blocks
+#  code_block_line_length: 80
+#  # Include code blocks
+#  code_blocks: true
+#  # Include tables
+#  tables: false
+#  # Include headings
+#  headings: true
+#  # Strict length checking
+#  strict: false
+#  # Stern length checking
+#  stern: false
 
 # MD014/commands-show-output : Dollar signs used before commands without showing output : https://github.com/DavidAnson/markdownlint/blob/v0.37.4/doc/md014.md
 MD014: true
@@ -131,15 +131,15 @@ MD029:
   style: 'one_or_ordered'
 
 # MD030/list-marker-space : Spaces after list markers : https://github.com/DavidAnson/markdownlint/blob/v0.37.4/doc/md030.md
-MD030:
-  # Spaces for single-line unordered list items
-  ul_single: 3
-  # Spaces for single-line ordered list items
-  ol_single: 3
-  # Spaces for multi-line unordered list items
-  ul_multi: 3
-  # Spaces for multi-line ordered list items
-  ol_multi: 3
+MD030: false
+#  # Spaces for single-line unordered list items
+#  ul_single: 3
+#  # Spaces for single-line ordered list items
+#  ol_single: 3
+#  # Spaces for multi-line unordered list items
+#  ul_multi: 3
+#  # Spaces for multi-line ordered list items
+#  ol_multi: 3
 
 # MD031/blanks-around-fences : Fenced code blocks should be surrounded by blank lines : https://github.com/DavidAnson/markdownlint/blob/v0.37.4/doc/md031.md
 MD031: false
