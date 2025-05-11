@@ -418,5 +418,5 @@ This architecture document should be treated as a living document. It will be re
 | Future Vision   | 2025-05-10 | 0.3     | Added Section 8 on Future Architectural Considerations & Evolution, and Section 9 on Document Maintenance. Elaborated on Transparency & Auditability. | Architect Agent |
 | Link Formatting | 2025-05-10 | 0.3.1   | Corrected internal document references to use Markdown link syntax instead of inline code. | Architect Agent |
 | Detailed Future Features | 2025-05-10 | 0.4     | Elaborated on AI Query Building, Embedding Deduplication (incl. pgvectorscale), and event-driven PRISMA generation in Section 8.2. | Architect Agent |
-| Arch Doc Clarifications | 2025-05-10 | 0.5     | Added note on DB backup reliance on Supabase. | Architect Agent |
-| ERD and Patterns | 2025-05-10 | 0.6     | Added Mermaid ERD to data-models.md. Expanded discussion of design patterns in architecture.md. | Architect Agent | 
+| Arch Doc Clarifications | 2025-05-10 | 0.5     | Added note on DB backup reliance on Supabase. Expanded discussion of design patterns in section 2.3. | Architect Agent |
+| Naming Conventions Doc Added | 2025-05-10 | 0.5.1   | Noted creation of `docs/naming-conventions.md` as a supporting architectural artifact. | Architect Agent | 
