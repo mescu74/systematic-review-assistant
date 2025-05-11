@@ -9,9 +9,11 @@ Todo:
 
 from __future__ import annotations
 
-import typing as t
 import uuid
-from typing import TypedDict
+from typing import TYPE_CHECKING, TypedDict
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping, MutableMapping
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 from pydantic.types import AwareDatetime, PositiveInt  # noqa: TC002
@@ -320,12 +322,12 @@ class SystematicReviewBase(BaseSchema):
     background: str | None = None
     research_question: str
     criteria_framework: CriteriaFramework | None = None
-    criteria_framework_answers: t.MutableMapping[str, JsonValue] = Field(
+    criteria_framework_answers: MutableMapping[str, JsonValue] = Field(
         default_factory=dict
     )
     inclusion_criteria: str | None = None
     exclusion_criteria: str  # Mandatory for creation based on model
-    review_metadata: t.MutableMapping[str, JsonValue] = Field(default_factory=dict)
+    review_metadata: MutableMapping[str, JsonValue] = Field(default_factory=dict)
 
 
 class SystematicReviewCreate(SystematicReviewBase):
@@ -341,12 +343,12 @@ class SystematicReviewUpdate(SystematicReviewBase):
     background: str | None = None
     research_question: str | None = None  # Make optional for update
     criteria_framework: CriteriaFramework | None = None
-    criteria_framework_answers: t.MutableMapping[str, JsonValue] | None = (
+    criteria_framework_answers: MutableMapping[str, JsonValue] | None = (
         None  # Make optional
     )
     inclusion_criteria: str | None = None
     exclusion_criteria: str | None = None  # Make optional for update
-    review_metadata: t.MutableMapping[str, JsonValue] | None = None  # Make optional
+    review_metadata: MutableMapping[str, JsonValue] | None = None  # Make optional
 
 
 class SystematicReviewRead(SystematicReviewBase):
@@ -362,34 +364,103 @@ class SystematicReviewRead(SystematicReviewBase):
 # --- SearchResult Schemas ---
 # (Define Read/Create/Update schemas if needed)
 class SearchResultRead(BaseSchema):
+    """Schema for reading/returning SearchResult data from the service layer."""
+
     id: uuid.UUID
+    """Unique identifier for the search result."""
+
     review_id: uuid.UUID
+    """Identifier of the systematic review this search result belongs to."""
+
     source_db: SearchDatabaseSource
+    """The source database from which this result was obtained (e.g., PubMed, Scopus)."""
+
     source_id: str
+    """The unique identifier of this record within its source database (e.g., PMID)."""
+
     doi: str | None
+    """Digital Object Identifier, if available."""
+
     title: str
+    """The title of the publication."""
+
     abstract: str | None
+    """The abstract of the publication."""
+
     journal: str | None
-    year: int | None  # Assuming int based on model correction
+    """The name of the journal in which the publication appeared."""
+
+    year: str | None  # Aligning with models.py SearchResult.year which is str | None
+    """The publication year (as a string)."""
+
     authors: list[str] | None
+    """A list of author names."""
+
     keywords: list[str] | None
-    raw_data: t.Mapping[str, JsonValue]
-    source_metadata: t.Mapping[str, JsonValue]
-    created_at: UtcDatetime | None
-    updated_at: UtcDatetime | None
+    """A list of keywords associated with the publication."""
+
+    raw_data: Mapping[str, JsonValue]  # Changed to use Mapping from collections.abc
+    """The original raw data record fetched from the source API."""
+
+    source_metadata: Mapping[
+        str, JsonValue
+    ]  # Changed to use Mapping from collections.abc
+    """Additional source-specific metadata."""
+
+    created_at: AwareDatetime | None
+    """Timestamp of when this search result was first stored (UTC). Must be timezone-aware."""
+
+    updated_at: AwareDatetime | None
+    """Timestamp of when this search result was last updated (UTC). Must be timezone-aware."""
+
+    final_decision: ScreeningDecisionType | None = None
+    """The final screening decision after any conflict resolution. Null if not yet resolved or no conflict."""
+
+    resolution_id: uuid.UUID | None = None
+    """Identifier of the ScreeningResolution record, if a conflict was resolved for this search result."""
+
     # Add relationships if needed
     # resolution: Optional["ScreeningResolutionRead"] = None
     # conservative_result: Optional["ScreenAbstractResultRead"] = None
     # comprehensive_result: Optional["ScreenAbstractResultRead"] = None
 
 
-class ExclusionReasons(BaseSchema):
-    """Represents PRISMA 2020 exclusion reasons categories."""
+class SearchResultUpdate(BaseSchema):
+    """Schema for partially updating an existing search result. All fields are optional."""
 
-    population_exclusion_reasons: list[str] = Field(default_factory=list)
-    intervention_exclusion_reasons: list[str] = Field(default_factory=list)
-    comparator_exclusion_reasons: list[str] = Field(default_factory=list)
-    outcomes_exclusion_reasons: list[str] = Field(default_factory=list)
-    setting_exclusion_reasons: list[str] = Field(default_factory=list)
-    study_design_exclusion_reasons: list[str] = Field(default_factory=list)
-    other_exclusion_reasons: list[str] = Field(default_factory=list)
+    doi: str | None = None
+    """Digital Object Identifier."""
+
+    title: str | None = None
+    """The title of the publication."""
+
+    abstract: str | None = None
+    """The abstract of the publication."""
+
+    journal: str | None = None
+    """The name of the journal."""
+
+    year: str | None = None
+    """The publication year (as a string)."""
+
+    authors: list[str] | None = None
+    """A list of author names."""
+
+    keywords: list[str] | None = None
+    """A list of keywords."""
+
+    raw_data: Mapping[str, JsonValue] | None = (
+        None  # Changed to use Mapping from collections.abc
+    )
+    """The original raw data record."""
+
+    source_metadata: Mapping[str, JsonValue] | None = (
+        None  # Changed to use Mapping from collections.abc
+    )
+    """Additional source-specific metadata."""
+
+    final_decision: ScreeningDecisionType | None = None
+    """The final screening decision after any conflict resolution."""
+
+    resolution_id: uuid.UUID | None = None
+    """Identifier of the ScreeningResolution record."""
