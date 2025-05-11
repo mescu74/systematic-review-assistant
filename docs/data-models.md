@@ -708,7 +708,7 @@ class ScreeningResolutionSchema(BaseSchema):
     comprehensive_result_id: uuid.UUID | None = None
     """ID of the comprehensive screening result. To be populated by the caller (ScreeningService)."""
 ```
-**Note:** The `ScreeningResolutionSchema` in `schemas.py` includes several IDs (`review_id`, `search_result_id`, etc.) that are marked as populated by the caller. For a schema *strictly* representing LLM output, these would be omitted. The `ScreeningService.store_resolution_results` method would take the LLM's output (decision, reasoning, confidence) and combine it with the necessary IDs to create the `models.ScreeningResolution` DB record.
+**Note:** The `ScreeningResolutionSchema` in `schemas.py` includes several IDs (`review_id`, `search_result_id`, etc.) that are marked as populated by the calling code. For a schema *strictly* representing LLM output, these would be omitted. The `ScreeningService.store_resolution_results` method would take the LLM's output (decision, reasoning, confidence) and combine it with the necessary IDs to create the `models.ScreeningResolution` DB record.
 
 #### `ScreeningResolutionCreate` (Service Input - Conceptual)
 
@@ -888,6 +888,7 @@ This section summarizes key discrepancies found or recommendations made while do
 - **`ScreeningResolutionSchema` Fields:**
   - **Issue:** The current `ScreeningResolutionSchema` in `schemas.py` includes fields (`review_id`, `search_result_id`, `conservative_result_id`, `comprehensive_result_id`) that are intended to be populated by the calling code (service layer) rather than being output by the LLM itself.
   - **Recommendation:** For clarity, the schema representing *direct LLM output* for the resolver should ideally only contain `resolver_decision`, `resolver_reasoning`, `resolver_confidence_score` (and potentially the legacy `resolver_include`). The service layer would then combine this with the necessary IDs to construct the `ScreeningResolutionCreate` data for database persistence. This distinction should be made clear if `ScreeningResolutionSchema` is refactored.
+  - **Naming Convention Note:** As per `docs/naming-conventions.md`, for consistency with `ScreeningResponse`, `ScreeningResolutionSchema` should ideally be refactored to `ScreeningResolutionResponse` in the future.
 
 - **`ScreenAbstractResult` SQLModel `search_result_id`:**
   - **Requirement:** The `ScreenAbstractResult` SQLModel in `models.py` needs a foreign key to `SearchResult` (e.g., `search_result_id: uuid.UUID = Field(foreign_key="search_results.id")`) to properly link screening decisions to the items they screen. This is essential for the `ScreeningResultCreate` schema to function as intended with the service layer.
@@ -900,3 +901,4 @@ This section summarizes key discrepancies found or recommendations made while do
 // Update Change Log
 | ERD Fixes        | 2025-05-10 | 0.6.1   | Corrected Mermaid ERD syntax (comments, relationship naming for SearchResult to ScreenAbstractResult) in data-models.md. | Architect Agent |
 | ERD Completeness | 2025-05-10 | 0.6.2   | Added more fields to entities in ERD and included LogRecord model and its relationships. | Architect Agent |
+| Naming Convention Note | 2025-05-10 | 0.7     | Added a note regarding the ideal future renaming of `ScreeningResolutionSchema` to `ScreeningResolutionResponse` for consistency. | Architect Agent |
