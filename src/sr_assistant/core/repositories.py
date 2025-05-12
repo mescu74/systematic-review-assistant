@@ -51,6 +51,7 @@ import uuid
 
 from loguru import logger
 from pydantic.types import JsonValue
+from sqlalchemy import func, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlmodel import Session, and_, col, or_, select
 from sqlmodel.sql.expression import SelectOfScalar
@@ -63,7 +64,7 @@ from sr_assistant.core.models import (
     SearchResult,
     SystematicReview,
 )
-from sr_assistant.core.schemas import ExclusionReasons
+from sr_assistant.core.schemas import ExclusionReasons, SearchResultFilter
 from sr_assistant.core.types import (
     LogLevel,
     ScreeningStrategyType,
@@ -285,6 +286,57 @@ class SystematicReviewRepository(BaseRepository[SystematicReview]):
 class SearchResultRepository(BaseRepository[SearchResult]):
     """Repository for SearchResult model operations."""
 
+    def get_by_doi(self, session: Session, *, doi: str) -> SearchResult | None:
+        """Retrieves a SearchResult by its DOI.
+
+        Args:
+            session: The database session.
+            doi: The Digital Object Identifier to search for.
+
+        Returns:
+            The SearchResult if found, otherwise None.
+
+        Raises:
+            RepositoryError: If a database error occurs.
+        """
+        try:
+            stmt = select(self.model_cls).where(self.model_cls.doi == doi)
+            return session.exec(stmt).first()
+        except SQLAlchemyError as exc:
+            msg = f"Database error in get_by_doi for DOI '{doi}': {exc}"
+            logger.exception(msg)
+            raise RepositoryError(msg) from exc
+
+    def get_by_title_and_year(
+        self, session: Session, *, title: str, year: str
+    ) -> SearchResult | None:
+        """Retrieves a SearchResult by its title and publication year.
+
+        Args:
+            session: The database session.
+            title: The title to search for (case-insensitive exact match).
+            year: The publication year (string) to search for.
+
+        Returns:
+            The SearchResult if found, otherwise None.
+
+        Raises:
+            RepositoryError: If a database error occurs.
+        """
+        try:
+            # Using ilike for case-insensitive title matching, assuming PostgreSQL
+            # For other DBs, lower(column) == lower(value) might be needed
+            stmt = select(self.model_cls).where(
+                # self.model_cls.title.ilike(title), # Hold off on ilike for now, depends on DB dialect features
+                self.model_cls.title == title,  # Exact match for now
+                self.model_cls.year == year,
+            )
+            return session.exec(stmt).first()
+        except SQLAlchemyError as exc:
+            msg = f"Database error in get_by_title_and_year for title '{title}' and year '{year}': {exc}"
+            logger.exception(msg)
+            raise RepositoryError(msg) from exc
+
     def get_by_review_id(
         self, session: Session, review_id: uuid.UUID
     ) -> Sequence[SearchResult]:
@@ -322,6 +374,113 @@ class SearchResultRepository(BaseRepository[SearchResult]):
                 f"Failed to fetch SearchResult for review {review_id}, "
                 f"source {source_db.name}, id {source_id}: {exc}"
             )
+            logger.exception(msg)
+            raise RepositoryError(msg) from exc
+
+    def advanced_search(
+        self,
+        session: Session,
+        *,
+        search_params: SearchResultFilter,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> list[SearchResult]:  # type: ignore
+        """Retrieves SearchResults based on complex criteria with pagination.
+
+        Args:
+            session: The database session.
+            search_params: A SearchResultFilter object with attributes to filter on.
+            skip: Number of records to skip for pagination.
+            limit: Maximum number of records to return.
+
+        Returns:
+            A list of SearchResult objects.
+
+        Raises:
+            RepositoryError: If a database error occurs.
+        """
+        try:
+            query = select(self.model_cls)
+            conditions = []
+
+            if search_params.review_id is not None:
+                conditions.append(self.model_cls.review_id == search_params.review_id)
+            if search_params.source_db is not None:
+                conditions.append(self.model_cls.source_db == search_params.source_db)
+            if search_params.source_id is not None:
+                conditions.append(self.model_cls.source_id == search_params.source_id)
+            if search_params.doi is not None:
+                conditions.append(self.model_cls.doi == search_params.doi)
+            if search_params.title is not None:
+                # Using `ilike` for case-insensitive partial matching (e.g., PostgreSQL).
+                # For broader compatibility without specific DB features, one might use
+                # from sqlalchemy import func
+                # conditions.append(func.lower(self.model_cls.title).contains(search_params.title.lower()))
+                conditions.append(
+                    self.model_cls.title.ilike(f"%{search_params.title}%")
+                )  # type: ignore[attr-defined]
+            if search_params.year is not None:
+                conditions.append(self.model_cls.year == search_params.year)
+
+            if conditions:
+                query = query.where(and_(*conditions))
+
+            query = query.offset(skip).limit(limit)
+            results = session.exec(query).all()
+            return list(results)  # Ensure it's a list
+        except SQLAlchemyError as exc:
+            msg = f"Database error in advanced_search with params {search_params!r}: {exc}"
+            logger.exception(msg)
+            raise RepositoryError(msg) from exc
+
+    def count(
+        self, session: Session, *, search_params: SearchResultFilter | None = None
+    ) -> int:
+        """Counts SearchResults, optionally filtered by search_params.
+
+        Args:
+            session: The database session.
+            search_params: An optional SearchResultFilter object with attributes to filter on.
+
+        Returns:
+            The total count of matching SearchResult objects.
+
+        Raises:
+            RepositoryError: If a database error occurs.
+        """
+        try:
+            stmt = select(func.count(text("*"))).select_from(self.model_cls)
+            conditions = []
+
+            if search_params:
+                if search_params.review_id is not None:
+                    conditions.append(
+                        self.model_cls.review_id == search_params.review_id
+                    )
+                if search_params.source_db is not None:
+                    conditions.append(
+                        self.model_cls.source_db == search_params.source_db
+                    )
+                if search_params.source_id is not None:
+                    conditions.append(
+                        self.model_cls.source_id == search_params.source_id
+                    )
+                if search_params.doi is not None:
+                    conditions.append(self.model_cls.doi == search_params.doi)
+                if search_params.title is not None:
+                    conditions.append(
+                        self.model_cls.title.ilike(f"%{search_params.title}%")
+                    )  # type: ignore[attr-defined]
+                if search_params.year is not None:
+                    conditions.append(self.model_cls.year == search_params.year)
+
+            if conditions:
+                stmt = stmt.where(and_(*conditions))
+
+            count = session.exec(stmt).scalar_one()  # type: ignore[attr-defined]
+            return count
+        except SQLAlchemyError as exc:
+            msg = f"Database error in count with params {search_params!r}: {exc}"
             logger.exception(msg)
             raise RepositoryError(msg) from exc
 

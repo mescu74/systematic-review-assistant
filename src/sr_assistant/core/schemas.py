@@ -363,6 +363,33 @@ class SystematicReviewRead(SystematicReviewBase):
 
 # --- SearchResult Schemas ---
 # (Define Read/Create/Update schemas if needed)
+
+
+class SearchResultFilter(BaseSchema):
+    """Schema for filtering SearchResult records in repository queries.
+
+    All fields are optional to allow flexible querying.
+    """
+
+    review_id: uuid.UUID | None = Field(
+        default=None, description="Filter by systematic review ID."
+    )
+    source_db: SearchDatabaseSource | None = Field(
+        default=None, description="Filter by source database."
+    )
+    source_id: str | None = Field(
+        default=None, description="Filter by source ID within the database."
+    )
+    doi: str | None = Field(
+        default=None, description="Filter by Digital Object Identifier."
+    )
+    title: str | None = Field(
+        default=None, description="Filter by title (case-insensitive partial match)."
+    )  # Actual matching logic in repo
+    year: str | None = Field(default=None, description="Filter by publication year.")
+    # Consider adding more fields if needed, e.g., authors, keywords (though these might need more complex query logic)
+
+
 class SearchResultRead(BaseSchema):
     """Schema for reading/returning SearchResult data from the service layer."""
 
