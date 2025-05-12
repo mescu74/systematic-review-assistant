@@ -298,5 +298,8 @@ Temporary Items
 
 # End of https://www.toptal.com/developers/gitignore/api/macos
 
-ai/
-.ai/
+.local
+
+# mise
+mise.local.toml
+mise.*.local.toml
