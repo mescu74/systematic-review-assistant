@@ -1,11 +1,9 @@
-import streamlit as st
 import asyncio
 import threading
 import time
-from typing import List, Any
+
+import streamlit as st
 from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
-from queue import Queue
-from concurrent.futures import ThreadPoolExecutor
 
 
 class AsyncWorkerPool:
@@ -32,7 +30,7 @@ class AsyncWorkerPool:
                     result = await func(*args)
                     st.session_state[f"last_{self.name}_result"] = result
                 except Exception as e:
-                    st.error(f"Error in {self.name} worker: {str(e)}")
+                    st.error(f"Error in {self.name} worker: {e!s}")
                 finally:
                     self.queue.task_done()
 
@@ -95,7 +93,6 @@ async def process_batches(
     db_items: list[str], cpu_items: list[str], results_container
 ) -> None:
     """Process items using different worker pools."""
-
     # Create worker pools
     db_pool = AsyncWorkerPool("db")
     cpu_pool = AsyncWorkerPool("cpu")
@@ -165,7 +162,7 @@ def main():
                 asyncio.run(process_batches(db_items, cpu_items, results_container))
 
         except Exception as e:
-            st.error(f"Error in main: {str(e)}")
+            st.error(f"Error in main: {e!s}")
 
 
 if __name__ == "__main__":

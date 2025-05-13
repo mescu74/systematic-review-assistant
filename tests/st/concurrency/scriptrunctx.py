@@ -1,14 +1,13 @@
-import streamlit as st
 import asyncio
-import time
 import threading
-from typing import List
+import time
+
+import streamlit as st
 from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
 
 
 def cpu_bound_work(text: str) -> str:
-    """
-    Simulate CPU-bound work that needs access to Streamlit context.
+    """Simulate CPU-bound work that needs access to Streamlit context.
     Now we can safely use st.* calls here because the context is properly attached.
     """
     # Access session state safely
@@ -71,7 +70,7 @@ async def process_batch(texts: list[str], results_container) -> list[str]:
 
         return results
     except Exception as e:
-        st.error(f"Error in process_batch: {str(e)}")
+        st.error(f"Error in process_batch: {e!s}")
         return []
 
 
@@ -108,7 +107,7 @@ def main():
                     )
 
         except Exception as e:
-            st.error(f"Error in main: {str(e)}")
+            st.error(f"Error in main: {e!s}")
 
 
 if __name__ == "__main__":

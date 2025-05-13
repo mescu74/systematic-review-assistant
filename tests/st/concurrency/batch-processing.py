@@ -8,9 +8,7 @@
 # - async coro/task in different loop
 # - sync threadpool executor
 # - async taskggroup
-"""
-from langchain_community.callbacks.manager import get_openai_callback
-
+"""from langchain_community.callbacks.manager import get_openai_callback
 
 with get_openai_callback() as cb:
     response = agent_executor.invoke(
@@ -29,18 +27,17 @@ cb.reasoning_tokens: int
 cb.successful_requests: int
 """
 
-import streamlit as st
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
-import pandas as pd
-from typing import List, Dict, Any
-from datetime import datetime
-from sqlmodel import select
-from sqlmodel.ext.asyncio.session import AsyncSession
-from langchain.chat_models import ChatOpenAI
-from langchain.callbacks.base import BaseCallbackHandler
-from functools import partial
 from contextlib import asynccontextmanager
+from datetime import datetime
+from typing import Any
+
+import pandas as pd
+import streamlit as st
+from langchain.callbacks.base import BaseCallbackHandler
+from langchain.chat_models import ChatOpenAI
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 
 class MetricsCallback(BaseCallbackHandler):
@@ -102,7 +99,6 @@ class BatchProcessor:
 
     async def process_batch(self, items: list[str], batch_size: int = 5):
         """Process items in batches using TaskGroup."""
-
         # Initialize LLM with metrics callback
         llm = ChatOpenAI(callbacks=[MetricsCallback(self.metrics)])
 
@@ -131,7 +127,7 @@ class BatchProcessor:
                     st.write(f"Processed batch of {len(batch)} items")
 
             except Exception as e:
-                st.error(f"Error processing batch: {str(e)}")
+                st.error(f"Error processing batch: {e!s}")
 
         # Process all batches concurrently using TaskGroup
         async with asyncio.TaskGroup() as tg:
@@ -158,7 +154,7 @@ def main():
             st.success("Processing complete!")
 
         except Exception as e:
-            st.error(f"Error: {str(e)}")
+            st.error(f"Error: {e!s}")
 
         finally:
             processor.executor.shutdown()

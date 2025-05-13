@@ -1,9 +1,7 @@
 """Integration tests for LangChain components in screening_agents.py."""
 
-import os
 import typing as t
 import uuid
-from unittest.mock import MagicMock, patch
 
 import pytest
 import streamlit as st

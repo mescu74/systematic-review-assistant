@@ -54,7 +54,7 @@ def create_tables() -> None:
 
 def persist_model(model: SQLModelBase) -> SQLModelBase:
     session_factory = t.cast(
-        sessionmaker[SQLModelSession], st.session_state.session_factory
+        "sessionmaker[SQLModelSession]", st.session_state.session_factory
     )
     # with session_factory() as session:
     #    model = session.merge(model)

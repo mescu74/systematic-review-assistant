@@ -1,7 +1,7 @@
-import streamlit as st
 import asyncio
 import time
-from typing import List
+
+import streamlit as st
 
 
 def cpu_bound_work(text: str) -> str:
@@ -37,7 +37,7 @@ async def process_batch(texts: list[str], results_container) -> list[str]:
 
         return results
     except Exception as e:
-        st.error(f"Error in process_batch: {str(e)}")
+        st.error(f"Error in process_batch: {e!s}")
         return []
 
 
@@ -71,7 +71,7 @@ def main():
                     )
 
         except Exception as e:
-            st.error(f"Error in main: {str(e)}")
+            st.error(f"Error in main: {e!s}")
 
 
 if __name__ == "__main__":

@@ -23,9 +23,9 @@ from sr_assistant.core.models import (
     SystematicReview,
 )
 from sr_assistant.core.repositories import (
-    SearchResultRepository,
     ScreenAbstractResultRepository,
     ScreeningResolutionRepository,
+    SearchResultRepository,
     SystematicReviewRepository,
 )
 from sr_assistant.core.schemas import ScreeningDecisionType
@@ -96,7 +96,7 @@ def render_df() -> None:
     """
     # exclusion categories, compute metrics
     results = t.cast(
-        list[tuple[SearchResult, ScreeningResult]],
+        "list[tuple[SearchResult, ScreeningResult]]",
         st.session_state.screen_abstracts_results,
     )
     df_data = [
