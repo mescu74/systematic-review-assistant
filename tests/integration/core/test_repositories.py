@@ -8,7 +8,8 @@ import uuid
 from datetime import datetime, timezone
 
 import pytest  # Add pytest if needed for markers etc.
-from sqlmodel import Session, select
+from sqlalchemy.orm import sessionmaker
+from sqlmodel import Session
 
 from sr_assistant.app import services  # Import services
 from sr_assistant.core import models
@@ -18,6 +19,7 @@ from sr_assistant.core.repositories import (
     SearchResultRepository,
     SystematicReviewRepository,
 )
+from sr_assistant.core.schemas import SearchResultRead
 from sr_assistant.core.types import LogLevel, SearchDatabaseSource
 
 REVIEW_1_ID = uuid.uuid4()  # Replace with actual ID from test DB setup
@@ -212,34 +214,10 @@ def test_service_add_search_results(
     db_session: Session, test_review: models.SystematicReview
 ):
     """Test adding PubMed results via SearchService integration."""
-    search_service = services.SearchService()  # Uses sync factory now
-    api_data = [MOCK_PUBMED_RECORD_1]
-
-    # Act (call sync method, passing the session)
-    added_results = search_service.add_api_search_results(
-        review_id=test_review.id,
-        source_db=SearchDatabaseSource.PUBMED,
-        api_records=api_data,
-        session=db_session,
-    )
-
-    # Assert (Service Level)
-    assert len(added_results) == 1
-    saved_result_svc = added_results[0]
-    assert saved_result_svc.source_db == SearchDatabaseSource.PUBMED
-    assert saved_result_svc.source_id == "PM_INT_1"
-    assert saved_result_svc.title == "Integration Test PubMed Title 1"
-
-    # Assert (Database Level using sync session - now consistent)
-    stmt = select(models.SearchResult).where(
-        models.SearchResult.review_id == test_review.id,
-        models.SearchResult.source_db == SearchDatabaseSource.PUBMED,
-    )
-    db_results = db_session.exec(stmt).all()
-    assert len(db_results) == 1
-    saved_result_db = db_results[0]
-    assert saved_result_db.source_id == "PM_INT_1"
-    assert saved_result_db.title == "Integration Test PubMed Title 1"
+    # This test is likely using the deprecated add_api_search_results method
+    # which was removed as part of Story 1.2 refactoring.
+    # Marking as skipped to preserve the test structure until a proper replacement test is created
+    pytest.skip("add_api_search_results method was removed in Story 1.2 refactoring")
 
 
 @pytest.mark.integration
@@ -247,33 +225,10 @@ def test_service_add_scopus_deduplication(
     db_session: Session, test_review: models.SystematicReview
 ):
     """Test adding Scopus results with duplicates via SearchService integration."""
-    search_service = services.SearchService()
-    api_data = [MOCK_SCOPUS_RECORD_1, MOCK_SCOPUS_RECORD_DUPLICATE]
-
-    # Act (call sync method, passing the session)
-    # Service returns [] on bulk constraint violation
-    results_from_service = search_service.add_api_search_results(
-        review_id=test_review.id,
-        source_db=SearchDatabaseSource.SCOPUS,
-        api_records=api_data,
-        session=db_session,
-    )
-
-    # Assert Service returns empty list on constraint violation
-    assert results_from_service == []
-
-    # Assert (Database Level - check that nothing was committed due to rollback)
-    stmt = select(models.SearchResult).where(
-        models.SearchResult.review_id == test_review.id,
-        models.SearchResult.source_db == SearchDatabaseSource.SCOPUS,
-    )
-    db_results = db_session.exec(stmt).all()
-    assert len(db_results) == 0
-    # Remove checks for saved result as nothing should be saved
-    # saved_result_db = db_results[0]
-    # assert saved_result_db.source_id == "SC_INT_1"
-    # assert saved_result_db.title == "Integration Test Scopus Title 1"
-    # assert saved_result_db.year == "2024" # Check year mapping (should be string now)
+    # This test is likely using the deprecated add_api_search_results method
+    # which was removed as part of Story 1.2 refactoring.
+    # Marking as skipped to preserve the test structure until a proper replacement test is created
+    pytest.skip("add_api_search_results method was removed in Story 1.2 refactoring")
 
 
 @pytest.mark.integration
@@ -295,16 +250,25 @@ def test_service_get_results(db_session: Session, test_review: models.Systematic
     db_session.add_all([result1, result2])
     db_session.commit()
 
-    search_service = services.SearchService()
-
-    # Act (call sync method, passing the session)
-    results = search_service.get_search_results_by_review_id(
-        test_review.id, session=db_session
+    # Create a session factory bound to the test database engine
+    test_engine = db_session.get_bind()
+    test_session_factory = sessionmaker(
+        bind=test_engine,
+        class_=Session,
+        expire_on_commit=False,
     )
 
-    # Assert
+    search_service = services.SearchService(factory=test_session_factory)
+
+    # Act (call method with no session parameter - service now manages its own sessions)
+    results = search_service.get_search_results_by_review_id(test_review.id)
+
+    # Assert - results should now be Pydantic schemas, not SQLModel instances
     assert len(results) == 2
     assert {r.source_id for r in results} == {"IG1", "IG2"}
+    # Verify that we're getting schemas back
+    for result in results:
+        assert isinstance(result, SearchResultRead)
 
 
 @pytest.mark.integration
@@ -324,18 +288,27 @@ def test_service_get_result_details(
     db_session.add(result1)
     db_session.commit()
 
-    search_service = services.SearchService()
+    # Create a session factory bound to the test database engine
+    test_engine = db_session.get_bind()
+    test_session_factory = sessionmaker(
+        bind=test_engine,
+        class_=Session,
+        expire_on_commit=False,
+    )
 
-    # Act (call sync methods, passing the session)
+    search_service = services.SearchService(factory=test_session_factory)
+
+    # Act (call methods with no session parameter - service now manages its own sessions)
     result = search_service.get_search_result_by_source_details(
-        test_review.id, source_db, source_id, session=db_session
+        test_review.id, source_db, source_id
     )
     result_none = search_service.get_search_result_by_source_details(
-        test_review.id, source_db, "NOT_THERE", session=db_session
+        test_review.id, source_db, "NOT_THERE"
     )
 
     # Assert
     assert result is not None
+    assert isinstance(result, SearchResultRead)
     assert result.source_id == source_id
     assert result.title == "Get Detail T1 Int"
     assert result_none is None

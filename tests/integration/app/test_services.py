@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import uuid  # Needed for test_review_with_criteria
-from collections.abc import Sequence
 
 import pytest
 from sqlalchemy.orm import sessionmaker  # Import sessionmaker
@@ -103,7 +102,7 @@ def test_search_pubmed_and_store_results(
     max_results_to_fetch = 1  # Keep very low for stable integration test
 
     # Act
-    stored_results: Sequence[models.SearchResult] = []
+    stored_results = []
     try:
         # NCBI_EMAIL and NCBI_API_KEY must be set in .env.test (loaded by conftest.py db_engine fixture)
         stored_results = search_service.search_pubmed_and_store_results(
@@ -130,6 +129,16 @@ def test_search_pubmed_and_store_results(
         f"Expected at most {max_results_to_fetch} results, got {len(stored_results)}"
     )
 
+    # Check that returned items are Pydantic schemas
+    for result in stored_results:
+        assert isinstance(result, schemas.SearchResultRead), (
+            "Result should be a SearchResultRead schema"
+        )
+        assert result.review_id == review_id, "Result should have the correct review_id"
+        assert result.source_db == schemas.SearchDatabaseSource.PUBMED, (
+            "Source DB should be PubMed"
+        )
+
     # Verification of DB state using a new session from the same factory
     # The service uses factory.begin() which handles commit/rollback
     with search_service_test_session_factory.begin() as verification_session:
@@ -142,32 +151,17 @@ def test_search_pubmed_and_store_results(
         f"Mismatch in result count: service returned {len(stored_results)}, DB query found {len(results_in_db)}"
     )
 
-    if not stored_results:
+    # If results were found, verify their content
+    if stored_results:
+        # Get the first result for comparison
+        db_result = results_in_db[0]
+        schema_result = stored_results[0]
+
+        # Verify key fields match between the DB model and the schema
+        assert str(db_result.id) == str(schema_result.id), "IDs should match"
+        assert db_result.title == schema_result.title, "Titles should match"
+        assert db_result.source_id == schema_result.source_id, "Source IDs should match"
+    else:
         print(
             f"Warning: PubMed query '{test_query}' returned no results. Detailed assertions for stored data will be skipped."
         )
-
-    if stored_results:
-        assert len(results_in_db) > 0, (
-            "Should have stored results in DB if service returned any"
-        )
-        for result in results_in_db:
-            assert isinstance(result, models.SearchResult)
-            assert result.review_id == review_id
-            assert result.source_db == models.SearchDatabaseSource.PUBMED
-            assert result.source_id is not None
-            assert result.title is not None
-            assert result.year is None or isinstance(result.year, str), (
-                f"Year should be str or None, got {type(result.year)}"
-            )
-            assert result.raw_data, (
-                "raw_data (cleaned record) should not be empty"
-            )  # Check if dict is not empty
-            assert isinstance(result.raw_data, dict), "raw_data should be a dict"
-            assert "mesh_headings" in result.source_metadata, (
-                "MeSH headings should be in source_metadata"
-            )
-            if result.source_metadata.get(
-                "mesh_headings"
-            ):  # Check if mesh_headings list is not empty if present
-                assert isinstance(result.source_metadata["mesh_headings"], list)

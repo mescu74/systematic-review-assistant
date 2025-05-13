@@ -447,20 +447,16 @@ class SearchService(BaseService):
         review_id: uuid.UUID,
         query: str,
         max_results: int = 100,
-        # Remove Entrez credential parameters
-        # entrez_email: str = "your.email@example.com",
-        # entrez_api_key: str | None = None,
-    ) -> Sequence[models.SearchResult]:
+    ) -> Sequence[schemas.SearchResultRead]:
         """Performs a PubMed search, maps results, stores them, and handles sessions.
 
         Args:
             review_id: The ID of the review to associate results with.
             query: The search query string for PubMed.
             max_results: The maximum number of results to fetch and store.
-            # entrez_email and entrez_api_key removed from args
 
         Returns:
-            A sequence of the added/stored SearchResult objects (refreshed).
+            A sequence of the added/stored SearchResult objects, converted to SearchResultRead schemas.
 
         Raises:
             ServiceError: If there is an issue with the API call or database operation,
@@ -470,7 +466,6 @@ class SearchService(BaseService):
             f"Starting PubMed search for review {review_id!r} with query {query!r} (max: {max_results})"
         )
 
-        # Get Entrez credentials from environment variables
         entrez_email = os.getenv("NCBI_EMAIL")
         entrez_api_key = os.getenv("NCBI_API_KEY")
 
@@ -480,194 +475,173 @@ class SearchService(BaseService):
             )
             raise ServiceError("NCBI_EMAIL environment variable not set.")
 
-        # Configure Entrez
         Entrez.email = entrez_email
         if entrez_api_key:
             Entrez.api_key = entrez_api_key
         else:
             logger.warning("NCBI_API_KEY not set. PubMed searches may be rate-limited.")
 
-        pmids: list[str] = []
+        # Initialize added_results_output here to ensure it's always defined before the final return
+        added_search_result_models_for_conversion: list[models.SearchResult] = []
+
         try:
             logger.debug("Executing Entrez.esearch for PMIDs...")
             handle = Entrez.esearch(
                 db="pubmed", term=query, retmax=max_results, sort="relevance"
             )
-            search_results = Entrez.read(handle)
+            search_results_raw = Entrez.read(handle)
             handle.close()
-            # Cast search_results to dict to satisfy type checker for .get()
-            # Assuming the returned BioPython object behaves like a dict for .get()
-            # Use collections.abc.Mapping for more general dict-like structures
-            pmids = t.cast("Mapping[str, t.Any]", search_results).get(
-                "IdList", []
-            )  # This uses Mapping from collections.abc
-            logger.info(f"Found {len(pmids)} PMIDs from PubMed search.")
+
+            pmids: list[str] = []
+            if isinstance(search_results_raw, Mapping):
+                pmids = search_results_raw.get("IdList", [])
+            else:
+                logger.error(
+                    f"Entrez.esearch returned unexpected type: {type(search_results_raw)}"
+                )
+                # pmids remains empty, will lead to empty return
+
             if not pmids:
+                logger.info("No PMIDs found by Entrez.esearch.")
                 return []
-        except Exception as e:
-            logger.opt(exception=True).error(
-                f"PubMed Entrez.esearch failed for query {query!r}"
-            )
-            raise ServiceError("PubMed search (esearch) failed") from e
 
-        # Fetch details for the PMIDs
-        records_to_map: list[dict[str, t.Any]] = []
-        try:
-            logger.debug(f"Executing Entrez.efetch for {len(pmids)} PMIDs...")
-            handle = Entrez.efetch(
-                db="pubmed", id=pmids, rettype="medline", retmode="xml"
+            logger.debug(
+                f"Found {len(pmids)} PMIDs. Fetching details with Entrez.efetch..."
             )
-            # Entrez.read for medline XML typically returns a list of dict-like objects (PubmedArticle).
-            # Each item in this list is an individual article's data.
-            fetched_data = Entrez.read(handle)
+            handle = Entrez.efetch(db="pubmed", id=pmids, rettype="xml", retmode="xml")
+            papers_raw_data = Entrez.read(handle)
             handle.close()
 
-            # Ensure fetched_data is a list of dictionaries.
-            # If a single article is fetched, Entrez.read might return the dict directly.
-            if isinstance(fetched_data, list):
-                # Ensure all elements in the list are dictionaries before assigning
-                # The Bio.Entrez.Parser objects often behave like dicts but might not be instances of dict.
-                # For safety, and because our mappers expect dict[str, t.Any], we can try to convert.
-                # However, direct iteration is usually fine if they are dict-like.
-                # The linter error suggests they are not always treated as pure dicts by type checkers.
-                # Let's assume for now they are sufficiently dict-like for the mapper.
-                # If `_map_pubmed_to_search_result` fails, it means these aren't truly dicts.
-                records_to_map = [
-                    item for item in fetched_data if isinstance(item, dict)
+            cleaned_papers_input = self._recursive_clean(papers_raw_data)
+            actual_articles_data: list[dict[str, t.Any]] = []
+
+            if isinstance(cleaned_papers_input, list):
+                actual_articles_data = [
+                    item for item in cleaned_papers_input if isinstance(item, dict)
                 ]
-                if len(records_to_map) != len(fetched_data):
-                    logger.warning(
-                        f"Some items from Entrez.efetch were not dictionaries and were skipped. Original count: {len(fetched_data)}, Dict count: {len(records_to_map)}"
-                    )
-            elif isinstance(fetched_data, dict):
-                records_to_map = [fetched_data]  # Wrap single dict in a list
+            elif isinstance(cleaned_papers_input, dict):
+                if "PubmedArticle" in cleaned_papers_input and isinstance(
+                    cleaned_papers_input["PubmedArticle"], list
+                ):
+                    actual_articles_data = [
+                        item
+                        for item in cleaned_papers_input["PubmedArticle"]
+                        if isinstance(item, dict)
+                    ]
+                elif "PubmedArticleSet" in cleaned_papers_input and isinstance(
+                    cleaned_papers_input["PubmedArticleSet"], list
+                ):
+                    actual_articles_data = [
+                        item
+                        for item in cleaned_papers_input["PubmedArticleSet"]
+                        if isinstance(item, dict)
+                    ]
+                else:
+                    actual_articles_data = [cleaned_papers_input]
             else:
                 logger.warning(
-                    f"Unexpected data type from Entrez.efetch: {type(fetched_data)}. Expected list or dict."
+                    f"Unexpected data structure after cleaning PubMed efetch results: {type(cleaned_papers_input)}"
                 )
-                records_to_map = []
 
-            logger.info(
-                f"Successfully fetched {len(records_to_map)} PubMed records to map."
-            )
+            if not actual_articles_data:
+                logger.info(
+                    "No article data extracted after cleaning PubMed efetch results."
+                )
+                return []
+
+            mapped_model_results: list[models.SearchResult] = []
+            for article_dict in actual_articles_data:  # article_dict is already known to be a dict here if list comprehension was robust
+                # The linter error was here: isinstance(article_dict, dict) is redundant
+                # Assuming actual_articles_data is correctly populated with dicts
+                mapped_model = self._map_pubmed_to_search_result(
+                    review_id, article_dict
+                )
+                if mapped_model:
+                    mapped_model_results.append(mapped_model)
+
+            if not mapped_model_results:
+                logger.info(
+                    f"No results successfully mapped from PubMed for review {review_id!r}."
+                )
+                return []
+
+            # Assign to the variable that will be used in the final return statement
+            added_search_result_models_for_conversion = mapped_model_results
 
         except Exception as e:
             logger.opt(exception=True).error(
-                f"PubMed Entrez.efetch failed for PMIDs: {pmids!r}"
+                f"Error during PubMed API interaction for query '{query}': {e!r}"
             )
-            raise ServiceError("PubMed fetch (efetch) failed") from e
+            raise ServiceError(
+                f"PubMed API interaction failed for query '{query}'."
+            ) from e
 
-        # Map and Store results within a single transaction
-        added_results_output: list[models.SearchResult] = []
-        if not records_to_map:
-            return added_results_output
-
-        logger.info(f"Mapping {len(records_to_map)} fetched PubMed records...")
-        with self.session_factory.begin() as session:
-            try:
-                results_to_add: list[models.SearchResult] = []
-                for raw_record in records_to_map:
-                    # Clean the raw record first using the helper
-                    try:
-                        # recursive_clean handles various BioPython types and returns standard types
-                        clean_record = self._recursive_clean(raw_record)
-
-                        # Check if the cleaned result is a dictionary, as expected by the mapper
-                        if not isinstance(clean_record, dict):
-                            logger.warning(
-                                f"Skipping record after cleaning: Expected dict, got {type(clean_record)}. Original: {str(raw_record)[:200]}"
-                            )
-                            continue
-
-                    except Exception as clean_exc:
-                        logger.error(
-                            f"Failed to clean PubMed record: {clean_exc!r}. Record snippet: {str(raw_record)[:200]}"
-                        )
-                        continue  # Skip this record if cleaning fails
-
-                    # Now map the cleaned dictionary
-                    mapped_result = self._map_pubmed_to_search_result(
-                        review_id, clean_record
+        # This block handles database storage and transaction
+        try:
+            with self.session_factory.begin() as session:
+                # Use the already mapped model results from the API interaction block
+                if (
+                    not added_search_result_models_for_conversion
+                ):  # Should have been caught above, but as a safeguard
+                    logger.info(
+                        "No mapped models to store after API interaction phase concluded."
                     )
-
-                    if mapped_result:
-                        # Basic validation before adding to list
-                        if not mapped_result.source_id or not mapped_result.title:
-                            logger.warning(
-                                f"Skipping mapped record due to missing source_id or title: {mapped_result.source_id}"
-                            )
-                            continue
-                        results_to_add.append(mapped_result)
-                    else:
-                        # Error is logged within the mapping function
-                        logger.warning("Failed to map a PubMed record.")
-
-                if not results_to_add:
-                    logger.info("No valid PubMed results mapped for addition.")
                     return []
+
+                persisted_models = self.search_repo.add_all(
+                    session, added_search_result_models_for_conversion
+                )
+
+                refreshed_models: list[models.SearchResult] = []
+                for model_instance in persisted_models:
+                    session.refresh(model_instance)
+                    refreshed_models.append(model_instance)
+
+                # Update the list for final conversion with refreshed models
+                added_search_result_models_for_conversion = refreshed_models
 
                 logger.info(
-                    f"Attempting to add {len(results_to_add)} mapped PubMed results to the database..."
+                    f"Successfully stored and refreshed {len(added_search_result_models_for_conversion)} results from PubMed for review {review_id!r}"
                 )
-                try:
-                    # Pass the session to the repository method
-                    added_results_in_session = self.search_repo.add_all(
-                        session, results_to_add
-                    )
-                    logger.info(
-                        f"Added/flushed {len(added_results_in_session)} PubMed results to session for review {review_id!r}."
-                    )
-                    # Commit is handled by session_factory.begin()
-                    # Refresh results within the same session after potential flush
-                    refreshed_results = []
-                    for result in added_results_in_session:
-                        try:
-                            session.refresh(result)
-                            refreshed_results.append(result)
-                        except Exception as refresh_exc:
-                            logger.warning(
-                                f"Could not refresh result {getattr(result, 'id', '?')} after add_all: {refresh_exc!r}"
-                            )
-                            refreshed_results.append(
-                                result
-                            )  # Still append potentially stale object
-                    added_results_output = refreshed_results
-                    logger.info(
-                        f"Stored and refreshed {len(added_results_output)} PubMed results."
-                    )
+                # The conversion to schema happens outside this try/except, using the final list of models
 
-                except repositories.ConstraintViolationError as e:
-                    logger.warning(
-                        f"Constraint violation during PubMed add_all, likely duplicates: {e!r}"
-                    )
-                    # Rollback is handled by session_factory.begin()
-                    logger.info("Transaction rolled back due to constraint violation.")
-                    # Return empty list or re-raise depending on desired behavior. Returning empty for now.
-                    return []
+        except repositories.ConstraintViolationError as e:
+            logger.warning(
+                f"Constraint violation storing PubMed results for review {review_id!r}, likely duplicates: {e!r}"
+            )
+            return []  # Return empty list on constraint violation
+        except Exception as e:
+            logger.opt(exception=True).error(
+                f"Database error storing PubMed results for review {review_id!r}: {e!r}"
+            )
+            raise ServiceError(
+                f"Failed to store PubMed results for review {review_id!r}."
+            ) from e
 
-            except Exception as e:
-                logger.exception(
-                    f"Error during mapping or storing PubMed results for review {review_id!r}"
-                )
-                # Rollback is handled automatically by .begin() context manager on exception
-                raise ServiceError("Failed to map or store PubMed results") from e
-
-        return added_results_output
+        # Final conversion to schema and return
+        return [
+            schemas.SearchResultRead.model_validate(model_res, from_attributes=True)
+            for model_res in added_search_result_models_for_conversion
+        ]
 
     def get_search_results_by_review_id(
         self, review_id: uuid.UUID
-    ) -> Sequence[models.SearchResult]:
-        """Retrieves all search results associated with a given review ID (sync)."""
+    ) -> Sequence[schemas.SearchResultRead]:  # MODIFIED return type
+        """Retrieves all search results associated with a given review ID (sync), converted to schemas."""  # MODIFIED comment
         logger.debug(f"Getting search results for review_id: {review_id!r}")
         # Use the internal session factory with .begin() for transaction management
         with self.session_factory.begin() as session:
             try:
                 # Pass the internally managed session to the repository method
-                results = self.search_repo.get_by_review_id(session, review_id)
+                results_models = self.search_repo.get_by_review_id(session, review_id)
                 logger.debug(
-                    f"Found {len(results)} search results for review {review_id!r}"
+                    f"Found {len(results_models)} search results for review {review_id!r}"
                 )
-                return results
+                # Convert to Pydantic schema before returning
+                return [
+                    schemas.SearchResultRead.model_validate(res, from_attributes=True)
+                    for res in results_models
+                ]  # MODIFIED
             except Exception as e:
                 logger.exception(
                     f"Error getting search results for review {review_id!r}"
@@ -680,8 +654,8 @@ class SearchService(BaseService):
         review_id: uuid.UUID,
         source_db: SearchDatabaseSource,
         source_id: str,
-    ) -> models.SearchResult | None:
-        """Retrieves a specific search result using its source database and ID (sync)."""
+    ) -> schemas.SearchResultRead | None:  # MODIFIED return type
+        """Retrieves a specific search result using its source database and ID (sync), converted to schema."""  # MODIFIED comment
         logger.debug(
             f"Getting search result for review {review_id!r}, source {source_db.name!r}, id {source_id!r}"
         )
@@ -689,14 +663,16 @@ class SearchService(BaseService):
         with self.session_factory.begin() as session:
             try:
                 # Pass the internally managed session to the repository method
-                result = self.search_repo.get_by_source_details(
+                result_model = self.search_repo.get_by_source_details(
                     session, review_id, source_db, source_id
                 )
-                if result:
-                    logger.debug(f"Found search result {result.id!r}")
-                else:
-                    logger.debug("Search result not found.")
-                return result
+                if result_model:
+                    logger.debug(f"Found search result {result_model.id!r}")
+                    return schemas.SearchResultRead.model_validate(
+                        result_model, from_attributes=True
+                    )  # MODIFIED
+                logger.debug("Search result not found by source details.")
+                return None  # MODIFIED (ensure None is returned if model not found)
             except Exception as e:
                 logger.exception(
                     f"Error getting search result for review {review_id!r}, source {source_db.name!r}, id {source_id!r}"
@@ -711,8 +687,8 @@ class SearchService(BaseService):
         self,
         result_id: uuid.UUID,
         update_data: schemas.SearchResultUpdate,  # Changed signature
-    ) -> models.SearchResult:
-        """Updates an existing search result using Pydantic schema for update data."""
+    ) -> schemas.SearchResultRead:  # MODIFIED return type
+        """Updates an existing search result using Pydantic schema for update data, returns updated schema."""  # MODIFIED comment
         logger.debug(f"Updating search result id: {result_id!r}")
 
         with (
@@ -720,8 +696,8 @@ class SearchService(BaseService):
         ):  # Use .begin() for transaction management
             try:
                 # Fetch the existing SearchResult object
-                db_search_result = self.search_repo.get_by_id(session, result_id)
-                if not db_search_result:
+                db_search_result_model = self.search_repo.get_by_id(session, result_id)
+                if not db_search_result_model:
                     # Raise a specific error if not found, to be handled by caller or logger
                     raise repositories.RecordNotFoundError(
                         f"SearchResult with id {result_id} not found for update."
@@ -730,27 +706,29 @@ class SearchService(BaseService):
                 # Apply updates from the Pydantic schema to the SQLModel instance
                 # model_dump(exclude_unset=True) ensures only provided fields are used for update
                 update_dict = update_data.model_dump(exclude_unset=True)
-
-                # Update the db_search_result object with new data
-                # SQLModel instances have a .sqlmodel_update method for this
                 for key, value in update_dict.items():
-                    setattr(db_search_result, key, value)
+                    # Map screening_decision from update schema to final_decision on the model
+                    if key == "screening_decision":
+                        db_search_result_model.final_decision = value
+                    else:
+                        setattr(db_search_result_model, key, value)
 
                 # The repository's update method should handle adding to session and flushing.
-                # Based on the provided repository.py, it does merge and flush.
-                updated_result_from_repo = self.search_repo.update(
-                    session, db_search_result
+                updated_result_from_repo_model = self.search_repo.update(
+                    session, db_search_result_model
                 )
 
                 # Explicitly refresh the instance after the repository has flushed it,
                 # to ensure all server-side changes (e.g., onupdate timestamps) are loaded.
-                session.refresh(updated_result_from_repo)
+                session.refresh(updated_result_from_repo_model)
 
                 logger.info(
-                    f"Successfully updated search result {updated_result_from_repo.id!r}"
+                    f"Successfully updated search result {updated_result_from_repo_model.id!r}"
                 )
                 # Commit is handled by session_factory.begin() on successful exit
-                return updated_result_from_repo
+                return schemas.SearchResultRead.model_validate(
+                    updated_result_from_repo_model, from_attributes=True
+                )  # MODIFIED
 
             except repositories.RecordNotFoundError:  # Specific re-raise
                 # Logged by repo or service can log here too. Re-raise to inform caller.
