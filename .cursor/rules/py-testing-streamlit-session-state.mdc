@@ -1,0 +1,192 @@
+---
+description: 
+globs: tests/unit/app/pages/*.py,src/sr_assistant/app/pages/*.py
+alwaysApply: false
+---
+# Testing Streamlit Pages with Session State
+
+When unit testing Streamlit pages (`*.py` files typically under `app/pages/`) that interact heavily with `st.session_state`, it's crucial to correctly mock `st.session_state` to ensure predictable behavior, especially for operations like attribute access, `in` checks, and iteration.
+
+## Key Principles:
+
+1.  **Use `pytest-mock` (`mocker` fixture):** For all mocking, prefer the `mocker` fixture from `pytest-mock` over `unittest.mock.patch` decorators. This aligns with project standards. See [py-unit-testing-rules](mdc:.cursor/rules/py-unit-testing-rules.mdc).
+2.  **Isolate `st.session_state`:** When testing a Streamlit page function (e.g., `search_page`), the `st` module imported by that page should be mocked (e.g., `mock_st_object = mocker.patch("path.to.your.page.st")`). Consequently, `st.session_state` within the function under test becomes `mock_st_object.session_state`.
+3.  **Custom `MockSessionState` Class:** To accurately simulate `st.session_state`'s dictionary-like and attribute-access behavior, especially for the `in` operator and dynamic attribute creation/access, use a custom wrapper class. This class should use a backing dictionary.
+
+## Example `MockSessionState` Implementation and Usage:
+
+It's highly recommended to create a shared pytest fixture that provides this mocked session state environment.
+
+**1. Shared Fixture (`conftest.py` or a test utility file):**
+
+```python
+# conftest.py or equivalent shared test utilities
+import pytest
+import streamlit as st # Import the actual st for spec
+from pytest_mock import MockerFixture
+import typing
+from collections.abc import KeysView # For type hinting
+
+@pytest.fixture
+def mock_session_state_manager(mocker: MockerFixture) -> tuple[MagicMock, dict[str, typing.Any]]:
+    """
+    Mocks the 'st' module's 'session_state' for a target module (e.g., a Streamlit page).
+    It replaces st.session_state with an instance of MockSessionState,
+    which uses a dictionary as a backing store for more predictable behavior in tests.
+
+    Returns:
+        A tuple containing:
+        - The mock object for the 'st' module itself (e.g., from mocker.patch("path.to.page.st")).
+        - The backing dictionary used by the MockSessionState instance.
+    """
+    _backing_dict = {} 
+
+    class MockSessionState:
+        def __init__(self, backing_dict_ref: dict[str, typing.Any], mocker_instance: MockerFixture):
+            # Use object.__setattr__ to avoid recursion with our custom __setattr__
+            object.__setattr__(self, "_backing_dict", backing_dict_ref)
+            object.__setattr__(self, "_mocker", mocker_instance)
+
+        def __getattr__(self, name: str) -> typing.Any:
+            if name in self._backing_dict:
+                return self._backing_dict[name]
+            # If an attribute is accessed that isn't explicitly set,
+            # create a new MagicMock for it and store it.
+            # This mimics Streamlit's behavior where session state attributes
+            # can often be created on first access.
+            # Check for dunder methods to avoid issues with MagicMock internals
+            if name.startswith("__") and name.endswith("__"):
+                 raise AttributeError(f"Dunder attribute {name} not found in MockSessionState backing dict")
+            
+            # print(f"DEBUG MockSessionState __getattr__ for '{name}', not in backing_dict, creating new mock")
+            new_mock = self._mocker.MagicMock(name=f"session_state_auto_attr_{name}")
+            self._backing_dict[name] = new_mock # Store for future access and 'in' checks
+            return new_mock
+
+        def __setattr__(self, name: str, value: typing.Any) -> None:
+            self._backing_dict[name] = value
+        
+        def __delattr__(self, name: str) -> None:
+            if name in self._backing_dict:
+                del self._backing_dict[name]
+            # Streamlit's SessionState might not raise an error for non-existent keys,
+            # or it might. Match behavior as needed or allow AttributeError.
+            # else:
+            #    raise AttributeError(f"MockSessionState: cannot delete non-existent attribute '{name}'")
+
+        def __contains__(self, key: str) -> bool:
+            return key in self._backing_dict
+        
+        def get(self, key: str, default: typing.Any = None) -> typing.Any:
+            return self._backing_dict.get(key, default)
+
+        def keys(self) -> KeysView[str]:
+            return self._backing_dict.keys()
+        
+        # Add other dictionary-like methods if your SUT uses them (e.g., items, values, __iter__)
+
+    # Example: Patching 'st' for 'src.sr_assistant.app.pages.search.st'
+    # The actual path will depend on the module under test.
+    # This fixture assumes the test function will provide the path to 'st'.
+    # For a general fixture, this patching might need to be more flexible or done in the test.
+    # Let's assume the test using this fixture will handle patching the specific 'st' module path.
+    # This fixture will just provide the MockSessionState class and how to use it.
+    # So, the fixture would return the class or a factory.
+    #
+    # Simpler: This fixture provides a pre-configured mock_st object.
+    # The user of the fixture needs to specify which 'st' module to patch.
+    # This example patches a common location, adjust as needed.
+    
+    # This fixture will create and return an instance of MockSessionState
+    # It's up to the test to assign it to a patched st.session_state
+    
+    # Revised fixture: provides the configured MockSessionState instance directly
+    # The test would then assign it: mock_st_object.session_state = mock_session_state_instance
+
+    mock_st_object = mocker.patch("src.sr_assistant.app.pages.search.st") # Adjust path as needed
+    session_state_instance = MockSessionState(_backing_dict, mocker)
+    mock_st_object.session_state = session_state_instance
+    
+    return mock_st_object, _backing_dict
+
+
+@pytest.fixture(autouse=True)
+def clear_global_st_session_state():
+    """
+    Clears the *actual* streamlit.session_state before each test.
+    This is important if any code under test (or unrelated code/imports)
+    might modify the global st.session_state directly.
+    """
+    keys = list(st.session_state.keys()) 
+    for key in keys:
+        del st.session_state[key]
+
+```
+
+**2. Usage in a test file (e.g., `tests/unit/app/pages/test_search.py`):**
+(Referencing the successful `test_search_page_initial_load_and_search` from our session)
+
+```python
+# tests/unit/app/pages/test_search.py
+from pytest_mock import MockerFixture
+# Assuming mock_session_state_manager is in conftest.py or imported
+
+def test_example_streamlit_page_interaction(
+    mocker: MockerFixture, 
+    mock_session_state_manager: tuple[MagicMock, dict[str, typing.Any]]
+):
+    mock_st_object, session_backing_dict = mock_session_state_manager
+
+    # Other mocks for the page's dependencies (services, repos, etc.)
+    # Example:
+    # MockMyService = mocker.patch("path.to.page.MyService")
+    # mock_init_repo = mocker.patch("path.to.page.init_my_repository")
+
+    # Configure mocks for UI elements that return values
+    mock_st_object.text_input.return_value = "user input"
+    mock_st_object.slider.return_value = 10
+    mock_st_object.columns.return_value = (mocker.MagicMock(), mocker.MagicMock()) # Adjust count
+
+    # Set initial "session state" values that your page expects
+    # These will use the MockSessionState.__setattr__
+    mock_st_object.session_state.some_key = "initial_value"
+    mock_st_object.session_state.another_key = None 
+
+    # Ensure specific keys are absent if the page logic depends on "key not in st.session_state"
+    # This uses MockSessionState.__contains__ and __delattr__
+    if 'key_to_ensure_is_absent' in mock_st_object.session_state:
+        del mock_st_object.session_state.key_to_ensure_is_absent
+    
+    # Configure button side effects
+    def button_side_effect(label: str, *args, **kwargs) -> bool:
+        if label == "Submit_Button_Being_Tested":
+            return True
+        return False # Other buttons are not "clicked"
+    mock_st_object.button.side_effect = button_side_effect
+
+    # Call your Streamlit page function
+    # your_page_module.page_function_under_test(params_if_any)
+
+    # Assertions
+    # Check calls to st functions (e.g., mock_st_object.write.assert_called_with(...))
+    # Check service/repo mock calls
+    # Check final state of session items via the backing dict or mock_st_object.session_state.attribute
+    assert mock_st_object.session_state.some_key == "expected_value_after_logic"
+    assert session_backing_dict.get("some_key") == "expected_value_after_logic"
+    # ...
+```
+
+## Explanation and Rationale:
+
+-   **Problem:** Directly mocking `st.session_state` with a simple `mocker.MagicMock()` doesn't correctly handle the `key in st.session_state` check, which uses `__contains__`. It also might not perfectly mimic attribute creation on first access if the page relies on that.
+-   **Solution:** The `MockSessionState` class, backed by a Python dictionary (`_backing_dict`), provides explicit implementations for `__getattr__`, `__setattr__`, `__delattr__`, and `__contains__`. This ensures that when the Streamlit page code (which sees `st.session_state` as an instance of `MockSessionState`) performs these operations, they behave predictably.
+-   **Fixture Usage:** The `mock_session_state_manager` fixture sets up this environment. It patches the `st` module relevant to the page under test and replaces its `session_state` attribute with an instance of `MockSessionState`.
+-   **Test Logic:**
+    -   Tests use the fixture to get the `mock_st_object`.
+    -   Initial session state conditions are set on `mock_st_object.session_state.your_key = value`.
+    -   The page function is called.
+    -   Assertions can be made on `mock_st_object` calls (e.g., `mock_st_object.write`) and on the final state of session items (e.g., `assert mock_st_object.session_state.your_key == expected_value`).
+
+This pattern was crucial for successfully testing the `search_page` in [src/sr_assistant/app/pages/search.py](mdc:src/sr_assistant/app/pages/search.py) as seen in our debugging session for `test_search_page_initial_load_and_search` in [tests/unit/app/pages/test_search.py](mdc:tests/unit/app/pages/test_search.py).
+
+By following this, tests for Streamlit pages become more robust and less prone to subtle issues with mock behavior for session state. 

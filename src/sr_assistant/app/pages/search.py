@@ -1,20 +1,24 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 import streamlit as st
-from Bio import Entrez
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from loguru import logger
 from pydantic import BaseModel, Field
 
+from sr_assistant.app.services import SearchService
 from sr_assistant.core.models import CriteriaFramework, SystematicReview
 from sr_assistant.core.repositories import (
-    SearchResultRepository,
     SystematicReviewRepository,
 )
-from sr_assistant.step2.pubmed_integration import pubmed_fetch_details, pubmed_search
+
+# Define TypeVar for structured output types
+T = TypeVar("T")
+StructuredLLMOutput = Callable[[dict[str, Any]], T]
 
 
 class PubMedQuery(BaseModel):
@@ -85,14 +89,15 @@ def get_query(review: SystematicReview) -> str:
         fallback_chain = fallback_prompt | ChatOpenAI(
             model="gpt-4o", temperature=0.0
         ).with_structured_output(PubMedQuery)
-        result_object: PubMedQuery = fallback_chain.invoke(
+        result_object = fallback_chain.invoke(
             {"research_question": review.research_question}
         )
-        return result_object.query if result_object else ""
+        # LangChain's result type is complex, but we know it implements a 'query' attribute
+        return result_object.query  # type: ignore
 
     pico = review.criteria_framework_answers
     logger.info(f"Generating query from PICO: {pico}")
-    result_object: PubMedQuery = st.session_state.query_chain.invoke(
+    result_object = st.session_state.query_chain.invoke(
         {
             "background": review.background or "",
             "research_question": review.research_question,
@@ -103,21 +108,12 @@ def get_query(review: SystematicReview) -> str:
             "exclusion_criteria": review.exclusion_criteria or "",
         }
     )
-    return result_object.query if result_object else ""
+    # LangChain's result type is complex, but we know it implements a 'query' attribute
+    return result_object.query  # type: ignore
 
 
 def gen_query_cb() -> None:
     st.session_state.query_value = get_query(st.session_state.review)
-
-
-def expand_query_cb() -> None:
-    Entrez.email = st.session_state.config.NCBI_EMAIL
-    Entrez.api_key = st.session_state.config.NCBI_API_KEY.get_secret_value()
-
-    with Entrez.esearch(db="pubmed", term=st.session_state.query_value) as handle:
-        result = Entrez.read(handle)  # type: ignore
-        res = result.get("QueryTranslation", "")  # type: ignore
-    st.session_state.query_value = res
 
 
 def init_review_repository() -> SystematicReviewRepository:
@@ -125,13 +121,6 @@ def init_review_repository() -> SystematicReviewRepository:
         repo = SystematicReviewRepository()
         st.session_state.repo_review = repo
     return st.session_state.repo_review
-
-
-def init_pubmed_repository() -> SearchResultRepository:
-    if "search_repo" not in st.session_state:
-        repo = SearchResultRepository()
-        st.session_state.search_repo = repo
-    return st.session_state.search_repo
 
 
 def search_page(review_id: uuid.UUID | None = None) -> None:
@@ -162,7 +151,7 @@ def search_page(review_id: uuid.UUID | None = None) -> None:
     current_review = st.session_state.review
 
     init_query_chain()
-    repo = init_pubmed_repository()
+    search_service = SearchService()
 
     # Initial query generation using the loaded review
     if "query_value" not in st.session_state or st.session_state.query_value is None:
@@ -175,7 +164,7 @@ def search_page(review_id: uuid.UUID | None = None) -> None:
         height=100,
         key="query",  # Keep key if needed for direct access, though callbacks use query_value
     )
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3 = st.columns(3)
     with col1:
         submitted = st.button("Search")
     with col2:
@@ -188,38 +177,31 @@ def search_page(review_id: uuid.UUID | None = None) -> None:
         )
     with col3:
         st.button("Generate query", on_click=gen_query_cb)
-    with col4:
-        st.button("Expand query", on_click=expand_query_cb)
 
     if submitted:
         with st.status("Searching...", expanded=True) as status:
             try:
-                # Search PubMed
                 logger.info("Searching PubMed: {!r}", st.session_state.query_value)
-                st.write("Searching PubMed...")
-                pmids = pubmed_search(
-                    st.session_state.query_value, st.session_state.max_results
+                st.write("Searching PubMed and storing results...")
+
+                # Call SearchService
+                search_results = search_service.search_pubmed_and_store_results(
+                    review_id=current_review.id,
+                    query=st.session_state.query_value,
+                    max_results=st.session_state.max_results,
                 )
-                if not pmids:
+
+                if not search_results:
                     st.warning("No results found")
-                    status.update(
-                        label="No results found", state="complete"
-                    )  # Update status
-                    st.stop()  # Stop further processing
+                    status.update(label="No results found", state="complete")
+                else:
+                    logger.info(f"Search returned {len(search_results)} articles")
+                    st.success(
+                        f"Search complete. Found {len(search_results)} articles."
+                    )
+                    # Store results in session state for display
+                    st.session_state.search_results = search_results
 
-                st.write(f"Found {len(pmids)} results, fetching study details ...")
-
-                # Fetch details
-                records = pubmed_fetch_details(pmids)
-                logger.info(f"Fetched {len(records['PubmedArticle'])} study details")
-                st.write(f"Fetched {len(records['PubmedArticle'])} study details")
-
-                # Store in Supabase
-                results = repo.store_results(
-                    review_id, st.session_state.query_value, records
-                )
-                logger.info(f"Stored {len(results)} articles")
-                st.success(f"Stored {len(results)} articles")
                 status.update(label="Search complete", state="complete")
 
             except Exception as e:
@@ -229,37 +211,46 @@ def search_page(review_id: uuid.UUID | None = None) -> None:
                 # Do not return here, allow results display below
 
     if st.button("Clear search results"):
-        repo.delete_by_review_id(review_id)
-        st.session_state.search_results = []  # Clear local state too
-        st.success("Search results cleared")
-        st.rerun()  # Rerun to reflect cleared results
+        # NOTE: This currently only clears results from the session state display.
+        # It does not delete any data from the database.
+        # Future improvement: Add a SearchService.delete_results_by_review_id method
+        # that properly manages the database transaction.
+        st.session_state.search_results = []
+        logger.info(f"Cleared search results for review_id: {review_id}")
+        st.success("Search results cleared from display. Re-search to fetch again.")
+        st.rerun()
 
-    # Show existing results
-    existing = repo.get_by_review_id(review_id)
+    # Show existing results - now from st.session_state.search_results populated by the service call
+    if "search_results" not in st.session_state:
+        st.session_state.search_results = []  # Initialize if not present
+
+    existing = st.session_state.search_results
+
     if not existing:
-        st.info("No search results available for this review yet.")
-        st.stop()  # Stop if no results
-
-    st.session_state.search_results = existing
+        st.info("No search results available. Perform a search to fetch articles.")
+        # st.stop() # Allow page to render even with no results
 
     st.divider()
     df_data = [
         {
-            "PMID": r.pmid,
+            "Source ID": r.source_id,
             "DOI": r.doi,
-            "PMC": r.pmc,
             "Title": r.title,
             "Journal": r.journal,
             "Year": r.year,
-            "Query": r.query,
         }
         for r in existing
     ]
+
     st.dataframe(df_data, use_container_width=True)
 
     if existing:
-        if pmid := st.selectbox("Select article:", [r.pmid for r in existing]):
-            article = next((r for r in existing if r.pmid == pmid), None)
+        if selected_source_id := st.selectbox(
+            "Select article by Source ID:", [r.source_id for r in existing]
+        ):
+            article = next(
+                (r for r in existing if r.source_id == selected_source_id), None
+            )
             if article:
                 st.subheader(article.title)
                 st.text(f"{article.journal} ({article.year})")

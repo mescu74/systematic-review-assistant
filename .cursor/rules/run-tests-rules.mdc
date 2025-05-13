@@ -1,0 +1,17 @@
+---
+description: 
+globs: tests/**/*.py
+alwaysApply: false
+---
+
+## Rules for running tests
+
+### Unit testing rules
+- ALWAAYS run unit tests with `make test.unit`, these must ALL pass before a story is marked for review. The command provides coverage report to terminal and htmlcov/.
+- REMEMBER unit tests coverage target is **80%**
+- If a unit test NOT related to your current story and task is failing, it means YOUR NEW CODE BROKE IT. DO NOT touch the failing test. Fix your own code instead.
+- It is OK for tests related to YOUR current story and task to fail during development (story status: `In-Progress`).
+
+### Integration testing rules
+- NEVER run `make test.integration` unless EXPLICITLY INSTRUCTED. *Rationale*: it is very slow and expensive, and there are known failing tests that will be addressed later on.
+- ALWAYS run TARGETED integration tests: `uv run pytest -m integration tests/integration/<pkg>/test_example.py`

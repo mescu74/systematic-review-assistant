@@ -415,7 +415,7 @@ class TestSearchServiceMapPubmedToSearchResult:
             record_no_title["MedlineCitation"] = {"Article": {"ArticleTitle": ""}}
 
         assert (
-            search_service_no_deps._map_pubmed_to_search_result(  # noqa: SLF001
+            search_service_no_deps._map_pubmed_to_search_result(  # noqa
                 review_id, record_no_title
             )
             is None
