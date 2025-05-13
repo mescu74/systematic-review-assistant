@@ -35,7 +35,7 @@ Manages search operations against external academic databases (e.g., PubMed, Sco
 #### Revised Key Methods
 
 - **`__init__(self, factory: sessionmaker[Session] = session_factory, search_repo: SearchResultRepository | None = None, http_client: httpx.AsyncClient | None = None)`**
-  - Initializes the service.
+  - Initializes the service. The `factory` parameter allows injection of a SQLAlchemy `sessionmaker` for database sessions, typically defaulting to the application's main `session_factory` from `sr_assistant.app.database`.
 
 - **`search_pubmed_and_store_results(self, review_id: uuid.UUID, query: str, max_results: int = 100) -> Sequence[models.SearchResult]`**
   - **Purpose:** Performs a PubMed search, maps results, and stores them.
@@ -102,7 +102,7 @@ Manages systematic review data, interacting with `SystematicReviewRepository`.
 #### Revised Key Methods
 
 - **`__init__(self, factory: sessionmaker[Session] = session_factory, review_repo: SystematicReviewRepository | None = None)`**
-  - Initializes the service.
+  - Initializes the service. The `factory` parameter allows injection of a SQLAlchemy `sessionmaker`, typically defaulting to the application's main `session_factory` from `sr_assistant.app.database`.
 
 - **`create_review(self, review_data: schemas.SystematicReviewCreate) -> models.SystematicReview`**
   - **Purpose:** Creates a new systematic review.
@@ -156,8 +156,8 @@ Manages screening decisions (from conservative and comprehensive LLM reviewers) 
 
 #### Revised Key Methods
 
-- **`__init__(self, ..., screen_repo: ScreenAbstractResultRepository | None = None, resolution_repo: ScreeningResolutionRepository | None = None, search_repo: SearchResultRepository | None = None)`**
-  - Initializes the service with necessary repositories and session factory.
+- **`__init__(self, factory: sessionmaker[Session] = session_factory, screen_repo: ScreenAbstractResultRepository | None = None, resolution_repo: ScreeningResolutionRepository | None = None, search_repo: SearchResultRepository | None = None)`**
+  - Initializes the service with necessary repositories and a session factory. The `factory` parameter allows injection of a SQLAlchemy `sessionmaker`, typically defaulting to the application's main `session_factory` from `sr_assistant.app.database`.
 
 - **`add_screening_decision(self, search_result_id: uuid.UUID, screening_strategy: ScreeningStrategyType, screening_data: schemas.ScreeningResultCreate) -> models.ScreenAbstractResult`**
   - **Purpose:** Adds a new screening decision to the system. It creates a `ScreenAbstractResult` record and then updates the corresponding `SearchResult` (identified by `search_result_id`) to link to this new record via its `conservative_result_id` or `comprehensive_result_id` field, based on the `screening_strategy`.
@@ -258,7 +258,7 @@ Manages screening decisions (from conservative and comprehensive LLM reviewers) 
 - Ensure Pydantic schemas for service inputs (e.g., `ScreeningResultCreate`, `ScreeningResultUpdate`) are clearly defined in `src/sr_assistant/core/schemas.py`.
 - The output of the resolver chain is `schemas.ScreeningResolutionSchema`.
 - The input to the resolver chain (`invoke_resolver_agent_batch`) is a list of dictionaries, each matching the input variables of the `resolver_prompt`.
-- The linter error regarding `models.ScreenAbstractResult(id=result_id, **update_data)` in the *current* `services.py` must be avoided. Service methods should explicitly construct model instances from validated Pydantic schema fields.
+- **Pydantic Model Instantiation:** When creating SQLModel instances (e.g., `models.ScreenAbstractResult`) from Pydantic schema data (e.g., `schemas.ScreeningResultCreate`), use the `ModelName.model_validate(data_dict)` method (e.g., `models.ScreenAbstractResult.model_validate(screening_create_data.model_dump())`) as per `docs/coding-standards.md`. Avoid direct instantiation with `**data_dict` if it leads to type errors or bypasses Pydantic v2 validation strictness.
 - Address the unused `e` variable linter error in the current `services.py` (`get_screening_result_by_strategy`).
 - Type hints for generic `dict` should be `dict[str, Any]` or a more specific `TypedDict` if applicable.
 
@@ -318,4 +318,14 @@ This chain is responsible for resolving disagreements between the conservative a
 
 ## Data Models
 
-Refer to `docs/data-models.md` for detailed definitions of SQLModel database models (e.g., `SearchResult`, `SystematicReview`, `ScreenAbstractResult`, `ScreeningResolution`) and core Pydantic schemas (e.g., `ScreeningResultCreate`, `ScreeningResultUpdate`, `SearchResultUpdate`, `ScreeningResponse`, `ScreeningResolutionSchema`) used throughout the application. 
+Refer to [Data Models Document](data-models.md) for detailed definitions of SQLModel database models (e.g., `SearchResult`, `SystematicReview`, `ScreenAbstractResult`, `ScreeningResolution`) and core Pydantic schemas (e.g., `ScreeningResultCreate`, `ScreeningResultUpdate`, `SearchResultUpdate`, `ScreeningResponse`, `ScreeningResolutionSchema`) used throughout the application.
+
+## Change Log
+
+| Date       | Version | Description                                                                                                                               | Author          |
+|------------|---------|-------------------------------------------------------------------------------------------------------------------------------------------|-----------------|
+| 2025-05-10 | 0.1     | Initial draft: Outlined SearchService, ReviewService, ScreeningService APIs based on existing `services.py`.                               | Architect Agent |
+| 2025-05-10 | 0.2     | Major Refactor: Corrected SearchService (encapsulated API calls), ScreeningService (input schemas, new resolver methods).                   | Architect Agent |
+| 2025-05-10 | 0.3     | Session Mgt Update: Removed session parameters from all public service methods to enforce internal session management.                        | Architect Agent |
+| 2025-05-10 | 0.4     | LLM I/O Schemas: Clarified `ScreeningResolutionSchema` vs. conceptual `ResolverInput/Output`. Corrected `ScreenAbstractsChainOutputDict` details. | Architect Agent |
+| 2025-05-12 | 0.5     | Formatting & Finalization: Corrected Markdown H4/bolding. Ensured `model_validate` note. Restored LLM Agent/Data Model sections. Added Changelog. Clarified session factory injection. Updated all dates. | Architect Agent |

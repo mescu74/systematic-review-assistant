@@ -119,7 +119,7 @@ This testing strategy document will be reviewed and updated as the project evolv
 
 | Change          | Date       | Version | Description             | Author          |
 |-----------------|------------|---------|-------------------------|-----------------|
-| Initial Draft   | 2025-05-10 | 0.1     | First draft of Testing Strategy. | Architect Agent |
-| Tooling Update  | 2025-05-10 | 0.1.1   | Corrected Unit Test tooling to specify `pytest-mock` instead of `unittest.mock`. | Architect Agent |
-| Env & CI Update | 2025-05-10 | 0.1.2   | Corrected prototype DB name and clarified CI execution for unit/integration tests. | Architect Agent |
-| Added Hypothesis| 2025-05-10 | 0.2.0   | Incorporated Hypothesis for property-based testing into the strategy. | Architect Agent | 
+| Initial Draft   | 2025-05-12 | 0.1     | First draft of Testing Strategy. | Architect Agent |
+| Tooling Update  | 2025-05-12 | 0.1.1   | Corrected Unit Test tooling to specify `pytest-mock` instead of `unittest.mock`. | Architect Agent |
+| Env & CI Update | 2025-05-12 | 0.1.2   | Corrected prototype DB name and clarified CI execution for unit/integration tests. | Architect Agent |
+| Added Hypothesis| 2025-05-12 | 0.2.0   | Incorporated Hypothesis for property-based testing into the strategy. | Architect Agent | 

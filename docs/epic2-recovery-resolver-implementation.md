@@ -197,6 +197,11 @@ Reference: `docs/prd-resolver.md` for detailed original specifications.
 
 - **User Story / Goal:** As a developer, I need the `ScreeningService` in `services.py` to be refactored to align with `docs/api-reference.md` (correct method signatures, internal session management, proper Pydantic schema usage) and to implement all new methods required for the conflict resolution workflow, so that screening operations and conflict resolution are robust, maintainable, and correctly implemented.
 - **Detailed Requirements:**
+    **Note on Current State of `services.py`:** The existing `src/sr_assistant/app/services.py` file, particularly the `ScreeningService` parts, contains large functions with mixed responsibilities (e.g., `add_or_update_screening_result`), direct Pydantic model instantiation issues (e.g., using `Model(**data)` instead of `Model.model_validate(data)`), and numerous linter errors. The refactoring under this story MUST address these by:
+        *   Breaking down logic into smaller, well-defined private helper methods.
+        *   Adhering to Pydantic best practices for model instantiation (use `.model_validate()`) as per `docs/coding-standards.md`.
+        *   Improving modularity, readability, and testability.
+        *   All linter errors within the refactored `ScreeningService` section MUST be resolved.
     1.  **Refactor Existing `ScreeningService` Methods:**
         *   **Session Management:** All public methods in `ScreeningService` (e.g., `add_screening_decision`, `update_screening_decision`, `get_screening_decision_by_id`, etc.) MUST manage their own database sessions internally. The `session: Session | None` parameter MUST be removed from all public method signatures.
         *   **`add_screening_decision`:**
@@ -231,7 +236,7 @@ Reference: `docs/prd-resolver.md` for detailed original specifications.
     *   AC9: Unit tests for all `ScreeningService` methods (existing refactored and new) achieve >80% coverage, mocking repositories and LLM calls where appropriate.
     *   AC10: Relevant integration tests for the resolver workflow involving `ScreeningService` pass.
 - **Tasks (Optional Initial Breakdown for SM):**
-    *   [ ] Task 2.5.1: Refactor existing `ScreeningService` methods (`add_screening_result`, `add_or_update_screening_result`, `get_screening_result_by_strategy`, etc.) for internal session management, correct Pydantic schema inputs (using `ScreeningResultCreate`/`Update`), and fix linter errors.
+    *   [ ] Task 2.5.1: Refactor existing `ScreeningService` methods (`add_screening_result`, `add_or_update_screening_result`, `get_screening_result_by_strategy`, etc.) for internal session management, correct Pydantic schema inputs (using `ScreeningResultCreate`/`Update`), ensure instantiation uses `Model.model_validate()`, and fix linter errors.
     *   [ ] Task 2.5.2: Implement `identify_disagreements` method in `ScreeningService`.
     *   [ ] Task 2.5.3: Implement `prepare_resolver_inputs` method in `ScreeningService`.
     *   [ ] Task 2.5.4: Implement `invoke_resolver_agent_batch` method in `ScreeningService` (to call resolver LLM chain).
@@ -247,7 +252,8 @@ Reference: `docs/prd-resolver.md` for detailed original specifications.
 
 | Change          | Date       | Version | Description             | Author               |
 |-----------------|------------|---------|-------------------------|----------------------|
-| Initial Draft   | 2025-05-09 | 0.1     | First draft of Epic 2   | Product Manager Agent |
-| Story 2.1 Update| 2025-05-10 | 0.2     | Expanded Story 2.1 to include all core Pydantic schema definitions, SQLModel updates, and resolver DB setup. | Architect Agent      |
-| Added Story 2.5 | 2025-05-10 | 0.3     | Added Story 2.5 for `ScreeningService` refactoring and resolver method implementation. | Architect Agent      |
-| Story 2.4 Update| 2025-05-10 | 0.4     | Expanded Story 2.4 to cover `screen_abstracts.py` service call alignment, resolver integration, and all UI logic. | Architect Agent      | 
+| Initial Draft   | 2025-05-12 | 0.1     | First draft of Epic 2   | Product Manager Agent |
+| Story 2.1 Update| 2025-05-12 | 0.2     | Expanded Story 2.1 to include all core Pydantic schema definitions, SQLModel updates, and resolver DB setup. | Architect Agent      |
+| Added Story 2.5 | 2025-05-12 | 0.3     | Added Story 2.5 for `ScreeningService` refactoring and resolver method implementation. | Architect Agent      |
+| Story 2.4 Update| 2025-05-12 | 0.4     | Expanded Story 2.4 to cover `screen_abstracts.py` service call alignment, resolver integration, and all UI logic. | Architect Agent      |
+| Story 2.5 Enh   | 2025-05-12 | 0.4.1   | Added note to Story 2.5 on current state of `ScreeningService` and refactoring requirements (modularity, Pydantic instantiation). | Architect Agent | 

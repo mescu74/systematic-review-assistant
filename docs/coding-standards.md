@@ -168,6 +168,15 @@ These rules help prevent common bugs and improve code robustness.
   - Define Pydantic model fields in the class body, not in `__init__` (PTC001).
   - Use `Field(default=...)` for default values, not direct assignment in class body if `Field` is also used for other purposes (PTC002, PTC007).
   - Use `model_validate` instead of `parse_obj` (PTC017).
+  
+## Pydantic Best Practices
+
+- Pydantic models are referred to as "schemas" in this project. Database models are referred to as "models".
+- **Use Model.model_validate(**obj):**
+  - **DO NOT** use `Model(**obj)`, it will cause Pyright type validation errors.
+  - **ALWAYS** use `Model.model_validate(**obj)` instead.
+- **Schemas should inheright from `sra_assistant.core.schemas.BaseSchema`:**
+  - *Rationale:* `BaseSchema` configures `model_config` with settings we want to use for all schemas unless there is a special reason not to. It's also fine to define a `FooBase(BaseSchema)` and `Bar(FooBase)`.
 
 ## AI Agent Specific Best Practices
 

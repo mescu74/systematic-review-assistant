@@ -902,3 +902,12 @@ This section summarizes key discrepancies found or recommendations made while do
 | ERD Fixes        | 2025-05-10 | 0.6.1   | Corrected Mermaid ERD syntax (comments, relationship naming for SearchResult to ScreenAbstractResult) in data-models.md. | Architect Agent |
 | ERD Completeness | 2025-05-10 | 0.6.2   | Added more fields to entities in ERD and included LogRecord model and its relationships. | Architect Agent |
 | Naming Convention Note | 2025-05-10 | 0.7     | Added a note regarding the ideal future renaming of `ScreeningResolutionSchema` to `ScreeningResolutionResponse` for consistency. | Architect Agent |
+| Initial Draft   | 2025-05-12 | 0.1     | Initial structure and SystematicReview schemas. | Architect Agent |
+| SearchResult Schemas | 2025-05-12 | 0.2     | Added SearchResultRead and SearchResultUpdate schemas. | Architect Agent |
+| Screening Schemas | 2025-05-12 | 0.3     | Added all Screening-related schemas (Response, Result, Create, Update, Read, ResolutionSchema, ResolutionCreate, ResolutionRead). | Architect Agent |
+| Suggestion Schemas & Notes | 2025-05-12 | 0.4     | Added Suggestion Agent schemas and comprehensive "Notes on Existing schemas.py". | Architect Agent |
+| AwareDatetime Fix & Principles | 2025-05-12 | 0.5     | Corrected AwareDatetime imports. Added Pydantic Field Docstring Standard to Guiding Principles. | Architect Agent |
+| ERD and Patterns | 2025-05-12 | 0.6     | Added Mermaid ERD for core SQLModels. (Pattern discussion moved to architecture.md) | Architect Agent |
+| ERD Fixes        | 2025-05-12 | 0.6.1   | Corrected Mermaid ERD syntax (comments, relationship naming). | Architect Agent |
+| ERD Completeness | 2025-05-12 | 0.6.2   | Added more fields to entities in ERD and included LogRecord model. | Architect Agent |
+| Naming Convention Note | 2025-05-12 | 0.7     | Added note regarding future renaming of `ScreeningResolutionSchema`. | Architect Agent |

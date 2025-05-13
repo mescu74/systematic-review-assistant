@@ -31,6 +31,8 @@ The architecture emphasizes a modular design with a clear separation of concerns
     -   *Rationale:* Provides a composable and declarative way to define complex LLM workflows, manage prompts, interact with models, parse outputs, and integrate features like retries and listeners (callbacks).
 -   **Dependency Injection (Conceptual via Constructors):** Services and repositories are initialized with their dependencies (e.g., session factories, other repositories) primarily through their constructors.
     -   *Rationale:* Facilitates testability (dependencies can be easily mocked) and makes component dependencies explicit.
+-   **Dependency Injection for Session Factory:** Services receive their `sessionmaker` instance (referred to as `session_factory`) via constructor injection. This factory defaults to the main application `session_factory` defined in `sr_assistant.app.database.py`, allowing for easy instantiation in the application while enabling tests to inject mock factories.
+    -   *Rationale:* Crucial for testability of services, as it allows mocking of database session creation and interaction.
 -   **Internal Session Management in Services:** Each public service method is responsible for managing the lifecycle of its database session.
     -   *Rationale:* Encapsulates transaction control within the service method that represents a single unit of work, preventing session leakage to the UI layer and simplifying calling code.
 -   **Industry best practices** (e.g., PEP 8 via Ruff, conventional commits, Pydantic for validation) are followed where possible, guided by `docs/coding-standards.md`.
@@ -413,10 +415,11 @@ This architecture document should be treated as a living document. It will be re
 
 | Change          | Date       | Version | Description             | Author          |
 |-----------------|------------|---------|-------------------------|-----------------|
-| Initial Draft   | 2025-05-10 | 0.1     | First draft of Architecture document. | Architect Agent |
-| Diagram Updates | 2025-05-10 | 0.2     | Corrected context/component diagram syntax and added sequence diagrams for key workflows. | Architect Agent |
-| Future Vision   | 2025-05-10 | 0.3     | Added Section 8 on Future Architectural Considerations & Evolution, and Section 9 on Document Maintenance. Elaborated on Transparency & Auditability. | Architect Agent |
-| Link Formatting | 2025-05-10 | 0.3.1   | Corrected internal document references to use Markdown link syntax instead of inline code. | Architect Agent |
-| Detailed Future Features | 2025-05-10 | 0.4     | Elaborated on AI Query Building, Embedding Deduplication (incl. pgvectorscale), and event-driven PRISMA generation in Section 8.2. | Architect Agent |
-| Arch Doc Clarifications | 2025-05-10 | 0.5     | Added note on DB backup reliance on Supabase. Expanded discussion of design patterns in section 2.3. | Architect Agent |
-| Naming Conventions Doc Added | 2025-05-10 | 0.5.1   | Noted creation of `docs/naming-conventions.md` as a supporting architectural artifact. | Architect Agent | 
+| Initial Draft   | 2025-05-12 | 0.1     | First draft of Architecture document. | Architect Agent |
+| Diagram Updates | 2025-05-12 | 0.2     | Corrected context/component diagram syntax and added sequence diagrams for key workflows. | Architect Agent |
+| Future Vision   | 2025-05-12 | 0.3     | Added Section 8 on Future Architectural Considerations & Evolution, and Section 9 on Document Maintenance. Elaborated on Transparency & Auditability. | Architect Agent |
+| Link Formatting | 2025-05-12 | 0.3.1   | Corrected internal document references to use Markdown link syntax instead of inline code. | Architect Agent |
+| Detailed Future Features | 2025-05-12 | 0.4     | Elaborated on AI Query Building, Embedding Deduplication (incl. pgvectorscale), and event-driven PRISMA generation in Section 8.2. | Architect Agent |
+| Arch Doc Clarifications | 2025-05-12 | 0.5     | Added note on DB backup reliance on Supabase. Expanded discussion of design patterns in section 2.3. | Architect Agent |
+| Naming Conventions Doc Added | 2025-05-12 | 0.5.1   | Noted creation of `docs/naming-conventions.md` as a supporting architectural artifact. | Architect Agent |
+| Session Factory Injection Clarified | 2025-05-12 | 0.7     | Clarified session_factory injection and default sourcing in relevant architectural docs and story plans. (Version jump due to merged edits) | Architect Agent | 

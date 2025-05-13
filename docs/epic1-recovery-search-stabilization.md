@@ -63,12 +63,13 @@ This epic focuses on refactoring and stabilizing existing components. Key techni
 
 - **User Story / Goal:** As a developer, I want the `SearchService` in `services.py` to correctly manage all business logic for PubMed searches, including API interaction and database session lifecycle, using architecturally sound interfaces, so that search operations are reliable, maintainable, and adhere to the service layer pattern defined in `docs/api-reference.md`.
 - **Detailed Requirements:**
+    **Note on Current State of `services.py`:** The existing `src/sr_assistant/app/services.py` file contains large functions with mixed responsibilities and numerous linter errors. The refactoring under this story MUST address these by breaking down logic into smaller, well-defined private helper methods (e.g., for parsing individual API response fields, specific sub-steps of a workflow) to improve modularity, readability, and testability. All linter errors within the refactored `SearchService` and `ReviewService` sections MUST be resolved.
     1.  **Encapsulate PubMed API Interaction:** `SearchService` must implement the `search_pubmed_and_store_results` method. This method will:
         *   Accept `review_id`, `query`, and `max_results`.
         *   Internally handle all aspects of querying the PubMed API (e.g., using BioPython Entrez or a similar HTTP client mechanism).
         *   Fetch raw results from PubMed.
         *   Utilize the internal `_map_pubmed_to_search_result` method to transform raw PubMed records into `models.SearchResult` instances.
-        *   Ensure `SearchResult` instances are correctly populated (e.g., `source_db='PubMed'`, `source_id=PMID`, `year` as `str | None`).
+        *   Ensure `SearchResult` instances are correctly populated (e.g., `source_db='PubMed'`(use the enum!), `source_id=PMID`, `year` as `str | None`).
         *   Store these `SearchResult` instances using `SearchResultRepository.add_all` (or similar batch method).
     2.  **Session Management:**
         *   All public methods in `SearchService` (including the new `search_pubmed_and_store_results`, `get_search_results_by_review_id`, `get_search_result_by_source_details`, `update_search_result`, `delete_search_result`) MUST manage their own database sessions internally (e.g., using `with self.session_factory() as session:`). The `session: Session | None` parameter MUST be removed from all public method signatures.
@@ -224,7 +225,8 @@ This epic focuses on refactoring and stabilizing existing components. Key techni
 
 | Change          | Date       | Version | Description             | Author               |
 |-----------------|------------|---------|-------------------------|----------------------|
-| Initial Draft   | 2025-05-09 | 0.1     | First draft of Epic 1   | Product Manager Agent |
-| Added Story 1.5 | 2025-05-10 | 0.2     | Added Story 1.5 for SearchResult Pydantic schema definition and alignment. | Architect Agent      |
-| Story 1.2 Update| 2025-05-10 | 0.3     | Expanded Story 1.2 with detailed plan for SearchService refactoring (API alignment, session mgt, new methods) and ReviewService session mgt. | Architect Agent      |
-| Story 1.1 Update| 2025-05-10 | 0.4     | Expanded Story 1.1 with detailed plan for `search.py` UI refactoring (service calls, data handling). | Architect Agent      | 
+| Initial Draft   | 2025-05-12 | 0.1     | First draft of Epic 1   | Product Manager Agent |
+| Added Story 1.5 | 2025-05-12 | 0.2     | Added Story 1.5 for SearchResult Pydantic schema definition and alignment. | Architect Agent      |
+| Story 1.2 Update| 2025-05-12 | 0.3     | Expanded Story 1.2 with detailed plan for SearchService refactoring (API alignment, session mgt, new methods) and ReviewService session mgt. | Architect Agent      |
+| Story 1.1 Update| 2025-05-12 | 0.4     | Expanded Story 1.1 with detailed plan for `search.py` UI refactoring (service calls, data handling). | Architect Agent      |
+| Story 1.2 Enh   | 2025-05-12 | 0.4.1   | Added note to Story 1.2 on current state of `services.py` and refactoring requirements. Clarified session factory injection for services. | Architect Agent      | 

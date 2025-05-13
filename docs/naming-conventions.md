@@ -113,5 +113,5 @@ This document should be reviewed and updated if new categories of components or 
 
 | Change          | Date       | Version | Description             | Author          |
 |-----------------|------------|---------|-------------------------|-----------------|
-| Initial Draft   | 2025-05-10 | 0.1     | First draft of Naming Conventions document. | Architect Agent |
-| LLM Schema Clarification | 2025-05-10 | 0.2     | Clarified preferred naming for LLM output schemas and noted `ScreeningResolutionSchema` as a deviation for future refactoring. | Architect Agent | 
+| Initial Draft   | 2025-05-12 | 0.1     | First draft of Naming Conventions document. | Architect Agent |
+| LLM Schema Clarification | 2025-05-12 | 0.2     | Clarified preferred naming for LLM output schemas and noted `ScreeningResolutionSchema` as a deviation for future refactoring. | Architect Agent | 

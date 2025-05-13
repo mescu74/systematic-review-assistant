@@ -69,7 +69,6 @@ These variables are typically loaded from `.env` files (e.g., `.env`, `.env.loca
 
 | Change          | Date       | Version | Description             | Author          |
 |-----------------|------------|---------|-------------------------|-----------------|
-| Initial Draft   | 2025-05-10 | 0.1     | First draft based on initial understanding. | Architect Agent |
-| Major Revision  | 2025-05-10 | 0.2     | Significantly revised and expanded based on user-provided `.env` contents. Added Supabase vars, clarified DB URLs, LangSmith project values, and other missing variables. | Architect Agent |
-| URL Port Fix    | 2025-05-10 | 0.2.1   | Corrected example Supabase database URL port numbers (direct vs. pooler). | Architect Agent |
-| Actual URL Fix  | 2025-05-10 | 0.3     | Updated Supabase connection string examples to reflect actual project structure (all via pooler on port 5432, specific hostnames) based on `.env` inspection. | Architect Agent | 
+| Initial Draft   | 2025-05-12 | 0.1     | First draft based on initial understanding. | Architect Agent |
+| Major Revision  | 2025-05-12 | 0.2     | Significantly revised and expanded based on user-provided `.env` contents. Added Supabase vars, clarified DB URLs, LangSmith project values, and other missing variables. | Architect Agent |
+| Actual URL Fix  | 2025-05-12 | 0.3     | Updated Supabase connection string examples to reflect actual project structure (all via pooler on port 5432, specific hostnames) based on `.env` inspection. | Architect Agent | 
