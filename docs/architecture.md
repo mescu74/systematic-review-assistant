@@ -410,16 +410,14 @@ This architecture document should be treated as a living document. It will be re
 -   If significant changes to the technology stack are decided.
 -   Periodically, to ensure it accurately reflects the evolving system.
 
-
 ## Change Log
 
-| Change          | Date       | Version | Description             | Author          |
-|-----------------|------------|---------|-------------------------|-----------------|
-| Initial Draft   | 2025-05-12 | 0.1     | First draft of Architecture document. | Architect Agent |
-| Diagram Updates | 2025-05-12 | 0.2     | Corrected context/component diagram syntax and added sequence diagrams for key workflows. | Architect Agent |
-| Future Vision   | 2025-05-12 | 0.3     | Added Section 8 on Future Architectural Considerations & Evolution, and Section 9 on Document Maintenance. Elaborated on Transparency & Auditability. | Architect Agent |
-| Link Formatting | 2025-05-12 | 0.3.1   | Corrected internal document references to use Markdown link syntax instead of inline code. | Architect Agent |
-| Detailed Future Features | 2025-05-12 | 0.4     | Elaborated on AI Query Building, Embedding Deduplication (incl. pgvectorscale), and event-driven PRISMA generation in Section 8.2. | Architect Agent |
-| Arch Doc Clarifications | 2025-05-12 | 0.5     | Added note on DB backup reliance on Supabase. Expanded discussion of design patterns in section 2.3. | Architect Agent |
-| Naming Conventions Doc Added | 2025-05-12 | 0.5.1   | Noted creation of `docs/naming-conventions.md` as a supporting architectural artifact. | Architect Agent |
-| Session Factory Injection Clarified | 2025-05-12 | 0.7     | Clarified session_factory injection and default sourcing in relevant architectural docs and story plans. (Version jump due to merged edits) | Architect Agent | 
+| Date       | Version | Description                                                                                                                                  | Author               |
+|------------|---------|----------------------------------------------------------------------------------------------------------------------------------------------|----------------------|
+| 2025-05-10 | 0.1     | Initial draft of Architecture document (as part of project recovery outputs).                                                                | wfjt/Architect Agent |
+| 2025-05-11 | 0.2     | Enhanced architecture documentation; noted future Naming Conventions doc.                                                                      | wfjt/Architect Agent |
+| 2025-05-13 | 0.3     | Added System Context & Component Diagrams (Mermaid), Key Workflows (text & sequence diagrams), initial Future Considerations & Maint. sections. | Architect Agent      |
+| 2025-05-13 | 0.3.1   | Corrected internal document references to use Markdown link syntax.                                                                            | Architect Agent      |
+| 2025-05-13 | 0.4     | Elaborated on Future Features: AI Query Building, Embedding Deduplication (incl. pgvectorscale), and event-driven PRISMA generation.         | Architect Agent      |
+| 2025-05-13 | 0.5     | Clarified DB backup (Supabase). Expanded on Design Patterns (Sec 2.3). Added note on Naming Conventions doc creation.                          | Architect Agent      |
+| 2025-05-13 | 0.6     | Clarified `session_factory` injection for services. (Consolidated versioning for 13th May changes).                                        | Architect Agent      | 

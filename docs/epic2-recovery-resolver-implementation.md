@@ -252,7 +252,7 @@ Reference: `docs/prd-resolver.md` for detailed original specifications.
 
 | Change          | Date       | Version | Description             | Author               |
 |-----------------|------------|---------|-------------------------|----------------------|
-| Initial Draft   | 2025-05-12 | 0.1     | First draft of Epic 2   | Product Manager Agent |
+| Initial Draft   | 2025-05-09 | 0.1     | First draft of Epic 2   | Product Manager Agent |
 | Story 2.1 Update| 2025-05-12 | 0.2     | Expanded Story 2.1 to include all core Pydantic schema definitions, SQLModel updates, and resolver DB setup. | Architect Agent      |
 | Added Story 2.5 | 2025-05-12 | 0.3     | Added Story 2.5 for `ScreeningService` refactoring and resolver method implementation. | Architect Agent      |
 | Story 2.4 Update| 2025-05-12 | 0.4     | Expanded Story 2.4 to cover `screen_abstracts.py` service call alignment, resolver integration, and all UI logic. | Architect Agent      |

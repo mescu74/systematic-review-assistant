@@ -37,16 +37,16 @@ Manages search operations against external academic databases (e.g., PubMed, Sco
 - **`__init__(self, factory: sessionmaker[Session] = session_factory, search_repo: SearchResultRepository | None = None, http_client: httpx.AsyncClient | None = None)`**
   - Initializes the service. The `factory` parameter allows injection of a SQLAlchemy `sessionmaker` for database sessions, typically defaulting to the application's main `session_factory` from `sr_assistant.app.database`.
 
-- **`search_pubmed_and_store_results(self, review_id: uuid.UUID, query: str, max_results: int = 100) -> Sequence[models.SearchResult]`**
-  - **Purpose:** Performs a PubMed search, maps results, and stores them.
+- **`search_pubmed_and_store_results(self, review_id: uuid.UUID, query: str, max_results: int = 100) -> Sequence[schemas.SearchResultRead]`**
+  - **Purpose:** Performs a PubMed search, maps results to `schemas.SearchResultRead`, and stores them (as `models.SearchResult`).
   - **Parameters:** (as previously defined, `session` parameter removed)
-  - **Returns:** Sequence of stored `SearchResult` objects.
+  - **Returns:** Sequence of `schemas.SearchResultRead` objects.
   - **Session Handling:** Manages its own session and transaction internally.
 
-- **`search_scopus_and_store_results(self, review_id: uuid.UUID, query: str, max_results: int = 100) -> Sequence[models.SearchResult]`** (Conceptual)
-  - **Purpose:** Performs a Scopus search, maps, and stores results.
+- **`search_scopus_and_store_results(self, review_id: uuid.UUID, query: str, max_results: int = 100) -> Sequence[schemas.SearchResultRead]`** (Conceptual)
+  - **Purpose:** Performs a Scopus search, maps, and stores results, returning `schemas.SearchResultRead`.
   - **Parameters:** (as previously defined, `session` parameter removed)
-  - **Returns:** Sequence of stored `SearchResult` objects from Scopus.
+  - **Returns:** Sequence of `schemas.SearchResultRead` objects from Scopus.
   - **Session Handling:** Manages its own session and transaction internally.
 
 - **`_map_pubmed_to_search_result(self, review_id: uuid.UUID, api_record: dict[str, Any]) -> models.SearchResult | None`** (Internal)
@@ -58,23 +58,23 @@ Manages search operations against external academic databases (e.g., PubMed, Sco
   - *Internal method.* Maps a raw Scopus API record to a `SearchResult` model.
   - **Note:** `api_record` type hint should be `dict[str, Any]`.
 
-- **`get_search_results_by_review_id(self, review_id: uuid.UUID) -> Sequence[models.SearchResult]`**
-  - **Purpose:** Retrieves all search results for a review.
+- **`get_search_results_by_review_id(self, review_id: uuid.UUID) -> Sequence[schemas.SearchResultRead]`**
+  - **Purpose:** Retrieves all search results for a review as `schemas.SearchResultRead` objects.
   - **Parameters:** (as previously defined, `session` parameter removed)
-  - **Returns:** Sequence of `SearchResult` objects.
+  - **Returns:** Sequence of `schemas.SearchResultRead` objects.
   - **Session Handling:** Manages its own session internally.
 
-- **`get_search_result_by_source_details(self, review_id: uuid.UUID, source_db: SearchDatabaseSource, source_id: str) -> models.SearchResult | None`**
-  - **Purpose:** Retrieves a specific search result.
+- **`get_search_result_by_source_details(self, review_id: uuid.UUID, source_db: SearchDatabaseSource, source_id: str) -> schemas.SearchResultRead | None`**
+  - **Purpose:** Retrieves a specific search result as a `schemas.SearchResultRead` object.
   - **Parameters:** (as previously defined, `session` parameter removed)
-  - **Returns:** `SearchResult` object or `None`.
+  - **Returns:** `schemas.SearchResultRead` object or `None`.
   - **Session Handling:** Manages its own session internally.
 
-- **`update_search_result(self, result_id: uuid.UUID, update_data: schemas.SearchResultUpdate) -> models.SearchResult`**
-  - **Purpose:** Updates an existing search result.
+- **`update_search_result(self, result_id: uuid.UUID, update_data: schemas.SearchResultUpdate) -> schemas.SearchResultRead`**
+  - **Purpose:** Updates an existing search result and returns the updated data as `schemas.SearchResultRead`.
   - **Parameters:** (as previously defined, `session` parameter removed)
     - `update_data`: A `schemas.SearchResultUpdate` Pydantic object.
-  - **Returns:** The updated `SearchResult` object.
+  - **Returns:** The updated `schemas.SearchResultRead` object.
   - **Session Handling:** Manages its own session and transaction internally.
 
 - **`delete_search_result(self, result_id: uuid.UUID) -> None`**
@@ -104,31 +104,31 @@ Manages systematic review data, interacting with `SystematicReviewRepository`.
 - **`__init__(self, factory: sessionmaker[Session] = session_factory, review_repo: SystematicReviewRepository | None = None)`**
   - Initializes the service. The `factory` parameter allows injection of a SQLAlchemy `sessionmaker`, typically defaulting to the application's main `session_factory` from `sr_assistant.app.database`.
 
-- **`create_review(self, review_data: schemas.SystematicReviewCreate) -> models.SystematicReview`**
+- **`create_review(self, review_data: schemas.SystematicReviewCreate) -> schemas.SystematicReviewRead`**
   - **Purpose:** Creates a new systematic review.
   - **Parameters:**
     - `review_data`: Pydantic schema `schemas.SystematicReviewCreate` with review details.
-  - **Returns:** The created `models.SystematicReview` object.
+  - **Returns:** The created `schemas.SystematicReviewRead` object.
   - **Session Handling:** Manages its own session and transaction internally.
 
-- **`get_review(self, review_id: uuid.UUID) -> models.SystematicReview | None`**
+- **`get_review(self, review_id: uuid.UUID) -> schemas.SystematicReviewRead | None`**
   - **Purpose:** Retrieves a review by its ID.
   - **Parameters:**
     - `review_id`: ID of the review.
-  - **Returns:** The `models.SystematicReview` object or `None`.
+  - **Returns:** The `schemas.SystematicReviewRead` object or `None`.
   - **Session Handling:** Manages its own session internally.
 
-- **`get_all_reviews(self) -> Sequence[models.SystematicReview]`**
+- **`get_all_reviews(self) -> Sequence[schemas.SystematicReviewRead]`**
   - **Purpose:** Retrieves all reviews.
-  - **Returns:** A sequence of `models.SystematicReview` objects.
+  - **Returns:** A sequence of `schemas.SystematicReviewRead` objects.
   - **Session Handling:** Manages its own session internally.
 
-- **`update_review(self, review_id: uuid.UUID, review_update_data: schemas.SystematicReviewUpdate) -> models.SystematicReview`**
+- **`update_review(self, review_id: uuid.UUID, review_update_data: schemas.SystematicReviewUpdate) -> schemas.SystematicReviewRead`**
   - **Purpose:** Updates an existing review.
   - **Parameters:**
     - `review_id`: ID of the review to update.
     - `review_update_data`: Pydantic schema `schemas.SystematicReviewUpdate` with fields to update.
-  - **Returns:** The updated `models.SystematicReview` object.
+  - **Returns:** The updated `schemas.SystematicReviewRead` object.
   - **Session Handling:** Manages its own session and transaction internally.
 
 - **`delete_review(self, review_id: uuid.UUID) -> None`**
@@ -159,13 +159,13 @@ Manages screening decisions (from conservative and comprehensive LLM reviewers) 
 - **`__init__(self, factory: sessionmaker[Session] = session_factory, screen_repo: ScreenAbstractResultRepository | None = None, resolution_repo: ScreeningResolutionRepository | None = None, search_repo: SearchResultRepository | None = None)`**
   - Initializes the service with necessary repositories and a session factory. The `factory` parameter allows injection of a SQLAlchemy `sessionmaker`, typically defaulting to the application's main `session_factory` from `sr_assistant.app.database`.
 
-- **`add_screening_decision(self, search_result_id: uuid.UUID, screening_strategy: ScreeningStrategyType, screening_data: schemas.ScreeningResultCreate) -> models.ScreenAbstractResult`**
+- **`add_screening_decision(self, search_result_id: uuid.UUID, screening_strategy: ScreeningStrategyType, screening_data: schemas.ScreeningResultCreate) -> schemas.ScreeningResultRead`**
   - **Purpose:** Adds a new screening decision to the system. It creates a `ScreenAbstractResult` record and then updates the corresponding `SearchResult` (identified by `search_result_id`) to link to this new record via its `conservative_result_id` or `comprehensive_result_id` field, based on the `screening_strategy`.
   - **Parameters:**
     - `search_result_id`: The ID of the `SearchResult` to which this screening decision pertains.
     - `screening_strategy`: The strategy (CONSERVATIVE or COMPREHENSIVE) used for this decision. This determines which field (`conservative_result_id` or `comprehensive_result_id`) on the `SearchResult` is updated.
     - `screening_data`: A `schemas.ScreeningResultCreate` Pydantic object containing the data for the new screening result (e.g., decision, rationale, LLM run ID used as `ScreenAbstractResult.id`).
-  - **Returns:** The created `models.ScreenAbstractResult` object.
+  - **Returns:** The created `schemas.ScreeningResultRead` object (representing the `ScreenAbstractResult`).
   - **Session Handling:** Manages its own session and transaction internally.
   - **Logic:**
     1. Validates `screening_data` (which includes `review_id` and the LLM `run_id` to be used as `ScreenAbstractResult.id`).
@@ -176,41 +176,41 @@ Manages screening decisions (from conservative and comprehensive LLM reviewers) 
     6. Uses `SearchResultRepository.update` (or adds to session) to save changes to the `SearchResult`.
     7. Commits the session and refreshes the created `ScreenAbstractResult` instance.
 
-- **`update_screening_decision(self, screening_result_id: uuid.UUID, screening_update_data: schemas.ScreeningResultUpdate) -> models.ScreenAbstractResult`**
+- **`update_screening_decision(self, screening_result_id: uuid.UUID, screening_update_data: schemas.ScreeningResultUpdate) -> schemas.ScreeningResultRead`**
   - **Purpose:** Updates an existing screening decision.
   - **Parameters:**
     - `screening_result_id`: The ID of the `ScreenAbstractResult` to update.
     - `screening_update_data`: A `schemas.ScreeningResultUpdate` Pydantic object.
-  - **Returns:** The updated `models.ScreenAbstractResult` object.
+  - **Returns:** The updated `schemas.ScreeningResultRead` object.
   - **Session Handling:** Manages its own session and transaction internally.
 
-- **`get_screening_decision_by_id(self, screening_result_id: uuid.UUID) -> models.ScreenAbstractResult | None`**
+- **`get_screening_decision_by_id(self, screening_result_id: uuid.UUID) -> schemas.ScreeningResultRead | None`**
   - **Purpose:** Retrieves a specific screening decision by its ID.
   - **Parameters:**
     - `screening_result_id`: The ID of the screening result.
-  - **Returns:** The `models.ScreenAbstractResult` object or `None`.
+  - **Returns:** The `schemas.ScreeningResultRead` object or `None`.
   - **Session Handling:** Manages its own session internally.
 
-- **`get_screening_decisions_for_search_result(self, search_result_id: uuid.UUID) -> Sequence[models.ScreenAbstractResult]`**
+- **`get_screening_decisions_for_search_result(self, search_result_id: uuid.UUID) -> Sequence[schemas.ScreeningResultRead]`**
   - **Purpose:** Retrieves all screening decisions associated with a specific `SearchResult`.
   - **Parameters:**
     - `search_result_id`: The ID of the `SearchResult`.
-  - **Returns:** A sequence of `models.ScreenAbstractResult` objects.
+  - **Returns:** A sequence of `schemas.ScreeningResultRead` objects.
   - **Session Handling:** Manages its own session internally.
 
-- **`get_screening_decisions_for_review(self, review_id: uuid.UUID) -> Sequence[models.ScreenAbstractResult]`**
+- **`get_screening_decisions_for_review(self, review_id: uuid.UUID) -> Sequence[schemas.ScreeningResultRead]`**
   - **Purpose:** Retrieves all screening results for a specific review.
   - **Parameters:**
     - `review_id`: ID of the review.
-  - **Returns:** Sequence of `models.ScreenAbstractResult` objects.
+  - **Returns:** Sequence of `schemas.ScreeningResultRead` objects.
   - **Session Handling:** Manages its own session internally.
 
 #### Needed Methods for Conflict Resolution (based on `prd-resolver.md` FR1-FR8 & TD4)
 
-- **`identify_disagreements(self, review_id: uuid.UUID, search_result_ids: list[uuid.UUID]) -> list[models.SearchResult]`** (New)
+- **`identify_disagreements(self, review_id: uuid.UUID, search_result_ids: list[uuid.UUID]) -> list[schemas.SearchResultRead]`** (New)
   - **Purpose:** Identifies search results that require conflict resolution.
   - **Parameters:** (as previously defined, `session` parameter removed)
-  - **Returns:** List of `SearchResult` objects with disagreements.
+  - **Returns:** List of `schemas.SearchResultRead` objects with disagreements.
   - **Session Handling:** Manages its own session internally.
 
 - **`prepare_resolver_inputs(self, review: models.SystematicReview, search_results_with_disagreements: list[models.SearchResult]) -> list[dict[str, Any]]`** (New)
@@ -234,12 +234,12 @@ Manages screening decisions (from conservative and comprehensive LLM reviewers) 
     2. Invoke the chain with the batch of inputs (`resolver_chain.batch(resolver_prompt_variable_inputs, config=...)`).
     3. Handle LLM call errors (retries, logging).
 
-- **`store_resolution_results(self, review_id: uuid.UUID, search_result_id_to_resolution_data: dict[uuid.UUID, schemas.ScreeningResolutionSchema]) -> list[models.ScreeningResolution]`** (New)
+- **`store_resolution_results(self, review_id: uuid.UUID, search_result_id_to_resolution_data: dict[uuid.UUID, schemas.ScreeningResolutionSchema]) -> list[schemas.ScreeningResolutionRead]`** (New)
   - **Purpose:** Stores outcomes from the resolver agent.
   - **Parameters:**
     - `review_id`: ID of the current systematic review.
     - `search_result_id_to_resolution_data`: A dictionary mapping `SearchResult.id` to its corresponding `schemas.ScreeningResolutionSchema` data from the resolver agent.
-  - **Returns:** List of created `ScreeningResolution` objects.
+  - **Returns:** List of created `schemas.ScreeningResolutionRead` objects.
   - **Session Handling:** Manages its own session and transaction internally.
   - **Logic:**
     1. Iterate through `search_result_id_to_resolution_data`.
@@ -324,8 +324,9 @@ Refer to [Data Models Document](data-models.md) for detailed definitions of SQLM
 
 | Date       | Version | Description                                                                                                                               | Author          |
 |------------|---------|-------------------------------------------------------------------------------------------------------------------------------------------|-----------------|
-| 2025-05-10 | 0.1     | Initial draft: Outlined SearchService, ReviewService, ScreeningService APIs based on existing `services.py`.                               | Architect Agent |
-| 2025-05-10 | 0.2     | Major Refactor: Corrected SearchService (encapsulated API calls), ScreeningService (input schemas, new resolver methods).                   | Architect Agent |
-| 2025-05-10 | 0.3     | Session Mgt Update: Removed session parameters from all public service methods to enforce internal session management.                        | Architect Agent |
-| 2025-05-10 | 0.4     | LLM I/O Schemas: Clarified `ScreeningResolutionSchema` vs. conceptual `ResolverInput/Output`. Corrected `ScreenAbstractsChainOutputDict` details. | Architect Agent |
-| 2025-05-12 | 0.5     | Formatting & Finalization: Corrected Markdown H4/bolding. Ensured `model_validate` note. Restored LLM Agent/Data Model sections. Added Changelog. Clarified session factory injection. Updated all dates. | Architect Agent |
+| 2025-05-10 | 0.1     | Initial draft created (Placeholder or basic outline from project recovery commit).                                                           | System/User     |
+| 2025-05-13 | 0.2     | Populated initial service API outlines (Search, Review, Screening) based on `services.py`.                                                | Architect Agent |
+| 2025-05-13 | 0.3     | Major Refactor: Corrected SearchService (encapsulation), ScreeningService (inputs, resolver methods). Defined all key Pydantic Read/Update schemas. | Architect Agent |
+| 2025-05-13 | 0.4     | Session Mgt Update: Removed session parameters from all public service methods; enforced internal session management & factory injection.     | Architect Agent |
+| 2025-05-13 | 0.5     | LLM I/O & Formatting: Clarified LLM chain I/O (`ScreenAbstractsChainOutputDict`, `ScreeningResolutionSchema`). Corrected Markdown H4/bolding. Restored sections. Added this changelog. | Architect Agent |
+| 2025-05-13 | 0.6     | Service Return Types: Updated all service methods to return Pydantic `Read` schemas instead of SQLModels. Added `model_validate` note.          | Architect Agent |

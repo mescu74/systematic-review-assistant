@@ -38,7 +38,7 @@ This epic focuses on refactoring and stabilizing existing components. Key techni
       *   `search.py` MUST NOT pass any `session` objects to `SearchService` methods.
       *   Any logic for directly calling PubMed APIs or managing raw API records within `search.py` MUST be removed (this is now `SearchService`'s responsibility).
   2.  **Data Handling & Display:**
-      *   `search.py` MUST expect a sequence of `schemas.SearchResultRead` objects (or equivalent Pydantic models that the service layer would return, based on `models.SearchResult`) from `SearchService.search_pubmed_and_store_results`.
+      *   `search.py` MUST expect a sequence of `schemas.SearchResultRead` objects directly from `SearchService.search_pubmed_and_store_results`. The service layer is responsible for mapping from `models.SearchResult` to `schemas.SearchResultRead` before returning data to the UI layer.
       *   All UI components in `search.py` (e.g., Streamlit tables, detail display elements) that show search result information MUST be updated to bind to the fields of `schemas.SearchResultRead` (e.g., `source_id`, `source_db`, `title`, `abstract`, `year` as string, etc.).
       *   Ensure any actions taken on search results (e.g., selection for screening, displaying details) correctly reference and use data from these `schemas.SearchResultRead` Pydantic objects.
   3.  **Error Handling:**
@@ -52,7 +52,7 @@ This epic focuses on refactoring and stabilizing existing components. Key techni
 - **Tasks (Optional Initial Breakdown for SM):**
   - [ ] Task 1.1.1: Analyze `search.py` for current PubMed search initiation logic and data handling.
   - [ ] Task 1.1.2: Refactor search initiation in `search.py` to call `SearchService.search_pubmed_and_store_results` and remove any direct PubMed API calls or session management from the page.
-  - [ ] Task 1.1.3: Update data handling logic in `search.py` to work with `schemas.SearchResultRead` objects returned by the service.
+  - [ ] Task 1.1.3: Update data handling logic in `search.py` to directly use the `Sequence[schemas.SearchResultRead]` objects returned by the `SearchService.search_pubmed_and_store_results` method. Remove any local logic in `search.py` for converting database models to Pydantic schemas.
   - [ ] Task 1.1.4: Update Streamlit UI components (tables, text displays) in `search.py` to bind to `schemas.SearchResultRead` attributes correctly.
   - [ ] Task 1.1.5: Implement or update error display logic in `search.py` for `SearchService` interactions.
 - **Dependencies:** Relies on `SearchService` refactoring (Story 1.2) and `schemas.SearchResultRead` definition (Story 1.5).
@@ -70,7 +70,8 @@ This epic focuses on refactoring and stabilizing existing components. Key techni
         *   Fetch raw results from PubMed.
         *   Utilize the internal `_map_pubmed_to_search_result` method to transform raw PubMed records into `models.SearchResult` instances.
         *   Ensure `SearchResult` instances are correctly populated (e.g., `source_db='PubMed'`(use the enum!), `source_id=PMID`, `year` as `str | None`).
-        *   Store these `SearchResult` instances using `SearchResultRepository.add_all` (or similar batch method).
+        *   Store these `models.SearchResult` instances using `SearchResultRepository.add_all` (or similar batch method).
+        *   **Crucially, before returning, map the persisted `models.SearchResult` instances to `schemas.SearchResultRead` Pydantic schemas.**
     2.  **Session Management:**
         *   All public methods in `SearchService` (including the new `search_pubmed_and_store_results`, `get_search_results_by_review_id`, `get_search_result_by_source_details`, `update_search_result`, `delete_search_result`) MUST manage their own database sessions internally (e.g., using `with self.session_factory() as session:`). The `session: Session | None` parameter MUST be removed from all public method signatures.
         *   The internally managed session MUST be passed to any `SearchResultRepository` methods called.
@@ -83,30 +84,34 @@ This epic focuses on refactoring and stabilizing existing components. Key techni
         *   Verify mapping logic aligns with `models.SearchResult` (e.g., `year` as `str | None`). The linter error regarding `year` being `int` in the mapper vs `str` in the model needs to be resolved by ensuring the mapper provides a string.
     6.  **Error Handling:** Implement robust error handling for PubMed API interactions and database operations within the service methods.
     7.  **Linter Errors:** Resolve all linter errors within the `SearchService` code block in `services.py` after refactoring.
-    8.  **`ReviewService` Session Management:**
+    8.  **`ReviewService` Session Management and Return Types:**
         *   All public methods in `ReviewService` (`create_review`, `get_review`, `get_all_reviews`, `update_review`, `delete_review`) MUST manage their own database sessions internally. The `session: Session | None` parameter MUST be removed from their public signatures.
         *   The internally managed session MUST be passed to any `SystematicReviewRepository` methods called.
+        *   Methods returning entity data (`create_review`, `get_review`, `get_all_reviews`, `update_review`) MUST map their internal `models.SystematicReview` instances to `schemas.SystematicReviewRead` Pydantic schemas before returning.
 - **Acceptance Criteria (ACs):**
-    *   AC1: `SearchService.search_pubmed_and_store_results` is implemented, encapsulates PubMed search, mapping, and storage logic, and returns a sequence of `models.SearchResult`.
+    *   AC1: `SearchService.search_pubmed_and_store_results` is implemented, encapsulates PubMed search, mapping, and storage logic, and returns a sequence of **`schemas.SearchResultRead`**.
     *   AC2: All public methods in `SearchService` manage sessions internally and no longer accept a `session` parameter.
     *   AC3: `SearchService.update_search_result` signature and implementation are updated to use `result_id` and `schemas.SearchResultUpdate`.
     *   AC4: `SearchService.add_api_search_results` method is removed.
     *   AC5: `SearchService` uses `SearchResultRepository` for all database interactions related to `SearchResult` objects, passing an internally managed session.
-    *   AC6: `_map_pubmed_to_search_result` correctly maps PubMed data to `models.SearchResult`, including `year` as `str | None`.
+    *   AC6: `_map_pubmed_to_search_result` correctly maps PubMed data to `models.SearchResult`, including `year` as `str | None`. (This internal mapper still produces the model; the public method then maps model to schema).
     *   AC7: Linter errors in `services.py` related to `SearchService` are resolved.
     *   AC8: Unit test coverage for `SearchService` (mocking repository and PubMed API calls) achieves >80%.
     *   AC9: Relevant integration tests for PubMed search functionality via `SearchService` pass.
     *   AC10: All public methods in `ReviewService` manage sessions internally and no longer accept a `session` parameter.
     *   AC11: `ReviewService` uses `SystematicReviewRepository` for all database interactions related to `SystematicReview` objects, passing an internally managed session.
+    *   AC12 (New): `ReviewService` methods that return review data (`create_review`, `get_review`, `get_all_reviews`, `update_review`) return `schemas.SystematicReviewRead` objects.
 - **Tasks (Optional Initial Breakdown for SM):**
     *   [ ] Task 1.2.1: Remove `session` parameter from all public methods of `SearchService` and implement internal session management logic for each.
     *   [ ] Task 1.2.2: Implement the `search_pubmed_and_store_results` method in `SearchService`:
         *   Integrate PubMed API call logic.
         *   Use `_map_pubmed_to_search_result` for mapping.
-        *   Use `SearchResultRepository` for storing results.
+        *   Use `SearchResultRepository` for storing `models.SearchResult` instances.
+        *   **Add step to map stored `models.SearchResult` instances to `schemas.SearchResultRead` before returning.**
     *   [ ] Task 1.2.3: Refactor `update_search_result` method in `SearchService`:
         *   Change signature to accept `result_id` and `schemas.SearchResultUpdate`.
         *   Implement logic to fetch, update, and save.
+        *   **Ensure the method returns `schemas.SearchResultRead` after successful update and refresh.**
     *   [ ] Task 1.2.4: Remove the `add_api_search_results` method from `SearchService`.
     *   [ ] Task 1.2.5: Review and correct internal mapping methods (`_map_pubmed_to_search_result`, `_map_scopus_to_search_result`) for type hints and `year` mapping logic.
     *   [ ] Task 1.2.6: Implement error handling for API and DB operations.
@@ -116,7 +121,8 @@ This epic focuses on refactoring and stabilizing existing components. Key techni
         *   Remove `session` parameter from `create_review`, `get_review`, `get_all_reviews`, `update_review`, `delete_review`.
         *   Implement internal session management logic for each of these methods.
         *   Ensure repository calls within these methods use the internally managed session.
-    *   [ ] Task 1.2.10: Write/update unit tests for `ReviewService` methods to reflect session encapsulation (mocking the session factory and repository).
+        *   **Implement mapping from `models.SystematicReview` to `schemas.SystematicReviewRead` for methods that return review data.**
+    *   [ ] Task 1.2.10: Write/update unit tests for `ReviewService` methods to reflect session encapsulation and `schemas.SystematicReviewRead` return types.
     *   [ ] Task 1.2.11: Verify `src/sr_assistant/app/pages/protocol.py` interactions with `ReviewService`:
         *   Confirm `build_review_model_from_pico` correctly prepares data that aligns with the input expected by `ReviewService.create_review` (which takes `schemas.SystematicReviewCreate`).
         *   Confirm the `persist_review` function in `protocol.py` correctly uses `ReviewService.update_review` (passing `schemas.SystematicReviewUpdate`) or `ReviewService.create_review` (passing `schemas.SystematicReviewCreate`) for saving changes, instead of direct model manipulation and commit after fetching from the service.
@@ -225,8 +231,9 @@ This epic focuses on refactoring and stabilizing existing components. Key techni
 
 | Change          | Date       | Version | Description             | Author               |
 |-----------------|------------|---------|-------------------------|----------------------|
-| Initial Draft   | 2025-05-12 | 0.1     | First draft of Epic 1   | Product Manager Agent |
+| Initial Draft   | 2025-05-09 | 0.1     | First draft of Epic 1   | Product Manager Agent |
 | Added Story 1.5 | 2025-05-12 | 0.2     | Added Story 1.5 for SearchResult Pydantic schema definition and alignment. | Architect Agent      |
 | Story 1.2 Update| 2025-05-12 | 0.3     | Expanded Story 1.2 with detailed plan for SearchService refactoring (API alignment, session mgt, new methods) and ReviewService session mgt. | Architect Agent      |
 | Story 1.1 Update| 2025-05-12 | 0.4     | Expanded Story 1.1 with detailed plan for `search.py` UI refactoring (service calls, data handling). | Architect Agent      |
-| Story 1.2 Enh   | 2025-05-12 | 0.4.1   | Added note to Story 1.2 on current state of `services.py` and refactoring requirements. Clarified session factory injection for services. | Architect Agent      | 
+| Story 1.2 Enh   | 2025-05-12 | 0.4.1   | Added note to Story 1.2 on current state of `services.py` and refactoring requirements. Clarified session factory injection for services. | Architect Agent      |
+| Service DTOs    | 2025-05-12 | 0.5     | Updated Stories 1.1 and 1.2 to reflect that service layer methods will return Pydantic Read schemas (DTOs) instead of SQLModels. | Architect Agent      | 

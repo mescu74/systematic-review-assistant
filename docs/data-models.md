@@ -898,10 +898,8 @@ This section summarizes key discrepancies found or recommendations made while do
 
 - **Linter Errors in `schemas.py`:** Address the identified linter errors, particularly the type override issues in `SystematicReviewUpdate` and the deprecated `t.Mapping`.
 
-// Update Change Log
-| ERD Fixes        | 2025-05-10 | 0.6.1   | Corrected Mermaid ERD syntax (comments, relationship naming for SearchResult to ScreenAbstractResult) in data-models.md. | Architect Agent |
-| ERD Completeness | 2025-05-10 | 0.6.2   | Added more fields to entities in ERD and included LogRecord model and its relationships. | Architect Agent |
-| Naming Convention Note | 2025-05-10 | 0.7     | Added a note regarding the ideal future renaming of `ScreeningResolutionSchema` to `ScreeningResolutionResponse` for consistency. | Architect Agent |
+| Change          | Date       | Version | Description             | Author          |
+|-----------------|------------|---------|-------------------------|-----------------|
 | Initial Draft   | 2025-05-12 | 0.1     | Initial structure and SystematicReview schemas. | Architect Agent |
 | SearchResult Schemas | 2025-05-12 | 0.2     | Added SearchResultRead and SearchResultUpdate schemas. | Architect Agent |
 | Screening Schemas | 2025-05-12 | 0.3     | Added all Screening-related schemas (Response, Result, Create, Update, Read, ResolutionSchema, ResolutionCreate, ResolutionRead). | Architect Agent |
