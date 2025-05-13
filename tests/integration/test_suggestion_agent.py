@@ -29,8 +29,8 @@ def test_agent_suggestions(agent: SuggestionAgent):
     assert isinstance(suggestions, dict)
     assert "pico" in suggestions
     assert "raw_response" in suggestions
-    assert (
-        len(suggestions.get("raw_response", "")) > 10
-    ), "Response should contain some text"
+    assert len(suggestions.get("raw_response", "")) > 10, (
+        "Response should contain some text"
+    )
 
     # History tests removed as agent has no memory

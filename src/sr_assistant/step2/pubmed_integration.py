@@ -248,7 +248,7 @@ def extract_article_info(article: dict[str, Any]) -> dict[str, str]:
             for author in author_list_data:
                 if isinstance(author, dict):
                     last_name = author.get("LastName", "")
-                    #fore_name = author.get("ForeName", "")
+                    # fore_name = author.get("ForeName", "")
                     initials = author.get("Initials", "")
                     if last_name:
                         authors.append(

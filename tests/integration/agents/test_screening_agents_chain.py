@@ -90,6 +90,7 @@ def mock_non_relevant_search_result() -> SearchResult:
         source_metadata={"publication_types": ["Journal Article"]},
     )
 
+
 @pytest.mark.integration
 def test_different_strategy_results(
     mock_search_result: SearchResult, mock_systematic_review: SystematicReview
