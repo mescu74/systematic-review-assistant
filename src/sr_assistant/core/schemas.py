@@ -10,10 +10,8 @@ Todo:
 from __future__ import annotations
 
 import uuid
-from typing import TYPE_CHECKING, TypedDict
-
-if TYPE_CHECKING:
-    from collections.abc import Mapping, MutableMapping
+from collections.abc import Mapping, MutableMapping  # noqa: TC003  # needed for tests
+from typing import TypedDict
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 from pydantic.types import AwareDatetime, PositiveInt  # noqa: TC002
@@ -29,7 +27,6 @@ from sr_assistant.core.types import (
     ScreeningStrategyType,
     SearchDatabaseSource,
     StudyDesignExclusionReason,
-    UtcDatetime,
 )
 
 
@@ -103,35 +100,32 @@ class ExclusionReasons(BaseSchema):
     """Exclusion reasons by category for PRISMA."""
 
     population_exclusion_reasons: list[PopulationExclusionReason] | None = Field(
-        default=None,
-        title="Population Exclusion Reasons",
-        description="Population exclusion reasons for PRISMA.",
+        default=None
     )
+    """Population exclusion reasons for PRISMA."""
+
     intervention_exclusion_reasons: list[InterventionExclusionReason] | None = Field(
-        default=None,
-        title="Intervention Exclusion Reasons",
-        description="Intervention exclusion reasons for PRISMA.",
+        default=None
     )
+    """Intervention exclusion reasons for PRISMA."""
+
     comparison_exclusion_reasons: list[ComparisonExclusionReason] | None = Field(
-        default=None,
-        title="Comparison Exclusion Reasons",
-        description="Comparison exclusion reasons for PRISMA.",
+        default=None
     )
-    outcome_exclusion_reasons: list[OutcomeExclusionReason] | None = Field(
-        default=None,
-        title="Outcome Exclusion Reasons",
-        description="Outcome exclusion reasons for PRISMA.",
-    )
+    """Comparison exclusion reasons for PRISMA."""
+
+    outcome_exclusion_reasons: list[OutcomeExclusionReason] | None = Field(default=None)
+    """Outcome exclusion reasons for PRISMA."""
+
     reporting_exclusion_reasons: list[ReportingExclusionReason] | None = Field(
-        default=None,
-        title="Reporting Exclusion Reasons",
-        description="Reporting exclusion reasons for PRISMA.",
+        default=None
     )
+    """Reporting exclusion reasons for PRISMA."""
+
     study_design_exclusion_reasons: list[StudyDesignExclusionReason] | None = Field(
-        default=None,
-        title="Study Design Exclusion Reasons",
-        description="Study design exclusion reasons for PRISMA.",
+        default=None
     )
+    """Study design exclusion reasons for PRISMA."""
 
 
 # The JSONSchema of this model is passed as a tool-call schema for the model.
@@ -144,29 +138,29 @@ class ScreeningResponse(BaseSchema):
     tricky, so assign confidence score and decision accordingly.
     """
 
-    decision: ScreeningDecisionType = Field(
-        ...,
-        description="The systematic review abstracts screening decision. Should this study be included or not? Or are you uncertain? If your confidence score is below 0.8, assign 'uncertain'.",
-    )
-    confidence_score: float = Field(
-        ...,
-        description="The systematic review abstracts screening confidence score [0.0, 1.0]. Should this study be included or not? Or are you uncertain? If your confidence score is below 0.8, assign 'uncertain'.",
-    )
+    decision: ScreeningDecisionType = Field(...)
+    """The systematic review abstracts screening decision. Should this study be included
+    or not? Or are you uncertain? If your confidence score is below 0.8, assign 'uncertain'.
+    """
 
-    rationale: str = Field(
-        ...,
-        description="The rationale for the decision. Be specific. Explainable AI is imporant. Don't just reiterate the category/categories, but explain how and why you reached this conclusion.",
-    )
+    confidence_score: float = Field(...)
+    """The systematic review abstracts screening confidence score [0.0, 1.0]. Should this study
+    be included or not? Or are you uncertain? If your confidence score is below 0.8, assign 'uncertain'.
+    """
 
-    extracted_quotes: list[str] | None = Field(
-        default=None,
-        description="The supporting quotes from the title/abstract. Can be omitted if uncertain.",
-    )
+    rationale: str = Field(...)
+    """The rationale for the decision. Be specific. Explainable AI is important. Don't
+    just reiterate the category/categories, but explain how and why you reached this conclusion.
+    """
 
-    exclusion_reason_categories: ExclusionReasons | None = Field(
-        default=None,
-        description="The PRISMA exclusion reason categories for the decision. Must be set if decision is 'exclude'. Omit if the decision is 'include'. If the decision is 'exclude' or 'uncertain', This complements the 'rationale' field.",
-    )
+    extracted_quotes: list[str] | None = Field(default=None)
+    """The supporting quotes from the title/abstract. Can be omitted if uncertain."""
+
+    exclusion_reason_categories: ExclusionReasons | None = Field(default=None)
+    """The PRISMA exclusion reason categories for the decision. Must be set if decision is 'exclude'.
+    Omit if the decision is 'include'. If the decision is 'exclude' or 'uncertain', this complements
+    the 'rationale' field.
+    """
 
 
 # response fields:
@@ -248,23 +242,168 @@ screening input, the two reviewers share the `trace_id`. `id` is unique to the r
 resp metadata, token usage, etc. JSONB in Postgres."""
 
 
+class ScreeningResultCreate(BaseSchema):
+    """Schema for creating a ScreenAbstractResult database record via the service layer.
+
+    Used by ScreeningService.add_screening_decision to populate the
+    ScreenAbstractResult SQLModel.
+    """
+
+    # Fields from ScreeningResponse
+    decision: ScreeningDecisionType
+    """The screening decision (INCLUDE, EXCLUDE, UNCERTAIN)."""
+
+    confidence_score: float
+    """The confidence score [0.0, 1.0] for the decision."""
+
+    rationale: str
+    """Specific rationale for the decision."""
+
+    extracted_quotes: list[str] | None = None
+    """Supporting quotes from the title/abstract."""
+
+    exclusion_reason_categories: ExclusionReasons | None = None
+    """PRISMA exclusion reason categories."""
+
+    # Fields from ScreeningResult (contextual/metadata)
+    id: uuid.UUID  # This is the LLM run_id, used as PK for ScreenAbstractResult model
+    """Screening result ID, from the LangSmith Run ID of the reviewer invocation."""
+
+    review_id: uuid.UUID
+    """ID of the SystematicReview this screening pertains to."""
+
+    trace_id: uuid.UUID | None = None
+    """LangSmith trace_id, shared between reviewers for the same SearchResult input."""
+
+    model_name: str
+    """Name of the LLM used for this screening decision."""
+
+    screening_strategy: ScreeningStrategyType
+    """The strategy used (e.g., CONSERVATIVE, COMPREHENSIVE)."""
+
+    start_time: AwareDatetime | None = None
+    """UTC timestamp when the LLM chain invocation started. Must be timezone-aware if not None."""
+
+    end_time: AwareDatetime | None = None
+    """UTC timestamp when the LLM chain invocation ended. Must be timezone-aware if not None."""
+
+    response_metadata: dict[str, JsonValue] = Field(default_factory=dict)
+    """Additional metadata from the LLM invocation (inputs, token usage, etc.)."""
+
+
+class ScreeningResultUpdate(BaseSchema):
+    """Schema for updating an existing ScreenAbstractResult database record.
+
+    Used by ScreeningService.update_screening_decision for partial updates
+    to a ScreenAbstractResult record. All fields are optional.
+    """
+
+    decision: ScreeningDecisionType | None = None
+    """The screening decision."""
+
+    confidence_score: float | None = None
+    """The confidence score."""
+
+    rationale: str | None = None
+    """Specific rationale."""
+
+    extracted_quotes: list[str] | None = None
+    """Supporting quotes."""
+
+    exclusion_reason_categories: ExclusionReasons | None = None
+    """PRISMA exclusion categories."""
+
+    trace_id: uuid.UUID | None = None
+    """LangSmith trace_id."""
+
+    model_name: str | None = None
+    """Name of the LLM."""
+
+    screening_strategy: ScreeningStrategyType | None = None
+    """The strategy used."""
+
+    start_time: AwareDatetime | None = None
+    """Invocation start time. Must be timezone-aware if not None."""
+
+    end_time: AwareDatetime | None = None
+    """Invocation end time. Must be timezone-aware if not None."""
+
+    response_metadata: dict[str, JsonValue] | None = None
+    """Additional LLM metadata."""
+
+
+class ScreeningResultRead(BaseSchema):
+    """Schema for returning ScreenAbstractResult data from the service layer.
+
+    Used for sending full ScreenAbstractResult data back to the caller.
+    """
+
+    id: uuid.UUID
+    """Unique ID of this screening record (typically the LLM run_id)."""
+
+    created_at: AwareDatetime | None
+    """Timestamp of when this record was created in the database (UTC). Must be timezone-aware."""
+
+    updated_at: AwareDatetime | None
+    """Timestamp of when this record was last updated (UTC). Must be timezone-aware."""
+
+    decision: ScreeningDecisionType
+    """The screening decision."""
+
+    confidence_score: float
+    """The confidence score."""
+
+    rationale: str
+    """Rationale for the decision."""
+
+    extracted_quotes: list[str] | None
+    """Supporting quotes."""
+
+    exclusion_reason_categories: dict[str, list[str]]  # Based on model's JSONB storage
+    """PRISMA exclusion reason categories."""
+
+    trace_id: uuid.UUID | None
+    """LangSmith trace_id."""
+
+    start_time: AwareDatetime | None
+    """LLM chain invocation start time. Must be timezone-aware if not None."""
+
+    end_time: AwareDatetime | None
+    """LLM chain invocation end time. Must be timezone-aware if not None."""
+
+    screening_strategy: ScreeningStrategyType
+    """Screening strategy used."""
+
+    model_name: str
+    """LLM model name used."""
+
+    response_metadata: dict[str, JsonValue]
+    """Metadata from the LLM invocation."""
+
+    review_id: uuid.UUID
+    """ID of the parent SystematicReview."""
+
+
 # --- Agent/Step Schemas --- # Added section
 
 
-class PicosSuggestions(BaseModel):
+class PicosSuggestions(BaseSchema):
     """Structured PICO suggestions from LLM."""
 
-    population: str = Field(
-        description="Suggested Population/Problem description based on context."
-    )
-    intervention: str = Field(
-        description="Suggested Intervention/Exposure description."
-    )
-    comparison: str = Field(description="Suggested Comparison/Control description.")
-    outcome: str = Field(description="Suggested Outcome description.")
-    general_critique: str = Field(
-        description="General critique and suggestions for the overall protocol."
-    )
+    population: str
+    """Suggested Population/Problem description based on context."""
+
+    intervention: str
+    """Suggested Intervention/Exposure description."""
+
+    comparison: str
+    """Suggested Comparison/Control description."""
+
+    outcome: str
+    """Suggested Outcome description."""
+
+    general_critique: str
+    """General critique and suggestions for the overall protocol."""
 
 
 class SuggestionResult(TypedDict):
@@ -281,36 +420,32 @@ class ScreeningResolutionSchema(BaseSchema):
     create a ScreeningResolution model instance.
     """
 
-    resolver_decision: ScreeningDecisionType = Field(
-        description="The decision made by the resolver for this search result. Should be one of: INCLUDE, EXCLUDE, or UNCERTAIN."
-    )
-    resolver_reasoning: str = Field(
-        description="Detailed reasoning for the resolver's decision. Explain your thought process clearly."
-    )
-    resolver_confidence_score: float = Field(
-        description="Confidence score for the resolver's decision, between 0.0 and 1.0. Higher values indicate more confidence."
-    )
-    resolver_include: list[str] = Field(
-        default_factory=list,
-        description="List of screening strategies (conservative, comprehensive) that the resolver believes are appropriate. Can be empty list if the decision is EXCLUDE.",
-    )
+    resolver_decision: ScreeningDecisionType = Field(...)
+    """The decision made by the resolver for this search result. Should be one of: INCLUDE, EXCLUDE, or UNCERTAIN."""
+
+    resolver_reasoning: str = Field(...)
+    """Detailed reasoning for the resolver's decision. Explain your thought process clearly."""
+
+    resolver_confidence_score: float = Field(...)
+    """Confidence score for the resolver's decision, between 0.0 and 1.0. Higher values indicate more confidence."""
+
+    resolver_include: list[str] = Field(default_factory=list)
+    """List of screening strategies (conservative, comprehensive) that the resolver believes are
+    appropriate. Can be empty list if the decision is EXCLUDE.
+    """
+
     # These fields will be populated by the calling code
-    review_id: uuid.UUID | None = Field(
-        default=None,
-        description="ID of the systematic review. Will be populated by the caller.",
-    )
-    search_result_id: uuid.UUID | None = Field(
-        default=None,
-        description="ID of the search search result. Will be populated by the caller.",
-    )
-    conservative_result_id: uuid.UUID | None = Field(
-        default=None,
-        description="ID of the conservative screening result. Will be populated by the caller.",
-    )
-    comprehensive_result_id: uuid.UUID | None = Field(
-        default=None,
-        description="ID of the comprehensive screening result. Will be populated by the caller.",
-    )
+    review_id: uuid.UUID | None = Field(default=None)
+    """ID of the systematic review. Will be populated by the caller."""
+
+    search_result_id: uuid.UUID | None = Field(default=None)
+    """ID of the search search result. Will be populated by the caller."""
+
+    conservative_result_id: uuid.UUID | None = Field(default=None)
+    """ID of the conservative screening result. Will be populated by the caller."""
+
+    comprehensive_result_id: uuid.UUID | None = Field(default=None)
+    """ID of the comprehensive screening result. Will be populated by the caller."""
 
 
 # --- Systematic Review Schemas ---
@@ -333,30 +468,63 @@ class SystematicReviewBase(BaseSchema):
 class SystematicReviewCreate(SystematicReviewBase):
     """Schema for creating a new Systematic Review."""
 
-    # Inherits all fields from Base
-    # No additional fields needed for creation usually
+    background: str | None = None
+    """Optional background context for the systematic review."""
+
+    research_question: str
+    """The primary research question the systematic review aims to answer. This field is mandatory."""
+
+    criteria_framework: CriteriaFramework | None = None
+    """The specific criteria framework being used (e.g., PICO, SPIDER)."""
+
+    criteria_framework_answers: MutableMapping[str, JsonValue] = Field(
+        default_factory=dict
+    )
+    """A dictionary holding the answers/components for the chosen criteria_framework."""
+
+    inclusion_criteria: str | None = None
+    """A string representation of inclusion criteria. Used by the screening LLM chain."""
+
+    exclusion_criteria: str
+    """A string representation of explicit exclusion criteria. This field is mandatory."""
+
+    review_metadata: MutableMapping[str, JsonValue] = Field(default_factory=dict)
+    """Any additional metadata associated with the review, stored as a JSON object."""
 
 
-class SystematicReviewUpdate(SystematicReviewBase):
+class SystematicReviewUpdate(BaseSchema):
     """Schema for updating a Systematic Review (all fields optional)."""
 
     background: str | None = None
-    research_question: str | None = None  # Make optional for update
+    """Optional background context for the systematic review."""
+
+    research_question: str | None = None
+    """The primary research question the systematic review aims to answer."""
+
     criteria_framework: CriteriaFramework | None = None
-    criteria_framework_answers: MutableMapping[str, JsonValue] | None = (
-        None  # Make optional
-    )
+    """The specific criteria framework being used (e.g., PICO, SPIDER)."""
+
+    criteria_framework_answers: MutableMapping[str, JsonValue] | None = None
+    """A dictionary holding the answers/components for the chosen criteria_framework."""
+
     inclusion_criteria: str | None = None
-    exclusion_criteria: str | None = None  # Make optional for update
-    review_metadata: MutableMapping[str, JsonValue] | None = None  # Make optional
+    """A string representation of inclusion criteria."""
+
+    exclusion_criteria: str | None = None
+    """A string representation of explicit exclusion criteria."""
+
+    review_metadata: MutableMapping[str, JsonValue] | None = None
+    """Any additional metadata associated with the review, stored as a JSON object."""
 
 
 class SystematicReviewRead(SystematicReviewBase):
     """Schema for reading/returning a Systematic Review."""
 
     id: uuid.UUID
-    created_at: UtcDatetime | None = None
-    updated_at: UtcDatetime | None = None
+
+    created_at: AwareDatetime | None = None
+
+    updated_at: AwareDatetime | None = None
     # Add relationships if needed for read operations, using nested schemas
     # e.g., search_results: list["SearchResultRead"] = []
 
@@ -417,7 +585,7 @@ class SearchResultRead(BaseSchema):
     journal: str | None
     """The name of the journal in which the publication appeared."""
 
-    year: str | None  # Aligning with models.py SearchResult.year which is str | None
+    year: str | None
     """The publication year (as a string)."""
 
     authors: list[str] | None
@@ -426,12 +594,10 @@ class SearchResultRead(BaseSchema):
     keywords: list[str] | None
     """A list of keywords associated with the publication."""
 
-    raw_data: Mapping[str, JsonValue]  # Changed to use Mapping from collections.abc
+    raw_data: Mapping[str, JsonValue]
     """The original raw data record fetched from the source API."""
 
-    source_metadata: Mapping[
-        str, JsonValue
-    ]  # Changed to use Mapping from collections.abc
+    source_metadata: Mapping[str, JsonValue]
     """Additional source-specific metadata."""
 
     created_at: AwareDatetime | None
@@ -476,14 +642,10 @@ class SearchResultUpdate(BaseSchema):
     keywords: list[str] | None = None
     """A list of keywords."""
 
-    raw_data: Mapping[str, JsonValue] | None = (
-        None  # Changed to use Mapping from collections.abc
-    )
+    raw_data: Mapping[str, JsonValue] | None = None
     """The original raw data record."""
 
-    source_metadata: Mapping[str, JsonValue] | None = (
-        None  # Changed to use Mapping from collections.abc
-    )
+    source_metadata: Mapping[str, JsonValue] | None = None
     """Additional source-specific metadata."""
 
     final_decision: ScreeningDecisionType | None = None
@@ -491,3 +653,95 @@ class SearchResultUpdate(BaseSchema):
 
     resolution_id: uuid.UUID | None = None
     """Identifier of the ScreeningResolution record."""
+
+
+class ScreeningResolutionCreate(BaseSchema):
+    """Schema for creating a ScreeningResolution database record.
+
+    Used by ScreeningService.store_resolution_results to create a
+    new ScreeningResolution record in the database.
+    """
+
+    search_result_id: uuid.UUID
+    """ID of the SearchResult this resolution applies to."""
+
+    review_id: uuid.UUID
+    """ID of the SystematicReview."""
+
+    # IDs of the original screening results that led to this resolution
+    conservative_result_id: uuid.UUID | None = None
+    """ID of the conservative screening result, if applicable."""
+
+    comprehensive_result_id: uuid.UUID | None = None
+    """ID of the comprehensive screening result, if applicable."""
+
+    # Data from the resolver LLM output
+    resolver_decision: ScreeningDecisionType
+    """The final decision made by the resolver."""
+
+    resolver_reasoning: str
+    """Detailed reasoning from the resolver."""
+
+    resolver_confidence_score: float
+    """Confidence score from the resolver."""
+
+    resolver_model_name: str | None = None
+    """Name of the LLM used for resolution."""
+
+    response_metadata: dict[str, JsonValue] = Field(default_factory=dict)
+    """Metadata from the resolver LLM invocation."""
+
+    start_time: AwareDatetime | None = None
+    """UTC timestamp of resolver LLM start. Must be timezone-aware if not None."""
+
+    end_time: AwareDatetime | None = None
+    """UTC timestamp of resolver LLM end. Must be timezone-aware if not None."""
+
+    trace_id: uuid.UUID | None = None
+    """LangSmith trace_id for the resolver invocation."""
+
+
+class ScreeningResolutionRead(BaseSchema):
+    """Schema for returning ScreeningResolution data from the service layer.
+
+    Used for retrieving full ScreeningResolution data.
+    """
+
+    id: uuid.UUID
+    """Unique ID of this screening resolution record."""
+
+    created_at: AwareDatetime | None
+    """Timestamp of when this record was created (UTC). Must be timezone-aware."""
+
+    updated_at: AwareDatetime | None
+    """Timestamp of when this record was last updated (UTC). Must be timezone-aware."""
+
+    search_result_id: uuid.UUID
+    """ID of the SearchResult this resolution applies to."""
+
+    review_id: uuid.UUID
+    """ID of the SystematicReview."""
+
+    resolver_decision: ScreeningDecisionType
+    """The final decision made by the resolver."""
+
+    resolver_reasoning: str
+    """Detailed reasoning from the resolver."""
+
+    resolver_confidence_score: float
+    """Confidence score from the resolver."""
+
+    resolver_model_name: str | None
+    """Name of the LLM used for resolution."""
+
+    response_metadata: dict[str, JsonValue]
+    """Metadata from the resolver LLM invocation."""
+
+    start_time: AwareDatetime | None
+    """UTC timestamp of resolver LLM start. Must be timezone-aware if not None."""
+
+    end_time: AwareDatetime | None
+    """UTC timestamp of resolver LLM end. Must be timezone-aware if not None."""
+
+    trace_id: uuid.UUID | None
+    """LangSmith trace_id for the resolver invocation."""

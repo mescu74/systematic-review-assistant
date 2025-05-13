@@ -78,6 +78,7 @@ dev = [
   "langchain-mcp-tools>=0.1.7",
   "pyright>=1.1.395",
   "pytest-dotenv>=0.5.2",
+  "pyupgrade>=3.19.1",
 ]
 security = ["pip-audit>=2.7.3", "ruff>=0.8.6"]
 observability = [
@@ -185,6 +186,7 @@ ignore = [
   "D104",    # Missing docstring in public package
   "D400",    # First line should end with a period TODO: enable this
   "D412",    # newline after docstring section: to create a note admonition in mkdocstrings docs, a blank line is needed
+  "FIX002",  # TODO comments
   "E501",    # Line too long, formatting will handle and sometimes it's fine
   "ERA001",  # Commented-out code
   "ISC001",
@@ -257,6 +259,7 @@ required-imports = []
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = [
+  "ANN201", # missing return type annotation
   "T20",
   "D100",
   "D101",
@@ -266,9 +269,9 @@ required-imports = []
   "D105",
   "D106",
   "D107",
-  "S101", # use of "assert"
-  "S102", # use of "exec"
-  "S106", # possible hardcoded password.
+  "S101",   # use of "assert"
+  "S102",   # use of "exec"
+  "S106",   # possible hardcoded password.
 ]
 "tools/**" = [
   "S603", # `subprocess` call: check for execution of untrusted input (false positive)

@@ -281,6 +281,23 @@ class SearchResult(SQLModelBase, table=True):
         nullable=True,
     )
 
+    # <<< Added final_decision field >>>
+    final_decision: ScreeningDecisionType | None = Field(
+        default=None,
+        sa_column=sa.Column(
+            type_=sa_pg.ENUM(
+                ScreeningDecisionType,
+                name="screeningdecisiontype",
+                values_callable=enum_values,
+                create_type=False,
+            ),
+            nullable=True,
+            index=True,
+        ),
+        description="Final decision after conflict resolution (if any).",
+    )
+    # <<< End of added field >>>
+
     # --- Relationships ---
     # review: Mapped["SystematicReview"] = Relationship(
     #    back_populates="search_results",
@@ -317,6 +334,12 @@ class SearchResult(SQLModelBase, table=True):
 
 
 class ScreeningResolution(SQLModelBase, table=True):
+    """Screening resolution model for storing conflict resolution decisions.
+
+    Records the final decision made by the resolver agent when two screening results
+    (conservative and comprehensive) disagree, along with the reasoning and confidence.
+    """
+
     _tablename = "screening_resolutions"
 
     __tablename__ = _tablename  # pyright: ignore # type: ignore
