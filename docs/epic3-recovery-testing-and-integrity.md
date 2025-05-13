@@ -1,5 +1,9 @@
 # Epic 3: Comprehensive Testing and Database Integrity
 
+**Urgent Directive from CTO**: Postponed and deprioritized if app is functional after epics 1, 2. Benchmarking module is a P1 project (see project briefs in docs/), and is blocked by epics 1, 2. /CTO
+
+---
+
 **Goal:** Establish a robust testing framework (unit, integration, E2E for the core recovery flow) and ensure database integrity, including clear documentation for safe integration testing protocols. This supports the PRD objectives to "Implement comprehensive test coverage" and ensure the application is "stable, robust, and reliable."
 
 **Deployability:** This epic is the final stage of the recovery project. Its completion signifies that the core functionalities (Search, Screen, Resolve) are not only working but are also covered by adequate tests and that data integrity has been reviewed. It ensures the application is in a maintainable and verifiable state before any new feature development (like the benchmarking module) begins.
@@ -56,10 +60,10 @@ This epic focuses on solidifying the testing landscape and ensuring data integri
   - Ensure all integration tests for `ScreeningResolutionRepository`, `SearchResult` updates (resolver fields), and the `resolver_chain` (from Epic 2) are complete and passing. This includes:
     - Tests for `resolver_chain` running against the actual LLM API.
     - Tests for different conflict scenarios that **must** trigger the resolver:
-        - `INCLUDE` vs. `EXCLUDE` (and vice-versa).
-        - `INCLUDE` vs. `UNCERTAIN` (and vice-versa).
-        - `EXCLUDE` vs. `UNCERTAIN` (and vice-versa).
-        - `UNCERTAIN` vs. `UNCERTAIN`.
+        - `include` vs. `exclude` (and vice-versa).
+        - `include` vs. `uncertain` (and vice-versa).
+        - `exclude` vs. `uncertain` (and vice-versa).
+        - `uncertain` vs. `uncertain`.
     - *(Note: This handling of UNCERTAIN cases supersedes the initial scope in `docs/prd-resolver.md` FR1 and implies that the resolver should attempt to make a definitive decision, or explicitly output UNCERTAIN if it cannot resolve based on the input.)*
   - Write any missing integration tests identified during Epic 1 and Epic 2 implementation.
   - Ensure integration tests correctly use the `sra_integration_test` database and manage test data/state appropriately (e.g., via fixtures, cleanup in `conftest.py`).
@@ -147,3 +151,4 @@ This epic focuses on solidifying the testing landscape and ensuring data integri
 | Change          | Date       | Version | Description             | Author               |
 |-----------------|------------|---------|-------------------------|----------------------|
 | Initial Draft   | 2025-05-09 | 0.1     | First draft of Epic 3   | Product Manager Agent | 
+| Deprioritized   | 2025-05-12 | 0.2     | Postponed, benchmarking module is highest priority. See NOTE at the top. | VP (@wfjt) |
