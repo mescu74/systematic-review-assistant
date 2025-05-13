@@ -7,7 +7,7 @@
   "ruff.lint.enable": true,
   "ruff.organizeImports": true,
   "ruff.importStrategy": "fromEnvironment",
-  "ruff.nativeServer": true,
+  "ruff.nativeServer": "auto",
   "ruff.configurationPreference": "filesystemFirst",
   "ruff.lineLength": 88,
   "[python]": {
@@ -16,11 +16,15 @@
     "editor.codeActionsOnSave": {
       "source.organizeImports.ruff": "always",
       "source.fixAll.ruff": "always"
-    }
+    },
+    "notebook.formatOnSave": true
   },
-  "python.testing.pytestArgs": [
-    "tests"
-  ],
+  "python.testing.pytestArgs": ["tests"],
   "python.testing.unittestEnabled": false,
-  "python.testing.pytestEnabled": true
+  "python.testing.pytestEnabled": true,
+  "notebook.defaultFormatter": "charliermarsh.ruff",
+  "python.analysis.typeCheckingMode": "strict",
+  "files.associations": {
+    "*.py.bak": "python"
+  }
 }

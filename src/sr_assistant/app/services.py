@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-import contextlib
+import os  # Import os for getenv
 import re
 import typing as t
 import uuid
-from collections.abc import Iterator
+from collections.abc import Mapping
 from datetime import datetime
 
+# Import BioPython Entrez for PubMed API interaction
+# Assuming BioPython is installed and configured (email, api_key)
+from Bio import Entrez
 from loguru import logger
 from sqlalchemy.orm import sessionmaker
 from sqlmodel import Session
@@ -51,220 +54,300 @@ class SearchService(BaseService):
         super().__init__(factory)
         self.search_repo = search_repo or repositories.SearchResultRepository()
 
-    # --- Helper context manager for session handling ---
-    @contextlib.contextmanager
-    def _get_session(self, session: Session | None = None) -> Iterator[Session]:
-        """Provides a session, either the one passed in or a new one from the factory."""
-        if session:
-            # If session is provided, yield it directly without context management
-            yield session
-        else:
-            # If no session provided, create one using the factory's context manager
-            with self.session_factory() as new_session:
-                yield new_session
+    # --- PubMed Data Cleaning and Parsing Helpers ---
+    def _recursive_clean(self, data: t.Any) -> t.Any:
+        """Recursively convert BioPython Entrez parser elements into plain Python types."""
+        if data is None:  # Explicitly handle None first
+            return None
+        if isinstance(data, list):
+            return [self._recursive_clean(item) for item in data]
+        if isinstance(data, dict):
+            return {k: self._recursive_clean(v) for k, v in data.items()}
+        # Handle BioPython's StringElement and other similar elements that might have attributes
+        # or a special _value attribute, but can often be treated as strings directly.
+        # The key is to get to the actual string, int, etc. value.
+        if hasattr(data, "__str__") and not isinstance(data, (str, int, float, bool)):
+            # This is a broad catch; specific Bio.Entrez.Element types might need tailored handling
+            # if str(data) isn't sufficient or if attributes need to be preserved differently.
+            # For now, assume str() is a reasonable default for unknown Entrez elements.
+            if hasattr(
+                data, "_value"
+            ):  # Some BioPython elements store main content in _value
+                return data._value  # noqa: SLF001
+            return str(data)  # Fallback to string representation
+        return data
 
-    # --- Mapping functions (to be implemented) ---
-    def _map_pubmed_to_search_result(
-        self, review_id: uuid.UUID, api_record: dict
-    ) -> models.SearchResult | None:
-        """Maps a raw PubMed API record (parsed XML dict) to a SearchResult model."""
-        pmid: str = ""
-        try:
-            # Navigate through the nested dictionary structure
-            medline = api_record.get("MedlineCitation", {})
-            if not medline:
-                return None  # Essential part missing
+    def _extract_text_from_element(self, element: t.Any, default: str = "") -> str:
+        """Safely extracts text, handling None or BioPython elements."""
+        if element is None:
+            return default
+        if hasattr(element, "_value"):  # Common for Bio.Entrez.Element.StringElement
+            return str(element._value)  # noqa: SLF001
+        return str(element)
 
-            pubmed_data = api_record.get("PubmedData", {})
-            article_info = medline.get("Article", {})
-            if not article_info:
-                return None  # Essential part missing
+    def _parse_pubmed_ids(
+        self, cleaned_article_data: dict[str, t.Any]
+    ) -> tuple[str | None, str | None, str | None]:
+        """Extracts PMID, DOI, and PMC from cleaned PubMed data."""
+        pmid = self._extract_text_from_element(
+            cleaned_article_data.get("MedlineCitation", {}).get("PMID")
+        )
 
-            journal_info = article_info.get("Journal", {})
-            journal_issue = journal_info.get("JournalIssue", {})
-            pub_date = journal_issue.get("PubDate", {})
+        doi: str | None = None
+        pmc: str | None = None
 
-            # --- Extract Core IDs ---
-            pmid_elem = medline.get("PMID")
-            # PMID element might have attributes, get text content
-            pmid = str(pmid_elem) if pmid_elem is not None else ""
-            if not pmid:
-                logger.warning("Skipping record: Missing PMID")
-                return None
+        # DOI and PMC can be in PubmedData/ArticleIdList or Article/ELocationID
+        pubmed_data_ids = cleaned_article_data.get("PubmedData", {}).get(
+            "ArticleIdList", []
+        )
+        if isinstance(pubmed_data_ids, list):
+            for item in pubmed_data_ids:
+                if isinstance(item, dict):
+                    id_type = self._extract_text_from_element(
+                        item.get("IdType")
+                    ).lower()
+                    id_value = self._extract_text_from_element(
+                        item.get("$")
+                    )  # Entrez often puts value in '$'
+                    if not id_value:  # Sometimes it's in '#text' or direct from element after cleaning
+                        id_value = self._extract_text_from_element(item)
 
-            pmc = ""
-            doi = ""
-            # Handle ArticleIdList structure variations
-            article_id_list = pubmed_data.get("ArticleIdList", [])
-            if isinstance(article_id_list, list):
-                for v in article_id_list:
-                    # Ensure v is a dict-like object with attributes
-                    if hasattr(v, "attributes") and hasattr(v, "__str__"):
-                        try:
-                            id_type = v.attributes.get("IdType", "").lower()
-                            id_value = str(v)
-                            if id_type == "pmc":
-                                pmc = id_value
-                            elif id_type == "doi":
-                                doi = id_value
-                        except Exception as e:
-                            logger.warning(f"Skipping malformed ArticleId {v}: {e}")
-                            continue
-                    else:
-                        logger.warning(
-                            f"Skipping unexpected item in ArticleIdList: {v}"
-                        )
+                    if id_type == "doi":
+                        doi = id_value
+                    elif id_type == "pmc":
+                        pmc = id_value
 
-            # --- Extract Title ---
-            title_elem = article_info.get("ArticleTitle")
-            # Title element might have attributes or be complex, get text content
-            title = str(title_elem) if title_elem is not None else ""
-            if not title:
-                logger.warning(f"Skipping record {pmid}: Missing Title")
-                return None
-
-            # --- Extract Abstract ---
-            abstract_text_parts = []
-            abstract_section = article_info.get("Abstract", {}).get("AbstractText", [])
-            if isinstance(abstract_section, list):
-                for part in abstract_section:
-                    # Handle StringElement with attributes or plain strings
-                    if hasattr(part, "attributes"):
-                        label = part.attributes.get("Label", None)
-                        text = str(part) if part is not None else ""
-                        if label:
-                            abstract_text_parts.append(f"{label}: {text}")
-                        else:
-                            abstract_text_parts.append(text)
-                    elif isinstance(part, str):
-                        abstract_text_parts.append(part)
-            elif abstract_section:  # Handle single StringElement or string
-                abstract_text_parts.append(str(abstract_section))
-
-            abstract = " ".join(filter(None, abstract_text_parts)) or None
-
-            # --- Extract Journal and Year ---
-            journal_title = (
-                str(journal_info.get("Title")) if journal_info.get("Title") else None
+        if not doi:
+            article_elocation_ids = (
+                cleaned_article_data.get("MedlineCitation", {})
+                .get("Article", {})
+                .get("ELocationID", [])
             )
-            year_str: str | None = None
-            if pub_date.get("Year"):
-                year_str = str(pub_date.get("Year"))
-            elif pub_date.get("MedlineDate"):  # Fallback
-                medline_date_str = str(pub_date.get("MedlineDate"))
-                match = re.search(r"^(\d{4})", medline_date_str)
-                if match:
-                    year_str = match.group(1)
+            if isinstance(article_elocation_ids, list):
+                for item in article_elocation_ids:
+                    if isinstance(item, dict):
+                        id_type = self._extract_text_from_element(
+                            item.get("EIdType")
+                        ).lower()
+                        if id_type == "doi":
+                            doi = self._extract_text_from_element(item.get("$"))
+                            if not doi:
+                                doi = self._extract_text_from_element(item)
+                            break
+        return pmid or None, doi or None, pmc or None
 
-            year = int(year_str) if year_str and year_str.isdigit() else None
+    def _parse_pubmed_title_abstract(
+        self, cleaned_article_data: dict[str, t.Any]
+    ) -> tuple[str | None, str | None]:
+        """Extracts title and abstract from cleaned PubMed data."""
+        article_info = cleaned_article_data.get("MedlineCitation", {}).get(
+            "Article", {}
+        )
+        title = self._extract_text_from_element(article_info.get("ArticleTitle"))
 
-            # --- Extract Authors ---
-            authors_list = article_info.get("AuthorList", [])
-            authors = []
-            if isinstance(authors_list, list):
-                for author_entry in authors_list:
-                    # Check if author_entry is dict-like
-                    if isinstance(author_entry, dict):
-                        last_name = author_entry.get("LastName", "")
-                        fore_name = author_entry.get("ForeName", "")
-                        initials = author_entry.get("Initials", "")
-                        # Construct name: Prefer ForeName + LastName, fallback to LastName + Initials, etc.
-                        name_parts = [
-                            n
-                            for n in [fore_name, last_name]
-                            if n and isinstance(n, str)
-                        ]
-                        if name_parts:
-                            authors.append(" ".join(name_parts))
-                        elif (
-                            last_name
-                            and initials
-                            and isinstance(last_name, str)
-                            and isinstance(initials, str)
-                        ):
-                            authors.append(f"{last_name} {initials}")
-                        elif initials and isinstance(
-                            initials, str
-                        ):  # Fallback if only initials are present
-                            authors.append(initials)
-                        # Handle CollectiveName if present and no individual authors
-                        collective_name = author_entry.get("CollectiveName")
-                        if (
-                            collective_name
-                            and isinstance(collective_name, str)
-                            and not authors
-                        ):
-                            authors.append(collective_name)
-                    else:
-                        logger.warning(
-                            f"Skipping non-dict item in AuthorList: {author_entry}"
+        abstract_text_parts = []
+        abstract_section = article_info.get("Abstract", {}).get("AbstractText", [])
+        if isinstance(abstract_section, list):
+            for part in abstract_section:
+                if isinstance(
+                    part, dict
+                ):  # Handle sections like { 'Label': 'BACKGROUND', '$: 'text...'}
+                    label = self._extract_text_from_element(part.get("Label"))
+                    text = self._extract_text_from_element(part.get("$"))
+                    if not text:  # Fallback if value not in '$'
+                        text = self._extract_text_from_element(
+                            part
+                        )  # Check if part itself is the text after cleaning
+
+                    if (
+                        label and text and label.lower() != text.lower()
+                    ):  # Avoid label being the text
+                        abstract_text_parts.append(f"{label.upper()}: {text}")
+                    elif text:
+                        abstract_text_parts.append(text)
+                else:  # Plain string part
+                    abstract_text_parts.append(self._extract_text_from_element(part))
+        elif isinstance(abstract_section, str):  # Single string abstract
+            abstract_text_parts.append(abstract_section)
+
+        abstract = (
+            " ".join(filter(None, abstract_text_parts)) if abstract_text_parts else None
+        )
+        return title or None, abstract or None
+
+    def _parse_pubmed_journal_year(
+        self, cleaned_article_data: dict[str, t.Any]
+    ) -> tuple[str | None, str | None]:
+        """Extracts journal and year from cleaned PubMed data."""
+        article_info = cleaned_article_data.get("MedlineCitation", {}).get(
+            "Article", {}
+        )
+        journal_info = article_info.get("Journal", {})
+        journal_title = self._extract_text_from_element(journal_info.get("Title"))
+
+        year_str: str | None = None
+        pub_date = journal_info.get("JournalIssue", {}).get("PubDate", {})
+        if isinstance(pub_date, dict):
+            year_str = self._extract_text_from_element(pub_date.get("Year"))
+            if not year_str:  # Fallback for MedlineDate e.g. "2023 Spring"
+                medline_date_str = self._extract_text_from_element(
+                    pub_date.get("MedlineDate")
+                )
+                if medline_date_str:
+                    match = re.search(r"^(\d{4})", medline_date_str)
+                    if match:
+                        year_str = match.group(1)
+        return journal_title or None, year_str or None
+
+    def _parse_pubmed_authors(
+        self, cleaned_article_data: dict[str, t.Any]
+    ) -> list[str] | None:
+        """Extracts authors from cleaned PubMed data."""
+        authors_list_data = (
+            cleaned_article_data.get("MedlineCitation", {})
+            .get("Article", {})
+            .get("AuthorList", [])
+        )
+        authors: list[str] = []
+        if isinstance(authors_list_data, list):
+            for author_entry in authors_list_data:
+                if isinstance(author_entry, dict):
+                    last_name = self._extract_text_from_element(
+                        author_entry.get("LastName")
+                    )
+                    fore_name = self._extract_text_from_element(
+                        author_entry.get("ForeName")
+                    )
+                    initials = self._extract_text_from_element(
+                        author_entry.get("Initials")
+                    )
+                    collective_name = self._extract_text_from_element(
+                        author_entry.get("CollectiveName")
+                    )
+
+                    if fore_name and last_name:
+                        authors.append(f"{fore_name} {last_name}")
+                    elif last_name and initials:
+                        authors.append(f"{last_name} {initials}")
+                    elif last_name:
+                        authors.append(last_name)
+                    elif collective_name:
+                        authors.append(collective_name)
+                    elif (
+                        initials
+                    ):  # Fallback if only initials are present and no other name part
+                        authors.append(initials)
+        return authors if authors else None
+
+    def _parse_pubmed_keywords(
+        self, cleaned_article_data: dict[str, t.Any]
+    ) -> list[str] | None:
+        """Extracts keywords from cleaned PubMed data."""
+        keyword_list_data = (
+            cleaned_article_data.get("MedlineCitation", {})
+            .get("Article", {})
+            .get("KeywordList", [])
+        )
+        keywords: list[str] = []
+        if isinstance(keyword_list_data, list):
+            for (
+                kw_group
+            ) in keyword_list_data:  # This can be a list of lists or list of dicts
+                if isinstance(kw_group, list):  # e.g., [[kw1, kw2], [kw3]]
+                    for inner_kw_list in kw_group:
+                        if isinstance(inner_kw_list, list):
+                            keywords.extend(
+                                self._extract_text_from_element(kw)
+                                for kw in inner_kw_list
+                                if kw
+                            )
+                        else:  # inner_kw_list is a direct keyword string/element
+                            keywords.append(
+                                self._extract_text_from_element(inner_kw_list)
+                            )
+                elif isinstance(kw_group, dict):  # e.g. { Keyword: ['kw1', 'kw2']}
+                    actual_keywords = kw_group.get(
+                        "Keyword", []
+                    )  # 'Keyword' is a common key
+                    if isinstance(actual_keywords, list):
+                        keywords.extend(
+                            self._extract_text_from_element(kw)
+                            for kw in actual_keywords
+                            if kw
                         )
-            authors = authors or None
+                    else:
+                        keywords.append(
+                            self._extract_text_from_element(actual_keywords)
+                        )
+                else:  # Direct keyword string/element in the outer list
+                    keywords.append(self._extract_text_from_element(kw_group))
 
-            # --- Extract Keywords ---
-            keyword_list_data = medline.get("KeywordList", [])
-            keywords = []
-            if isinstance(keyword_list_data, list):
-                for kw_group in keyword_list_data:
-                    if hasattr(kw_group, "__iter__") and not isinstance(
-                        kw_group, (str, bytes, dict)
-                    ):
-                        # Handles [['keyword1'], ['keyword2']] structure sometimes seen
-                        for inner_kw_list in kw_group:
-                            if hasattr(inner_kw_list, "__iter__") and not isinstance(
-                                inner_kw_list, (str, bytes)
-                            ):
-                                keywords.extend(str(kw) for kw in inner_kw_list if kw)
-                            elif (
-                                inner_kw_list
-                            ):  # Handle plain string keyword in inner list
-                                keywords.append(str(inner_kw_list))
-                    elif isinstance(
-                        kw_group, dict
-                    ):  # Handles {'Keyword': ['kw1', 'kw2']} or {'Keyword': 'kw1'} etc.
-                        kws = kw_group.get("Keyword", [])
-                        if isinstance(kws, list):
-                            keywords.extend(str(kw) for kw in kws if kw)
-                        elif kws:
-                            keywords.append(str(kws))
-                    elif kw_group:  # Handle plain string keyword in top list
-                        keywords.append(str(kw_group))
+        return (
+            list({k for k in keywords if k}) if keywords else None
+        )  # Deduplicate and remove empty strings
 
-            keywords = list(set(keywords))  # Deduplicate
-            keywords = keywords or None
+    # --- Original Mapping function, now a coordinator ---
+    def _map_pubmed_to_search_result(
+        self,
+        review_id: uuid.UUID,
+        api_record: dict[str, t.Any],  # Will receive a CLEANED dict
+    ) -> models.SearchResult | None:
+        """Maps a CLEANED PubMed API record dictionary to a SearchResult model."""
+        try:
+            # The api_record is already cleaned by _recursive_clean
+            pmid, doi, pmc = self._parse_pubmed_ids(api_record)
+            title, abstract = self._parse_pubmed_title_abstract(api_record)
+            journal, year = self._parse_pubmed_journal_year(api_record)
+            authors = self._parse_pubmed_authors(api_record)
+            keywords = self._parse_pubmed_keywords(api_record)
 
-            # --- Create SearchResult ---
+            if not pmid or not title:
+                logger.warning(
+                    f"Skipping record due to missing PMID or title after parsing. PMID: {pmid}, Title: {title}."
+                )
+                return None
+
+            # Construct SearchResult
             search_result = models.SearchResult(
                 review_id=review_id,
                 source_db=SearchDatabaseSource.PUBMED,
                 source_id=pmid,
-                doi=doi or None,
+                doi=doi,
                 title=title,
                 abstract=abstract,
-                journal=journal_title,
+                journal=journal,
                 year=year,
                 authors=authors,
                 keywords=keywords,
-                raw_data=api_record,  # Store the original record
-                source_metadata={  # Store potentially useful extra IDs/info
-                    "pmc": pmc or None,
-                    "publication_status": pubmed_data.get("PublicationStatus", None),
-                    "mesh_headings": medline.get(
-                        "MeshHeadingList", None
-                    ),  # Example: include MeSH
+                raw_data=api_record,
+                source_metadata={
+                    "pmc": pmc,
+                    "publication_status": self._extract_text_from_element(
+                        api_record.get("PubmedData", {}).get("PublicationStatus")
+                    ),
+                    # Add MeSH Headings back
+                    "mesh_headings": api_record.get("MedlineCitation", {}).get(
+                        "MeshHeadingList", []
+                    ),
                 },
             )
             return search_result
 
         except Exception as e:
-            pmid_for_log = pmid if pmid else "UNKNOWN"
+            pmid_for_log = api_record.get("MedlineCitation", {}).get("PMID", "UNKNOWN")
+            # Ensure pmid_for_log is a string for the log message
+            if not isinstance(pmid_for_log, str):
+                pmid_for_log = str(pmid_for_log)
+
             logger.opt(exception=True).error(
-                f"Error mapping PubMed record {pmid_for_log}: {e}. Record snippet: {str(api_record)[:500]}"
+                f"Error mapping cleaned PubMed record {pmid_for_log}: {e!r}. Record snippet: {str(api_record)[:500]}"
             )
-            return None  # Return None on any mapping error
+            return None
 
     def _map_scopus_to_search_result(
-        self, review_id: uuid.UUID, api_record: dict
+        self,
+        review_id: uuid.UUID,
+        api_record: dict[str, t.Any],  # Updated type hint
     ) -> models.SearchResult | None:
         """Maps a raw Scopus API record (dict) to a SearchResult model."""
         source_id: str = ""
@@ -359,228 +442,348 @@ class SearchService(BaseService):
             return None  # Return None on any mapping error
 
     # --- Core Service Methods (Synchronous) ---
-    def add_api_search_results(
+    def search_pubmed_and_store_results(
         self,
         review_id: uuid.UUID,
-        source_db: SearchDatabaseSource,
-        api_records: list[dict[str, t.Any]],
-        session: Session | None = None,
+        query: str,
+        max_results: int = 100,
+        # Remove Entrez credential parameters
+        # entrez_email: str = "your.email@example.com",
+        # entrez_api_key: str | None = None,
     ) -> Sequence[models.SearchResult]:
-        """Adds search results from an external API (sync).
+        """Performs a PubMed search, maps results, stores them, and handles sessions.
 
         Args:
-            review_id: The ID of the review to add results to.
-            source_db: The source database of the results.
-            api_records: A list of raw API record dictionaries.
-            session: An optional existing DB session to use.
+            review_id: The ID of the review to associate results with.
+            query: The search query string for PubMed.
+            max_results: The maximum number of results to fetch and store.
+            # entrez_email and entrez_api_key removed from args
 
         Returns:
-            A sequence of the added SearchResult objects (refreshed).
-        """
-        added_results_output: list[models.SearchResult] = []
-        if not api_records:
-            return added_results_output
+            A sequence of the added/stored SearchResult objects (refreshed).
 
+        Raises:
+            ServiceError: If there is an issue with the API call or database operation,
+                        or if NCBI credentials are not set in environment variables.
+        """
         logger.info(
-            f"Processing {len(api_records)} results from {source_db.name} for review {review_id}"
+            f"Starting PubMed search for review {review_id!r} with query {query!r} (max: {max_results})"
         )
 
-        # Use the helper context manager
-        with self._get_session(session) as active_session:
+        # Get Entrez credentials from environment variables
+        entrez_email = os.getenv("NCBI_EMAIL")
+        entrez_api_key = os.getenv("NCBI_API_KEY")
+
+        if not entrez_email:
+            logger.error(
+                "NCBI_EMAIL environment variable not set. PubMed search cannot proceed."
+            )
+            raise ServiceError("NCBI_EMAIL environment variable not set.")
+
+        # Configure Entrez
+        Entrez.email = entrez_email
+        if entrez_api_key:
+            Entrez.api_key = entrez_api_key
+        else:
+            logger.warning("NCBI_API_KEY not set. PubMed searches may be rate-limited.")
+
+        pmids: list[str] = []
+        try:
+            logger.debug("Executing Entrez.esearch for PMIDs...")
+            handle = Entrez.esearch(
+                db="pubmed", term=query, retmax=max_results, sort="relevance"
+            )
+            search_results = Entrez.read(handle)
+            handle.close()
+            # Cast search_results to dict to satisfy type checker for .get()
+            # Assuming the returned BioPython object behaves like a dict for .get()
+            # Use collections.abc.Mapping for more general dict-like structures
+            pmids = t.cast("Mapping[str, t.Any]", search_results).get(
+                "IdList", []
+            )  # This uses Mapping from collections.abc
+            logger.info(f"Found {len(pmids)} PMIDs from PubMed search.")
+            if not pmids:
+                return []
+        except Exception as e:
+            logger.opt(exception=True).error(
+                f"PubMed Entrez.esearch failed for query {query!r}"
+            )
+            raise ServiceError("PubMed search (esearch) failed") from e
+
+        # Fetch details for the PMIDs
+        records_to_map: list[dict[str, t.Any]] = []
+        try:
+            logger.debug(f"Executing Entrez.efetch for {len(pmids)} PMIDs...")
+            handle = Entrez.efetch(
+                db="pubmed", id=pmids, rettype="medline", retmode="xml"
+            )
+            # Entrez.read for medline XML typically returns a list of dict-like objects (PubmedArticle).
+            # Each item in this list is an individual article's data.
+            fetched_data = Entrez.read(handle)
+            handle.close()
+
+            # Ensure fetched_data is a list of dictionaries.
+            # If a single article is fetched, Entrez.read might return the dict directly.
+            if isinstance(fetched_data, list):
+                # Ensure all elements in the list are dictionaries before assigning
+                # The Bio.Entrez.Parser objects often behave like dicts but might not be instances of dict.
+                # For safety, and because our mappers expect dict[str, t.Any], we can try to convert.
+                # However, direct iteration is usually fine if they are dict-like.
+                # The linter error suggests they are not always treated as pure dicts by type checkers.
+                # Let's assume for now they are sufficiently dict-like for the mapper.
+                # If `_map_pubmed_to_search_result` fails, it means these aren't truly dicts.
+                records_to_map = [
+                    item for item in fetched_data if isinstance(item, dict)
+                ]
+                if len(records_to_map) != len(fetched_data):
+                    logger.warning(
+                        f"Some items from Entrez.efetch were not dictionaries and were skipped. Original count: {len(fetched_data)}, Dict count: {len(records_to_map)}"
+                    )
+            elif isinstance(fetched_data, dict):
+                records_to_map = [fetched_data]  # Wrap single dict in a list
+            else:
+                logger.warning(
+                    f"Unexpected data type from Entrez.efetch: {type(fetched_data)}. Expected list or dict."
+                )
+                records_to_map = []
+
+            logger.info(
+                f"Successfully fetched {len(records_to_map)} PubMed records to map."
+            )
+
+        except Exception as e:
+            logger.opt(exception=True).error(
+                f"PubMed Entrez.efetch failed for PMIDs: {pmids!r}"
+            )
+            raise ServiceError("PubMed fetch (efetch) failed") from e
+
+        # Map and Store results within a single transaction
+        added_results_output: list[models.SearchResult] = []
+        if not records_to_map:
+            return added_results_output
+
+        logger.info(f"Mapping {len(records_to_map)} fetched PubMed records...")
+        with self.session_factory.begin() as session:
             try:
                 results_to_add: list[models.SearchResult] = []
-                for record in api_records:
-                    mapped_result: models.SearchResult | None = None
-                    if source_db == SearchDatabaseSource.PUBMED:
-                        mapped_result = self._map_pubmed_to_search_result(
-                            review_id, record
+                for raw_record in records_to_map:
+                    # Clean the raw record first using the helper
+                    try:
+                        # recursive_clean handles various BioPython types and returns standard types
+                        clean_record = self._recursive_clean(raw_record)
+
+                        # Check if the cleaned result is a dictionary, as expected by the mapper
+                        if not isinstance(clean_record, dict):
+                            logger.warning(
+                                f"Skipping record after cleaning: Expected dict, got {type(clean_record)}. Original: {str(raw_record)[:200]}"
+                            )
+                            continue
+
+                    except Exception as clean_exc:
+                        logger.error(
+                            f"Failed to clean PubMed record: {clean_exc!r}. Record snippet: {str(raw_record)[:200]}"
                         )
-                    elif source_db == SearchDatabaseSource.SCOPUS:
-                        mapped_result = self._map_scopus_to_search_result(
-                            review_id, record
-                        )
-                    else:
-                        logger.warning(f"Unsupported source database: {source_db.name}")
-                        continue
+                        continue  # Skip this record if cleaning fails
+
+                    # Now map the cleaned dictionary
+                    mapped_result = self._map_pubmed_to_search_result(
+                        review_id, clean_record
+                    )
 
                     if mapped_result:
+                        # Basic validation before adding to list
                         if not mapped_result.source_id or not mapped_result.title:
                             logger.warning(
-                                f"Skipping record due to missing source_id or title: {mapped_result}"
+                                f"Skipping mapped record due to missing source_id or title: {mapped_result.source_id}"
                             )
                             continue
                         results_to_add.append(mapped_result)
                     else:
-                        logger.warning(f"Failed to map record from {source_db.name}")
+                        # Error is logged within the mapping function
+                        logger.warning("Failed to map a PubMed record.")
 
                 if not results_to_add:
-                    logger.info("No valid results mapped for addition.")
+                    logger.info("No valid PubMed results mapped for addition.")
                     return []
 
+                logger.info(
+                    f"Attempting to add {len(results_to_add)} mapped PubMed results to the database..."
+                )
                 try:
-                    # Pass the active_session to the repository method
+                    # Pass the session to the repository method
                     added_results_in_session = self.search_repo.add_all(
-                        active_session, results_to_add
+                        session, results_to_add
                     )
                     logger.info(
-                        f"Added/flushed {len(results_to_add)} results to session."
+                        f"Added/flushed {len(added_results_in_session)} PubMed results to session for review {review_id!r}."
                     )
+                    # Commit is handled by session_factory.begin()
+                    # Refresh results within the same session after potential flush
+                    refreshed_results = []
+                    for result in added_results_in_session:
+                        try:
+                            session.refresh(result)
+                            refreshed_results.append(result)
+                        except Exception as refresh_exc:
+                            logger.warning(
+                                f"Could not refresh result {getattr(result, 'id', '?')} after add_all: {refresh_exc!r}"
+                            )
+                            refreshed_results.append(
+                                result
+                            )  # Still append potentially stale object
+                    added_results_output = refreshed_results
+                    logger.info(
+                        f"Stored and refreshed {len(added_results_output)} PubMed results."
+                    )
+
                 except repositories.ConstraintViolationError as e:
                     logger.warning(
-                        f"Constraint violation during add_all, likely duplicates: {e}"
+                        f"Constraint violation during PubMed add_all, likely duplicates: {e!r}"
                     )
-                    # Always rollback the active session state after a constraint violation
-                    # regardless of whether it was passed in or created internally.
-                    active_session.rollback()
-                    logger.info(
-                        "Rolled back due to constraint violation. Returning empty list."
-                    )
-                    return []  # Return empty list as per current logic
-
-                # Only commit if we created the session
-                if not session:
-                    active_session.commit()
-                logger.info(
-                    f"Committed {len(added_results_in_session)} search results for review {review_id}"
-                )
-
-                # Refresh results after commit/flush using the active session
-                refreshed_results = []
-                for (
-                    result
-                ) in added_results_in_session:  # Use the result from repo.add_all
-                    try:
-                        active_session.refresh(result)
-                        refreshed_results.append(result)
-                    except Exception as refresh_exc:
-                        logger.warning(
-                            f"Could not refresh result {getattr(result, 'id', '?')}: {refresh_exc}"
-                        )
-                        # Still append the potentially stale object if refresh fails
-                        refreshed_results.append(result)
-                added_results_output = refreshed_results
+                    # Rollback is handled by session_factory.begin()
+                    logger.info("Transaction rolled back due to constraint violation.")
+                    # Return empty list or re-raise depending on desired behavior. Returning empty for now.
+                    return []
 
             except Exception as e:
                 logger.exception(
-                    f"Error adding API search results for review {review_id}: {e}"
+                    f"Error during mapping or storing PubMed results for review {review_id!r}"
                 )
-                # Always rollback the active session state after an error
-                active_session.rollback()
-                raise ServiceError(f"Failed to add search results: {e}") from e
+                # Rollback is handled automatically by .begin() context manager on exception
+                raise ServiceError("Failed to map or store PubMed results") from e
 
         return added_results_output
 
     def get_search_results_by_review_id(
-        self, review_id: uuid.UUID, session: Session | None = None
+        self, review_id: uuid.UUID
     ) -> Sequence[models.SearchResult]:
         """Retrieves all search results associated with a given review ID (sync)."""
-        logger.debug(f"Getting search results for review_id: {review_id}")
-        # Use the helper context manager
-        with self._get_session(session) as active_session:
+        logger.debug(f"Getting search results for review_id: {review_id!r}")
+        # Use the internal session factory with .begin() for transaction management
+        with self.session_factory.begin() as session:
             try:
-                # Pass the active_session to the repository method
-                results = self.search_repo.get_by_review_id(active_session, review_id)
+                # Pass the internally managed session to the repository method
+                results = self.search_repo.get_by_review_id(session, review_id)
                 logger.debug(
-                    f"Found {len(results)} search results for review {review_id}"
+                    f"Found {len(results)} search results for review {review_id!r}"
                 )
                 return results
             except Exception as e:
                 logger.exception(
-                    f"Error getting search results for review {review_id}: {e}"
+                    f"Error getting search results for review {review_id!r}"
                 )
-                raise ServiceError(f"Failed to get search results: {e}") from e
+                # Rollback is handled automatically by .begin() context manager on exception
+                raise ServiceError("Failed to get search results") from e
 
     def get_search_result_by_source_details(
         self,
         review_id: uuid.UUID,
         source_db: SearchDatabaseSource,
         source_id: str,
-        session: Session | None = None,
     ) -> models.SearchResult | None:
         """Retrieves a specific search result using its source database and ID (sync)."""
         logger.debug(
-            f"Getting search result for review {review_id}, source {source_db.name}, id {source_id}"
+            f"Getting search result for review {review_id!r}, source {source_db.name!r}, id {source_id!r}"
         )
-        # Use the helper context manager
-        with self._get_session(session) as active_session:
+        # Use the internal session factory with .begin() for transaction management
+        with self.session_factory.begin() as session:
             try:
-                # Pass the active_session to the repository method
+                # Pass the internally managed session to the repository method
                 result = self.search_repo.get_by_source_details(
-                    active_session, review_id, source_db, source_id
+                    session, review_id, source_db, source_id
                 )
                 if result:
-                    logger.debug(f"Found search result {result.id}")
+                    logger.debug(f"Found search result {result.id!r}")
                 else:
                     logger.debug("Search result not found.")
                 return result
             except Exception as e:
-                # Fix implicit string concatenation in f-string
-                log_message = (
-                    f"Error getting search result for review {review_id}, "
-                    f"source {source_db.name}, id {source_id}: {e}"
+                logger.exception(
+                    f"Error getting search result for review {review_id!r}, source {source_db.name!r}, id {source_id!r}"
                 )
-                logger.exception(log_message)
+                # Rollback is handled automatically by .begin() context manager on exception
                 raise ServiceError(
-                    f"Failed to get search result by source details: {e}"
+                    "Failed to get search result by source details"
                 ) from e
 
     # Implement sync update method
     def update_search_result(
-        self, result_update: models.SearchResult, session: Session | None = None
+        self,
+        result_id: uuid.UUID,
+        update_data: schemas.SearchResultUpdate,  # Changed signature
     ) -> models.SearchResult:
-        """Updates an existing search result."""
-        if not result_update.id:
-            raise ValueError("Cannot update SearchResult without an ID.")
-        logger.debug(f"Updating search result id: {result_update.id}")
-        # Use the helper context manager
-        with self._get_session(session) as active_session:
+        """Updates an existing search result using Pydantic schema for update data."""
+        logger.debug(f"Updating search result id: {result_id!r}")
+
+        with (
+            self.session_factory.begin() as session
+        ):  # Use .begin() for transaction management
             try:
-                # Pass the active_session to the repository method
-                updated_result = self.search_repo.update(active_session, result_update)
-                # Only commit if we created the session
-                if not session:
-                    active_session.commit()
-                # Refresh using the active session
-                active_session.refresh(updated_result)
-                logger.info(f"Successfully updated search result {updated_result.id}")
-                return updated_result
-            except repositories.RecordNotFoundError as e:
-                logger.warning(f"Update failed: {e}")
-                # Always rollback the active session state after an error
-                active_session.rollback()
-                raise
-            except Exception as e:
-                logger.exception(
-                    f"Error updating search result {result_update.id}: {e}"
+                # Fetch the existing SearchResult object
+                db_search_result = self.search_repo.get_by_id(session, result_id)
+                if not db_search_result:
+                    # Raise a specific error if not found, to be handled by caller or logger
+                    raise repositories.RecordNotFoundError(
+                        f"SearchResult with id {result_id} not found for update."
+                    )
+
+                # Apply updates from the Pydantic schema to the SQLModel instance
+                # model_dump(exclude_unset=True) ensures only provided fields are used for update
+                update_dict = update_data.model_dump(exclude_unset=True)
+
+                # Update the db_search_result object with new data
+                # SQLModel instances have a .sqlmodel_update method for this
+                for key, value in update_dict.items():
+                    setattr(db_search_result, key, value)
+
+                # The repository's update method should handle adding to session and flushing.
+                # Based on the provided repository.py, it does merge and flush.
+                updated_result_from_repo = self.search_repo.update(
+                    session, db_search_result
                 )
-                # Always rollback the active session state after an error
-                active_session.rollback()
-                raise ServiceError(f"Failed to update search result: {e}") from e
+
+                # Explicitly refresh the instance after the repository has flushed it,
+                # to ensure all server-side changes (e.g., onupdate timestamps) are loaded.
+                session.refresh(updated_result_from_repo)
+
+                logger.info(
+                    f"Successfully updated search result {updated_result_from_repo.id!r}"
+                )
+                # Commit is handled by session_factory.begin() on successful exit
+                return updated_result_from_repo
+
+            except repositories.RecordNotFoundError:  # Specific re-raise
+                # Logged by repo or service can log here too. Re-raise to inform caller.
+                logger.warning(
+                    f"Update failed for SearchResult {result_id!r}: Record not found."
+                )
+                raise  # Re-raise the RecordNotFoundError
+
+            except Exception as e:
+                logger.exception(f"Error updating search result {result_id!r}")
+                # Rollback is handled by session_factory.begin() on exception
+                raise ServiceError(f"Failed to update search result: {e!r}") from e
 
     # Implement sync delete method
-    def delete_search_result(
-        self, result_id: uuid.UUID, session: Session | None = None
-    ):
+    def delete_search_result(self, result_id: uuid.UUID) -> None:
         """Deletes a search result by its ID."""
-        logger.debug(f"Deleting search result id: {result_id}")
-        # Use the helper context manager
-        with self._get_session(session) as active_session:
+        logger.debug(f"Deleting search result id: {result_id!r}")
+        # Use the internal session factory with .begin() for transaction management
+        with self.session_factory.begin() as session:
             try:
-                # Pass the active_session to the repository method
-                self.search_repo.delete(active_session, result_id)
-                # Only commit if we created the session
-                if not session:
-                    active_session.commit()
-                logger.info(f"Successfully deleted search result {result_id}")
+                # Pass the internally managed session to the repository method
+                self.search_repo.delete(session, result_id)
+                # Commit is handled automatically by .begin() context manager on successful exit
+                logger.info(f"Successfully deleted search result {result_id!r}")
             except repositories.RecordNotFoundError as e:
-                logger.warning(f"Delete failed: {e}")
-                # Always rollback the active session state after an error
-                active_session.rollback()
+                logger.warning(
+                    f"Delete failed for search result {result_id!r}: Record not found."
+                )
+                # Rollback is handled automatically by .begin() context manager on exception
             except Exception as e:
-                logger.exception(f"Error deleting search result {result_id}: {e}")
-                # Always rollback the active session state after an error
-                active_session.rollback()
-                raise ServiceError(f"Failed to delete search result: {e}") from e
+                logger.exception(f"Error deleting search result {result_id!r}")
+                # Rollback is handled automatically by .begin() context manager on exception
+                raise ServiceError("Failed to delete search result") from e
 
 
 # --- Review Service ---
@@ -602,98 +805,85 @@ class ReviewService(BaseService):
     ) -> models.SystematicReview:
         """Creates a new systematic review."""
         logger.debug(f"Creating review: {review_data.research_question[:50]}...")
-        # Create the SQLModel instance from the Pydantic schema
-        # Ensure all required fields are present in SystematicReviewCreate or have defaults
-        review = models.SystematicReview.model_validate(review_data)
-        with self.session_factory() as session:
+        review_dict = review_data.model_dump(exclude_none=True)
+        review = models.SystematicReview.model_validate(review_dict)
+        with self.session_factory.begin() as session:
             try:
                 added_review = self.review_repo.add(session, review)
-                session.commit()
                 session.refresh(added_review)
-                logger.info(f"Successfully created review {added_review.id}")
+                logger.info(f"Successfully created review {added_review.id!r}")
                 return added_review
             except Exception as e:
                 logger.exception("Error creating review")
-                session.rollback()
-                raise ServiceError(f"Failed to create review: {e}") from e
+                raise ServiceError(f"Failed to create review: {e!r}") from e
 
     def get_review(self, review_id: uuid.UUID) -> models.SystematicReview | None:
         """Gets a review by its ID."""
-        logger.debug(f"Getting review id: {review_id}")
-        with self.session_factory() as session:
+        logger.debug(f"Getting review id: {review_id!r}")
+        with self.session_factory.begin() as session:
             try:
                 review = self.review_repo.get_by_id(session, review_id)
                 if not review:
-                    logger.warning(f"Review {review_id} not found.")
+                    logger.warning(f"Review {review_id!r} not found.")
                     return None
-                logger.debug(f"Found review {review_id}")
+                logger.debug(f"Found review {review_id!r}")
                 return review
             except Exception as e:
-                logger.exception(f"Error getting review {review_id}: {e}")
-                raise ServiceError(f"Failed to get review: {e}") from e
+                logger.exception(f"Error getting review {review_id!r}")
+                raise ServiceError(f"Failed to get review: {e!r}") from e
 
     def get_all_reviews(self) -> Sequence[models.SystematicReview]:
         """Gets all reviews."""
         logger.debug("Getting all reviews")
-        with self.session_factory() as session:
+        with self.session_factory.begin() as session:
             try:
                 reviews = self.review_repo.get_all(session)
                 logger.debug(f"Found {len(reviews)} reviews")
                 return reviews
             except Exception as e:
                 logger.exception("Error getting all reviews")
-                raise ServiceError(f"Failed to get all reviews: {e}") from e
+                raise ServiceError(f"Failed to get all reviews: {e!r}") from e
 
     def update_review(
         self, review_update_data: schemas.SystematicReviewUpdate, review_id: uuid.UUID
     ) -> models.SystematicReview:
         """Updates an existing review using partial update schema."""
-        logger.debug(f"Updating review id: {review_id}")
-        with self.session_factory() as session:
+        logger.debug(f"Updating review id: {review_id!r}")
+        with self.session_factory.begin() as session:
             try:
-                # Get the existing review
                 db_review = self.review_repo.get_by_id(session, review_id)
                 if not db_review:
                     raise repositories.RecordNotFoundError(
-                        f"Review {review_id} not found for update."
+                        f"Review {review_id!r} not found for update."
                     )
+                update_dict = review_update_data.model_dump(exclude_unset=True)
 
-                # Create dictionary of fields to update, excluding unset fields from input
-                update_data = review_update_data.model_dump(exclude_unset=True)
+                db_review.sqlmodel_update(update_dict)
 
-                # Update the db_review object with new data
-                db_review.sqlmodel_update(update_data)
+                updated_review = self.review_repo.update(session, db_review)
+                session.refresh(updated_review)
 
-                # Add to session (marks it as dirty) and commit
-                session.add(db_review)
-                session.commit()
-                session.refresh(db_review)
-                logger.info(f"Successfully updated review {db_review.id}")
-                return db_review
+                logger.info(f"Successfully updated review {updated_review.id!r}")
+                return updated_review
             except repositories.RecordNotFoundError as e:
-                logger.warning(f"Update failed: {e}")
-                session.rollback()
+                logger.warning(f"Update failed: {e!r}")
                 raise  # Re-raise specific error
             except Exception as e:
-                logger.exception(f"Error updating review {review_id}: {e}")
-                session.rollback()
-                raise ServiceError(f"Failed to update review: {e}") from e
+                logger.exception(f"Error updating review {review_id!r}")
+                raise ServiceError(f"Failed to update review: {e!r}") from e
 
     def delete_review(self, review_id: uuid.UUID) -> None:
         """Deletes a review. Assumes DB cascade handles related data or it's handled separately."""
-        logger.debug(f"Deleting review id: {review_id}")
-        with self.session_factory() as session:
+        logger.debug(f"Deleting review id: {review_id!r}")
+        with self.session_factory.begin() as session:
             try:
                 self.review_repo.delete(session, review_id)
-                session.commit()
-                logger.info(f"Successfully deleted review {review_id}")
+                logger.info(f"Successfully deleted review {review_id!r}")
             except repositories.RecordNotFoundError as e:
-                logger.warning(f"Delete failed: {e}")
-                session.rollback()
+                logger.warning(f"Delete failed: {e!r}")
             except Exception as e:
-                logger.exception(f"Error deleting review {review_id}: {e}")
-                session.rollback()
-                raise ServiceError(f"Failed to delete review: {e}") from e
+                logger.exception(f"Error deleting review {review_id!r}")
+                raise ServiceError(f"Failed to delete review: {e!r}") from e
 
 
 # --- Screening Service ---

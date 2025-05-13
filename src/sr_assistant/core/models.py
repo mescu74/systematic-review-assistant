@@ -146,6 +146,7 @@ class SystematicReview(SQLModelBase, table=True):
     """Answers to the criteria framework."""
 
     inclusion_criteria: str | None = Field(
+        default=None,
         description="Inclusion criteria. To be replaced by above framework fields.",
         sa_column=sa.Column(sa.Text(), nullable=True),
     )

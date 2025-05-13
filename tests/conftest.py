@@ -10,10 +10,12 @@ from dotenv import load_dotenv
 from sqlmodel import Session, SQLModel, create_engine
 
 
+# FIXME: THIS EXPOSES CREDENTIALS IN LOGS/CI! See alembic/env.py for how to mask the conn string.
 @pytest.fixture(scope="session")
 def db_engine() -> Generator[sa.Engine, None, None]:
     """Yields a SQLAlchemy engine scoped to the test session."""
     load_dotenv(".env.test", override=True)
+    # WARN: Contains plaintext credentials!
     db_url = os.getenv("SRA_DATABASE_URL", os.getenv("DATABASE_URL", ""))
 
     if not db_url:
