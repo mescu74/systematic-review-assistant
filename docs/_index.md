@@ -4,20 +4,28 @@ This index provides a central point of navigation for various documentation and 
 
 ## Core Documentation
 
-While there isn't a main `readme.md` in this directory, it contains several key documents:
+This section links to key documents within the `docs` directory:
 
-*   `architecture.md`: Describes the system architecture.
-*   `data-models.md`: Details the data models used.
-*   `api-reference.md`: API reference documentation.
-*   `coding-standards.md`: Guidelines for writing code.
-*   `epic*.md` files: Documentation for specific project epics.
-*   `environment-vars.md`: Information on environment variables.
-*   `naming-conventions.md`: Conventions for naming entities.
-*   `prd-*.md` files: Product Requirement Documents.
-*   `project-structure.md`: Overview of the project's directory layout.
-*   `tech-stack.md`: Lists the technologies used.
-*   `testing-strategy.md`: Approach to testing.
-*   Other `.md` files for specific project aspects and recovery plans.
+*   [`MPH_SR_Prototype_Full_Vision_PM_Prompt.md`](./MPH_SR_Prototype_Full_Vision_PM_Prompt.md): Initial PM prompt for the prototype vision.
+*   [`MPH_SR_Prototype_Main_Project_Brief.md`](./MPH_SR_Prototype_Main_Project_Brief.md): Main project brief for the prototype.
+*   [`SRA_Recovery_PM_Prompt.md`](./SRA_Recovery_PM_Prompt.md): PM prompt for the SRA Recovery phase.
+*   [`SRA_Recovery_Project_Brief.md`](./SRA_Recovery_Project_Brief.md): Project brief for the SRA Recovery phase.
+*   [`api-reference.md`](./api-reference.md): API reference documentation.
+*   [`architecture.md`](./architecture.md): Describes the system architecture.
+*   [`coding-standards.md`](./coding-standards.md): Guidelines for writing code.
+*   [`data-models.md`](./data-models.md): Details the data models used.
+*   [`environment-vars.md`](./environment-vars.md): Information on environment variables.
+*   [`epic1-recovery-search-stabilization.md`](./epic1-recovery-search-stabilization.md): Documentation for Epic 1.
+*   [`epic2-recovery-resolver-implementation.md`](./epic2-recovery-resolver-implementation.md): Documentation for Epic 2.
+*   [`epic3-recovery-testing-and-integrity.md`](./epic3-recovery-testing-and-integrity.md): Documentation for Epic 3.
+*   [`naming-conventions.md`](./naming-conventions.md): Conventions for naming entities.
+*   [`po-recovery-approval.md`](./po-recovery-approval.md): Product Owner approval documentation for recovery phase.
+*   [`prd-recovery.md`](./prd-recovery.md): Product Requirements Document for the recovery phase.
+*   [`prd-resolver.md`](./prd-resolver.md): Product Requirements Document for the resolver.
+*   [`project-structure.md`](./project-structure.md): Overview of the project's directory layout.
+*   [`sr_metrics.md`](./sr_metrics.md): Metrics related to the Systematic Review Assistant.
+*   [`tech-stack.md`](./tech-stack.md): Lists the technologies used.
+*   [`testing-strategy.md`](./testing-strategy.md): Approach to testing.
 
 ### AI Chats
 
