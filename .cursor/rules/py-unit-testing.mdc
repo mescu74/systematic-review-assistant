@@ -3,6 +3,8 @@ description:
 globs: tests/**/*.py
 alwaysApply: false
 ---
-## ALWAYS use **pytest-mock** and **mocker** instead of unittest.mock.patch or MagickMock.
+
+# ALWAYS use **pytest-mock** and **mocker** instead of unittest.mock.patch or unittest's MagickMock.
+
 - *Rationale*: This project is standardized on pytest and pytest-mock provides better DX and makes code simpler and easier to implement. **pytest-mock** is also THE idiomatic way to mock with pytest. There is no justification for unittest, pytest ecosystem is vastly superior.
 - Use **context7** MCP tools and **tavily-mcp** to lookup documentation and best practices for pytest-mock if you're unsure about anything.
