@@ -1,3 +1,8 @@
+---
+description: Rules for Mermaid syntax. These rules correct common mistakes you make when generating Mermaid diagrams in Markdown, and explains Mermaid best practices to ensure your Markdown Mermaid diagrams display properly on GitHub. You MUST follow these rules when creating Mermain diagrams, be it nested in Markdown or a standalone file.
+globs: *.md,*.mdx,*.mdoc,*.mmd,*.mermaid
+alwaysApply: false
+---
 # **Essential rules** for creating **Mermaid diagrams** that render well in GitHub Markdown:
 
 1.  **Use the Correct Fenced Code Block:**

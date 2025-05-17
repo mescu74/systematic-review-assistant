@@ -1,0 +1,40 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Commenting Rules
+
+- Only add meaningful comments that provide a rationale, important domain knowledge, or the *how* for complex code.
+- Always use impersonal tone, **NEVER address the reader***, e.g., with "you". Using "we" is fine when applicable.
+- Your comment must read as if written by a human developer.
+
+- **Always use a standard label**: This is **mandatory**, you're NOT ALLOWED to add comments without a below label.
+    - TODO
+    - NOTE | INFO
+    - WARN | XXX
+    - PERF | OPTIM
+    - TEST | PASSED | FAILED
+    - HACK (messy code, ugly fixes)
+
+    * Do not add syntax around lanbel like **TODO:**. IDEs manage highlighting these already and markdown only breaks IDE integration.
+
+- **Rationale for labels**; They enable crucial IDE integration and can be searched and listed workspace wide. They also mitigate LLM's typical inane and redundant commenting. LLM's tend to litter code with idiotic comments. **DO NOT DO THIS** or you will be **fired!**
+
+- **NEVER remove existing comments*** that are not yours unless the user explicitly approves removal.
+- Do not litter code with inane comments like "# You can select x or y". They will be purged automatically, you're only wasting tokens.
+- Always add thorough docstrings in public function, methods, classes, and at module level if applicable.
+
+<example>
+# INFO: Always wrap comments on col 80 and align
+        the following lines with the sentence after
+        the label.
+</example>
+
+<example type="invalid">
+# You can use library X instead of Y depending on your requirements
+
+# x . # Remove variable x
+
+x += 1 # increment x
+</example>
