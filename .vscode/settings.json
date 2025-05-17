@@ -14,17 +14,26 @@
     "editor.defaultFormatter": "charliermarsh.ruff",
     "editor.formatOnSave": true,
     "editor.codeActionsOnSave": {
-      "source.organizeImports.ruff": "always",
-      "source.fixAll.ruff": "always"
-    },
-    "notebook.formatOnSave": true
+      "source.organizeImports.ruff": "explicit",
+      "source.fixAll.ruff": "explicit"
+    }
   },
-  "python.testing.pytestArgs": ["tests"],
+  "[markdown]": {
+    // TODO: markdowncli-cli2 formatting and rules
+    "editor.codeActionsOnSave": {
+      "source.organizeLinkDefinitions": "explicit"
+    },
+    "editor.formatOnSave": true
+  },
+  "python.testing.pytestArgs": [
+    "tests"
+  ],
   "python.testing.unittestEnabled": false,
   "python.testing.pytestEnabled": true,
   "notebook.defaultFormatter": "charliermarsh.ruff",
   "python.analysis.typeCheckingMode": "strict",
   "files.associations": {
-    "*.py.bak": "python"
+    "*.py.bak": "python",
+    "*.md.txt": "markdown"
   }
 }
