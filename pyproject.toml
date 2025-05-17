@@ -186,6 +186,7 @@ ignore = [
   "D104",    # Missing docstring in public package
   "D400",    # First line should end with a period TODO: enable this
   "D412",    # newline after docstring section: to create a note admonition in mkdocstrings docs, a blank line is needed
+  "FIX001",  # FIXME: comments are reported by this rule. We use other tools to scan for TODO etc. comments.
   "FIX002",  # TODO comments
   "E501",    # Line too long, formatting will handle and sometimes it's fine
   "ERA001",  # Commented-out code
@@ -196,6 +197,7 @@ ignore = [
   #"PLR",     # Design related pylint codes
   #"PT011",   # `pytest.raises(ValueError)` is too broad, set the `match` parameter or use a more specific exception"
   "T201",   # Use of print
+  "TD001",  # incorret TODO comment label, e.g., this flags FIXME which is valid in our project. TODO: is this configurable?
   "TD002",
   "TD003",
   "TRY300", # Use else in try except
@@ -288,7 +290,7 @@ avoid-escape = true
 
 [tool.ruff.lint.pycodestyle]
 max-line-length = 88
-max-doc-length = 120
+max-doc-length = 200
 ignore-overlong-task-comments = true
 
 [tool.pytest.ini_options]
