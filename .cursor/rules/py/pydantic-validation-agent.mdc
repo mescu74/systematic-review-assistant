@@ -1,0 +1,69 @@
+---
+description: This rule enforces the project's best practices for working with Pydantic models (referred to as "schemas"). Always follow these rules when working with Pydantic models/schemas. If you do not, you will cause linter errors and subtle bugs. It is IMPERRATIVE you read and follow this rule whenever using Pydantic in any way.
+globs:
+alwaysApply: false
+---
+# Pydantic Model Validation and Instantiation
+
+This rule enforces the project's best practices for working with Pydantic models (referred to as "schemas").
+
+## Critical Rules
+
+-   **ALWAYS use `Model.model_validate(data_dict)` for instantiation from a dictionary.**
+    -   **DO NOT** use `Model(**data_dict)`. This older syntax can bypass some Pydantic v2 validation steps, lead to subtle bugs, and often causes Pyright type validation errors.
+    -   Using `Model.model_validate(data_dict)` ensures that the full Pydantic validation lifecycle is correctly applied, including coercion and error reporting as defined in the schema.
+
+-   **Pydantic models (schemas) in this project should generally inherit from `sr_assistant.core.schemas.BaseSchema`.**
+    -   **Rationale:** `BaseSchema` provides a centralized `model_config` with project-standard settings (e.g., `populate_by_name=True`, `arbitrary_types_allowed=True`, `validate_assignment=True`).
+    -   It is acceptable to have intermediate base schemas, e.g., `MySpecificBase(BaseSchema)`. Check existing schemas for patterns.
+
+## Examples
+
+<example>
+# Valid Pydantic model instantiation
+from sr_assistant.core.schemas import BaseSchema, ScreeningDecisionType
+from pydantic import Field
+
+class MySchema(BaseSchema):
+    name: str
+    count: int
+    decision: ScreeningDecisionType = Field(default=ScreeningDecisionType.UNCERTAIN)
+
+# Correct instantiation from a dictionary
+valid_data = {"name": "Test Item", "count": 10, "decision": "include"}
+my_instance = MySchema.model_validate(valid_data)
+
+assert my_instance.name == "Test Item"
+assert my_instance.count == 10
+assert my_instance.decision == ScreeningDecisionType.INCLUDE
+</example>
+
+<example type="invalid">
+# Invalid Pydantic model instantiation
+from sr_assistant.core.schemas import BaseSchema, ScreeningDecisionType
+from pydantic import Field, ValidationError
+
+class MySchema(BaseSchema):
+    name: str
+    count: int
+    decision: ScreeningDecisionType = Field(default=ScreeningDecisionType.UNCERTAIN)
+
+# Incorrect instantiation using dictionary unpacking
+# This might appear to work but can cause issues and is against project standards.
+valid_data = {"name": "Test Item", "count": 10, "decision": "include"}
+# my_instance = MySchema(**valid_data) # <-- THIS IS DISCOURAGED / BANNED
+
+# Example of how the discouraged pattern might fail to catch certain errors
+# or behave differently compared to model_validate, especially with complex types or validators.
+# For instance, if 'decision' was a more complex type that model_validate handles with specific parsing.
+
+# Also, Pyright might complain more with `Model(**data)` for complex cases.
+try:
+    # This is the correct way and it will raise ValidationError for bad data
+    invalid_data = {"name": "Test Item", "count": "not-an-int"}
+    # MySchema(**invalid_data) # This would also raise ValidationError, but model_validate is preferred
+    MySchema.model_validate(invalid_data)
+except ValidationError as e:
+    print(f"Validation correctly failed: {e}")
+
+</example>
