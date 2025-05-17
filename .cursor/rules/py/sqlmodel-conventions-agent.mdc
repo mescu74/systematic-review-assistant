@@ -1,0 +1,78 @@
+---
+description: This rule provides guidance on instantiating SQLModel classes that have non-optional string fields, especially when the conceptual data might be "missing" or "empty".
+globs:
+alwaysApply: false
+---
+# SQLModel Non-Optional String Fields
+
+This rule provides guidance on instantiating SQLModel classes that have non-optional string fields, especially when the conceptual data might be "missing" or "empty".
+
+## Critical Rules
+
+-   **Non-Optional String Fields Require String Values:** If a SQLModel field is defined as `my_field: str` (i.e., not `str | None`), it cannot be assigned `None` during instantiation. Doing so will typically raise a validation error from Pydantic/SQLModel.
+
+-   **Use Empty String (`""`) for "Missing" Non-Optional Strings:** If a non-optional string field conceptually represents data that could be missing or not applicable, and downstream logic (e.g., a data preparation function for an LLM prompt) converts empty strings or other falsy values into a placeholder like "N/A":
+    -   Instantiate the SQLModel object with an empty string (`""`) for that field.
+    -   Example: `my_instance = MyModel(non_optional_title="")`
+
+-   **Check SQLModel Field Defaults:** If a non-optional string field has a `default=""` (or another string default) in its `Field` definition within the SQLModel class, then not providing it during instantiation will use that default. If providing it, ensure it's a string.
+
+-   **Alignment with Downstream Processing:** This practice is particularly important if functions consuming these model instances (like `prepare_resolver_inputs_for_prompt` in our session) use logic like `model_instance.field or "N/A"`. An empty string `""` will correctly evaluate to `"N/A"` in such an expression, whereas `None` would cause an error if the field type doesn't allow `None`.
+
+## Examples
+
+<example>
+# Correct handling of non-optional string fields in SQLModel
+
+from sqlmodel import SQLModel, Field
+from typing import Optional
+
+# Assume this is in sr_assistant.core.models
+class Article(SQLModel):
+    id: int
+    title: str  # Non-optional string
+    abstract: Optional[str] = Field(default=None)
+    journal_name: str = Field(default="Unknown Journal") # Non-optional with default
+
+# Instantiation for a test or application logic:
+
+# Scenario 1: Title is conceptually missing, will become "N/A" later
+article1 = Article(id=1, title="") # Correct: use empty string
+
+# Scenario 2: Title is present
+article2 = Article(id=2, title="Actual Title")
+
+# Scenario 3: Journal name not provided, uses default
+article3 = Article(id=3, title="Another Title") 
+assert article3.journal_name == "Unknown Journal"
+
+# Illustrative downstream processing (like in prepare_resolver_inputs_for_prompt)
+def format_for_prompt(article: Article) -> dict:
+    return {
+        "title_display": article.title or "N/A",
+        "abstract_display": article.abstract or "N/A",
+        "journal_display": article.journal_name or "N/A", # journal_name will use default if not set
+    }
+
+assert format_for_prompt(article1)["title_display"] == "N/A"
+assert format_for_prompt(article2)["title_display"] == "Actual Title"
+assert format_for_prompt(article3)["journal_display"] == "Unknown Journal"
+
+</example>
+
+<example type="invalid">
+# Incorrect handling of non-optional string fields
+
+from sqlmodel import SQLModel, Field
+from typing import Optional
+
+class Article(SQLModel):
+    id: int
+    title: str  # Non-optional string
+    abstract: Optional[str] = Field(default=None)
+
+# Incorrect: Passing None to a non-optional string field
+# This would likely raise a Pydantic/SQLModel ValidationError
+# article_invalid = Article(id=1, title=None) 
+
+</example>
