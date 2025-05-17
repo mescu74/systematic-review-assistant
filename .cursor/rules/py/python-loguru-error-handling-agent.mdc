@@ -1,0 +1,116 @@
+---
+description: This rule outlines the standard practices for error handling and logging using the Loguru library in this project. Adherence is crucial for maintaining robust applications, preventing uncaught exceptions from reaching the UI, and ensuring comprehensive error diagnostics.
+globs:
+alwaysApply: false
+---
+# Loguru Error Handling and Logging Best Practices
+
+This rule outlines the standard practices for error handling and logging using the Loguru library in this project. Adherence is crucial for maintaining robust applications, preventing uncaught exceptions from reaching the UI, and ensuring comprehensive error diagnostics.
+
+## Critical Rules
+
+1.  **Use `@logger.catch` for Critical Function/Method Wrappers:**
+    *   Any function or method that invokes external services (like LLM APIs, database calls if not handled by a lower layer with `@logger.catch` already) or performs complex operations prone to exceptions **MUST** be decorated with `@logger.catch` from Loguru.
+    *   This is especially critical for functions directly or indirectly called from the UI layer (e.g., Streamlit page handlers calling service methods, or service methods invoking LLM agent chains).
+    *   **Rationale:** `@logger.catch` automatically captures any exceptions raised within the decorated function, logs them (including traceback), and prevents the exception from propagating further up the call stack (unless `reraise=True` is used, which should be rare for top-level handlers).
+    *   **Existing Pattern:** This pattern is established in `src/sr_assistant/app/agents/screening_agents.py` for callbacks and chain invocation wrappers.
+
+2.  **Import Loguru Logger:**
+    *   Always import the logger as: `from loguru import logger`.
+
+3.  **Logging Exceptions:**
+    *   When using `@logger.catch`, the exception is logged automatically. There is no need to re-log it within the function unless adding specific contextual information *before* it's caught by the decorator.
+    *   If you are catching an exception manually (e.g., in a `try...except` block that *doesn't* re-raise to be caught by `@logger.catch`), use `logger.exception()` to log the error along with the stack trace.
+    *   **DO NOT** include the exception object directly in an f-string for `logger.exception()`. The method handles it automatically.
+        *   Correct: `logger.exception("An error occurred during X process")`
+        *   Incorrect: `logger.exception(f"Error: {e}")`
+
+4.  **Logging Variables:**
+    *   When logging variables, especially within error messages or for debugging, **ALWAYS** use `!r` (repr) for the variable to get a more informative and unambiguous string representation.
+    *   Example: `logger.error(f"Failed to process item: {item_id!r} with data: {data_payload!r}")`
+
+5.  **Log Levels:**
+    *   Use appropriate log levels (`.debug()`, `.info()`, `.warning()`, `.error()`, `.critical()`).
+    *   Reserve `.error()` and `.critical()` for actual error conditions.
+    *   Use `.warning()` for potential issues or non-critical errors that don't stop the process.
+    *   Use `.info()` for general operational messages.
+    *   Use `.debug()` for detailed diagnostic information, useful during development and troubleshooting.
+
+## Examples
+
+### Example 1: Using `@logger.catch` for an LLM chain invocation
+
+<example>
+```python
+from loguru import logger
+
+# In src/sr_assistant/app/agents/screening_agents.py or similar service/agent file
+
+@logger.catch(reraise=False) # reraise=False is default, explicitly shown for clarity
+def invoke_resolver_llm_chain_safely(input_data: dict) -> ResolverOutputSchema | None:
+    """Invokes the resolver LLM chain and handles potential errors."""
+    # Assume resolver_chain is defined elsewhere and can raise exceptions
+    raw_output = resolver_chain.invoke(input_data)
+    # Further processing or validation might occur here
+    if not isinstance(raw_output, ResolverOutputSchema):
+        logger.error(f"Unexpected output type from resolver_chain: {type(raw_output)!r}")
+        return None
+    return raw_output
+
+# Calling code
+# result = invoke_resolver_llm_chain_safely(my_data)
+# if result is None:
+#     # UI can be notified that an error occurred and was logged,
+#     # without seeing the raw exception.
+#     st.error("An error occurred during resolution. Please check logs or contact support.")
+```
+</example>
+
+### Example 2: Manual Exception Logging (Less common if `@logger.catch` is used at entry point)
+
+<example type="invalid">
+```python
+from loguru import logger
+
+def some_risky_operation(data_item):
+    try:
+        # ... some operation that might fail ...
+        result = 10 / data_item["value"]
+        return result
+    except KeyError as e:
+        # Incorrect: Exception in f-string, and no stack trace with logger.error
+        logger.error(f"Missing key in data_item: {data_item!r}, error: {e}")
+        return None
+    except ZeroDivisionError:
+        # Better, but still not ideal if a @logger.catch could wrap the caller
+        logger.exception("Division by zero attempted")
+        return None
+```
+</example>
+
+<example>
+```python
+from loguru import logger
+
+def some_risky_operation_logged_correctly(data_item):
+    try:
+        # ... some operation that might fail ...
+        result = 10 / data_item["value"]
+        return result
+    except KeyError:
+        # Correct: logger.exception logs the error and stack trace
+        logger.exception(f"Missing key in data_item: {data_item!r}")
+        return None
+    except ZeroDivisionError:
+        logger.exception(f"Division by zero with data_item: {data_item!r}")
+        return None
+
+# Ideally, the function calling some_risky_operation_logged_correctly
+# would be wrapped with @logger.catch if it's an entry point from UI/service boundary.
+```
+</example>
+
+## References
+
+-   Loguru Documentation: [https://loguru.readthedocs.io/](https://loguru.readthedocs.io/)
+-   Existing usage pattern: `[src/sr_assistant/app/agents/screening_agents.py](mdc:src/sr_assistant/app/agents/screening_agents.py)`
