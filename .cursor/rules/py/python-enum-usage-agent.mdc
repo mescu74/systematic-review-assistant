@@ -1,0 +1,76 @@
+---
+description: This rule clarifies the common behavior of `enum.StrEnum` when used with `enum.auto()` for value generation, which is relevant for ensuring correct data representation in LLM prompts and test assertions. Always read this rule when working with Pydantic and enums.
+globs:
+alwaysApply: false
+---
+# Python StrEnum Value Conventions
+
+This rule clarifies the common behavior of `enum.StrEnum` when used with `enum.auto()` for value generation, which is relevant for ensuring correct data representation in LLM prompts and test assertions.
+
+## Critical Rules
+
+-   **`StrEnum` with `auto()` often produces lowercase values:** When using `enum.StrEnum` and `enum.auto()` to generate member values, the default behavior in many Python setups (including Python 3.11+ for `StrEnum`) is that the value will be the lowercase version of the member's name.
+    -   Example: `MyEnum(StrEnum): MEMBER = auto()` results in `MyEnum.MEMBER.value == 'member'`.
+
+-   **Prompt Engineering:** When designing LLM prompts that expect or generate string representations of these enum values (e.g., for a Pydantic schema field typed with such an enum), ensure the example values or instructions in the prompt use the **lowercase string value** (e.g., `'member'`), not the uppercase member name (e.g., `'MEMBER'`).
+
+-   **Test Assertions:** When writing unit tests for Pydantic models that parse string inputs into these `StrEnum` fields, or when asserting the `.value` of an enum member:
+    -   If asserting the result of Pydantic parsing a string like `'member_value'`, the parsed enum member will be `MyEnum.MEMBER_VALUE`.
+    -   When asserting the string value itself, use the lowercase version: `assert my_enum_instance.value == 'member_value'`.
+    -   When comparing an enum instance to an expected enum member: `assert parsed_field == MyEnum.EXPECTED_MEMBER`.
+
+-   **Pydantic Coercion:** Pydantic `BaseModel` fields typed with a `StrEnum` will correctly coerce valid lowercase string inputs (e.g., `'member'`) into the corresponding enum member (e.g., `MyEnum.MEMBER`).
+
+## Examples
+
+<example>
+# Correct handling of StrEnum values
+```python
+from enum import StrEnum, auto
+from pydantic import BaseModel
+
+class ScreeningDecision(StrEnum):
+    INCLUDE = auto()
+    EXCLUDE = auto()
+    UNCERTAIN = auto()
+
+# Behavior of StrEnum with auto()
+assert ScreeningDecision.INCLUDE.value == "include"
+assert ScreeningDecision.EXCLUDE.name == "EXCLUDE"
+
+class OutputSchema(BaseModel):
+    decision: ScreeningDecision
+
+# Pydantic parsing string to Enum member
+parsed_schema = OutputSchema.model_validate({"decision": "exclude"})
+assert parsed_schema.decision == ScreeningDecision.EXCLUDE
+
+# LLM Prompt Snippet (Illustrative)
+# "... your decision (e.g., 'include', 'exclude', 'uncertain'). ..."
+
+# Test Assertion Example
+# Assuming `result` is an instance of `OutputSchema` from an LLM
+# assert result.decision == ScreeningDecision.EXCLUDE
+# assert result.decision.value == "exclude"
+```
+</example>
+
+<example type="invalid">
+# Incorrect assumptions about StrEnum values
+
+from enum import StrEnum, auto
+
+class Status(StrEnum):
+    ACTIVE = auto()
+    INACTIVE = auto()
+
+# Incorrect: Expecting uppercase value by default with auto()
+# assert Status.ACTIVE.value == "ACTIVE" # This would typically fail; it would be "active"
+
+# Incorrect LLM Prompt Snippet:
+# "... your status (e.g., 'ACTIVE', 'INACTIVE'). ..."
+# This might lead the LLM to produce uppercase strings, which Pydantic might still parse
+# if the enum definition allows it (e.g. by overriding __new__ or if member names are lowercase),
+# but relying on lowercase is safer with standard StrEnum + auto().
+
+</example>
