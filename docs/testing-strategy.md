@@ -16,7 +16,7 @@ Key quality goals include:
 -   **Core Functionalities:**
     -   PubMed Search: Service logic, data mapping, persistence (`SearchService`, `SearchResultRepository`, `SearchResult` model).
     -   Abstract Screening: Dual reviewer LLM chain invocation (`screen_abstracts_batch`), processing of `ScreeningResponse` and `ScreeningResult`, persistence of `ScreenAbstractResult`.
-    -   Conflict Resolution: Resolver LLM chain invocation, processing of `ScreeningResolutionSchema`, persistence of `ScreeningResolution`, and updates to `SearchResult.final_decision`.
+    -   Conflict Resolution: Resolver LLM chain invocation, processing of `ResolverOutputSchema`, persistence of `ScreeningResolution`, and updates to `SearchResult.final_decision`.
 -   **Service Layer:** All public methods of `SearchService`, `ReviewService`, and `ScreeningService` as defined in `docs/api-reference.md`.
 -   **Repository Layer:** All methods of `SearchResultRepository`, `SystematicReviewRepository`, `ScreenAbstractResultRepository`, and `ScreeningResolutionRepository`.
 -   **Data Models & Schemas:** Validation logic inherent in Pydantic schemas (`schemas.py`) and SQLModel constraints (`models.py`).
@@ -65,7 +65,7 @@ Key quality goals include:
 
 ### 3.4. Contract Tests (LLM Interactions)
 
--   **Goal:** Ensure that the inputs provided to LLM chains (prompts and their variables) and the outputs received (structured Pydantic schemas like `ScreeningResponse`, `ScreeningResolutionSchema`) adhere to their expected formats and constraints.
+-   **Goal:** Ensure that the inputs provided to LLM chains (prompts and their variables) and the outputs received (structured Pydantic schemas like `ScreeningResponse`, `ResolverOutputSchema`) adhere to their expected formats and constraints.
 -   **Implementation:** These are often integrated within the integration tests for the LLM chains themselves. Assertions will be made on the structure and types of data passed to and received from the LLM components.
 
 ## 4. Testing Environment & Data
@@ -109,7 +109,7 @@ Key quality goals include:
 -   Verification of all defined Pydantic schemas in `schemas.py` through their usage in tests.
 -   Validation of SQLModel definitions and database interactions, especially for `SearchResult`, `ScreenAbstractResult`, and `ScreeningResolution`, including the new `SearchResult.final_decision` field and FK relationships.
 -   Testing all documented conflict scenarios that should trigger the resolver (as per `docs/epic3-recovery-testing-and-integrity.md`, Story 3.2).
--   **Consider applying property-based testing with Hypothesis, particularly for Pydantic schemas with complex validation logic (e.g., `ScreeningResponse`, `ScreeningResolutionSchema`) and critical utility functions, to enhance robustness against diverse inputs.**
+-   **Consider applying property-based testing with Hypothesis, particularly for Pydantic schemas with complex validation logic (e.g., `ScreeningResponse`, `ResolverOutputSchema`) and critical utility functions, to enhance robustness against diverse inputs.**
 
 ## 9. Document Maintenance
 

@@ -36,7 +36,7 @@ When a prompt contains multiple components—such as instructions, context, exam
 
 ### **F. Positive Framing: Instructing "What To Do" vs. "What Not To Do"**
 
-Instructions should be framed positively, telling the LLM what actions to perform rather than what to avoid.2 For example, instead of "Don't write a long response," a more effective instruction is "Provide a concise summary" or "Summarize in three sentences".2 Positive instructions tend to reduce ambiguity and focus the AI on generating constructive and desired outcomes.2 Negative instructions can be harder for LLMs to interpret accurately and may inadvertently lead to the model focusing on the undesired behavior or struggling to identify an appropriate alternative. This is because LLMs are primarily generative systems trained to produce text that matches given patterns; a positive instruction directly specifies the target pattern, whereas a negative one requires a more complex inferential step to determine what *is* desired.
+Instructions should be framed positively, telling the LLM what actions to perform rather than what to avoid.2 For example, instead of "Don't write a long response," a more effective instruction is "Provide a concise summary" or "Summarize in three sentences".2 Positive instructions tend to reduce ambiguity and focus the AI on generating constructive and desired outcomes.2 Negative instructions can be harder for LLMs to interpret accurately and may inadvertently lead to the model focusing on the undesired behavior or struggling to identify an appropriate alternative. This is because LLMs are primarily generative systems trained to produce text that matches given patterns; a positive instruction directly specifies the target pattern, whereas a negative one requires a more complex inferential step to determine what _is_ desired.
 
 ### **G. Specifying Output Format, Length, and Style**
 
@@ -70,31 +70,31 @@ While general principles apply broadly, LLM providers often offer specific recom
 
 OpenAI's models, such as GPT-4 and its successors, are widely used and have a rich set of prompting strategies.
 
-1\. Key Strategies:  
+1\. Key Strategies:
 OpenAI emphasizes several core strategies for eliciting better results:
 
-* **Write Clear Instructions:** This includes providing ample detail, asking the model to adopt a persona, using delimiters to structure input, specifying the steps required for a task, offering examples (few-shot prompting), and defining the desired output length.1  
-* **Provide Reference Text:** To mitigate the risk of models inventing answers (hallucinations), especially for obscure topics, it is recommended to provide relevant reference text and instruct the model to base its answers on this text, potentially including citations.1  
-* **Split Complex Tasks:** For intricate operations, breaking them down into simpler subtasks is advised. This can involve using intent classification to select relevant instructions or summarizing long documents and dialogues piecewise to manage context limits.1  
-* **Systematic Testing:** Performance improvements from prompt changes should be validated through systematic testing, ideally by evaluating model outputs against a set of "gold-standard" answers or predefined benchmarks.1
+- **Write Clear Instructions:** This includes providing ample detail, asking the model to adopt a persona, using delimiters to structure input, specifying the steps required for a task, offering examples (few-shot prompting), and defining the desired output length.1
+- **Provide Reference Text:** To mitigate the risk of models inventing answers (hallucinations), especially for obscure topics, it is recommended to provide relevant reference text and instruct the model to base its answers on this text, potentially including citations.1
+- **Split Complex Tasks:** For intricate operations, breaking them down into simpler subtasks is advised. This can involve using intent classification to select relevant instructions or summarizing long documents and dialogues piecewise to manage context limits.1
+- **Systematic Testing:** Performance improvements from prompt changes should be validated through systematic testing, ideally by evaluating model outputs against a set of "gold-standard" answers or predefined benchmarks.1
 
-2\. Utilizing System, User, and Assistant Roles:  
+2\. Utilizing System, User, and Assistant Roles:
 The OpenAI Chat Completions API structures conversations using distinct roles:
 
-* system: This message sets the overall behavior, persona, or high-level instructions for the model throughout the conversation. It is typically prioritized by the model.1 For example, a system prompt might instruct the model to act as a helpful assistant that always asks clarifying questions.  
-* user: This role conveys the end-user's requests, questions, or instructions to the model.1  
-* assistant: This role is used for the model's responses. It can also be used by the developer to provide examples of desired model behavior (few-shot examples within a conversational context) or to store previous turns of the conversation when managing dialogue history.1
+- system: This message sets the overall behavior, persona, or high-level instructions for the model throughout the conversation. It is typically prioritized by the model.1 For example, a system prompt might instruct the model to act as a helpful assistant that always asks clarifying questions.
+- user: This role conveys the end-user's requests, questions, or instructions to the model.1
+- assistant: This role is used for the model's responses. It can also be used by the developer to provide examples of desired model behavior (few-shot examples within a conversational context) or to store previous turns of the conversation when managing dialogue history.1
 
 The effective use of these roles, particularly the system prompt, is crucial for guiding the model's conduct and response style consistently.
 
-3\. Formatting: Markdown and Delimiters:  
-OpenAI models generally respond well to prompts structured using Markdown elements such as headings, lists, and code blocks. These can improve readability and help organize complex instructions.9 Delimiters like triple backticks (\`\`\`), triple quotes ("""), or XML-like tags (e.g., \<document\>...\</document\>) are highly recommended for clearly separating distinct parts of the input, such as instructions from context or examples from questions.1 This helps the model parse the prompt accurately. While Markdown is a good starting point, XML can also be effective for more precise section wrapping.9  
-4\. Agentic Workflows (especially for GPT-4.1 and newer):  
+3\. Formatting: Markdown and Delimiters:
+OpenAI models generally respond well to prompts structured using Markdown elements such as headings, lists, and code blocks. These can improve readability and help organize complex instructions.9 Delimiters like triple backticks (\`\`\`), triple quotes ("""), or XML-like tags (e.g., \<document\>...\</document\>) are highly recommended for clearly separating distinct parts of the input, such as instructions from context or examples from questions.1 This helps the model parse the prompt accurately. While Markdown is a good starting point, XML can also be effective for more precise section wrapping.9
+4\. Agentic Workflows (especially for GPT-4.1 and newer):
 For more autonomous, multi-step tasks, newer OpenAI models like GPT-4.1 are designed with "agentic workflows" in mind. Prompting for these workflows involves specific considerations 9:
 
-* **Persistence:** Reminding the model in the system prompt that it is part of an ongoing, multi-turn interaction and should continue working until the user's query is fully resolved.  
-* **Tool-Calling:** Explicitly encouraging the model to make full use of any provided tools (functions) to gather information or perform actions, rather than guessing or hallucinating. The API's tools and tool\_choice parameters are central to this.  
-* **Planning (Optional):** Instructing the model to create an explicit plan and reflect on the outcomes of its actions or tool calls, often by "thinking out loud" in its response.
+- **Persistence:** Reminding the model in the system prompt that it is part of an ongoing, multi-turn interaction and should continue working until the user's query is fully resolved.
+- **Tool-Calling:** Explicitly encouraging the model to make full use of any provided tools (functions) to gather information or perform actions, rather than guessing or hallucinating. The API's tools and tool_choice parameters are central to this.
+- **Planning (Optional):** Instructing the model to create an explicit plan and reflect on the outcomes of its actions or tool calls, often by "thinking out loud" in its response.
 
 These agentic instructions, typically placed in the system prompt, help transform the model from a passive respondent into a more proactive and capable agent that can drive interactions forward and utilize external capabilities effectively.9
 
@@ -102,33 +102,33 @@ These agentic instructions, typically placed in the system prompt, help transfor
 
 Anthropic's Claude models have distinct characteristics and respond particularly well to certain prompting techniques, especially the use of XML tags.
 
-1\. The Power of XML Tags for Structure and Clarity:  
-A hallmark of prompting Claude models is the highly effective use of XML tags to structure prompts and delineate different components.5 Tags such as \<document\>, \<instructions\>, \<example\>, \<question\>, \<context\>, \<thinking\>, and \<answer\> (among others, as there are no strictly canonical tags, but descriptive ones are preferred) help Claude parse complex prompts with greater accuracy, leading to higher-quality and more reliable outputs.5 These tags allow for clear separation of instructions from content, examples from queries, and can even be used to guide Claude's internal reasoning process (e.g., by asking it to perform its thinking within \<thinking\> tags before providing a final answer in \<answer\> tags).7 This explicit structuring is not merely a stylistic suggestion but a core best practice for Claude, as it significantly reduces ambiguity and helps the model understand the intended role of each piece of information in the prompt.  
-2\. System Prompts and Role Assignment:  
-Similar to OpenAI, Anthropic's API allows for the use of a system prompt (passed as a top-level parameter in the Messages API) to provide Claude with high-level instructions, context, persona, or rules that should govern its behavior throughout the interaction.10 This system prompt sets the stage for Claude's responses and can be used to define its role, tone, and operational constraints.5  
-3\. Prefilling Claude's Response and Chain-of-Thought Variations:  
-An agent can guide Claude's output by prefilling the beginning of its response. This is done by providing the initial part of the assistant message in the API call. This technique can steer the model to continue in a specific format, style, or line of thought.5 For Chain-of-Thought (CoT) prompting, Claude can be instructed to output its reasoning steps, often within designated XML tags like \<thinking\> or \<scratchpad\>, before providing the final answer, which might be enclosed in tags like \<answer\> or a task-specific tag like \<email\>.7 This structured CoT allows the agent to inspect the model's reasoning process.  
-4\. Extended Thinking Capabilities:  
-Certain Claude models feature "extended thinking," an API-driven capability where the model is allocated a specific token budget to "think" or process information internally before generating the final response.8 This is designed for complex tasks requiring deeper analysis or planning. Prompts can guide this thinking process, for instance, by asking Claude to verify its work or run through test cases during its extended thinking phase.8 It is important to note that prefilling the model's extended thinking output is not allowed and can degrade performance.8 This feature underscores a design philosophy where explicit allocation of processing resources for reasoning can enhance output quality.  
+1\. The Power of XML Tags for Structure and Clarity:
+A hallmark of prompting Claude models is the highly effective use of XML tags to structure prompts and delineate different components.5 Tags such as \<document\>, \<instructions\>, \<example\>, \<question\>, \<context\>, \<thinking\>, and \<answer\> (among others, as there are no strictly canonical tags, but descriptive ones are preferred) help Claude parse complex prompts with greater accuracy, leading to higher-quality and more reliable outputs.5 These tags allow for clear separation of instructions from content, examples from queries, and can even be used to guide Claude's internal reasoning process (e.g., by asking it to perform its thinking within \<thinking\> tags before providing a final answer in \<answer\> tags).7 This explicit structuring is not merely a stylistic suggestion but a core best practice for Claude, as it significantly reduces ambiguity and helps the model understand the intended role of each piece of information in the prompt.
+2\. System Prompts and Role Assignment:
+Similar to OpenAI, Anthropic's API allows for the use of a system prompt (passed as a top-level parameter in the Messages API) to provide Claude with high-level instructions, context, persona, or rules that should govern its behavior throughout the interaction.10 This system prompt sets the stage for Claude's responses and can be used to define its role, tone, and operational constraints.5
+3\. Prefilling Claude's Response and Chain-of-Thought Variations:
+An agent can guide Claude's output by prefilling the beginning of its response. This is done by providing the initial part of the assistant message in the API call. This technique can steer the model to continue in a specific format, style, or line of thought.5 For Chain-of-Thought (CoT) prompting, Claude can be instructed to output its reasoning steps, often within designated XML tags like \<thinking\> or \<scratchpad\>, before providing the final answer, which might be enclosed in tags like \<answer\> or a task-specific tag like \<email\>.7 This structured CoT allows the agent to inspect the model's reasoning process.
+4\. Extended Thinking Capabilities:
+Certain Claude models feature "extended thinking," an API-driven capability where the model is allocated a specific token budget to "think" or process information internally before generating the final response.8 This is designed for complex tasks requiring deeper analysis or planning. Prompts can guide this thinking process, for instance, by asking Claude to verify its work or run through test cases during its extended thinking phase.8 It is important to note that prefilling the model's extended thinking output is not allowed and can degrade performance.8 This feature underscores a design philosophy where explicit allocation of processing resources for reasoning can enhance output quality.
 The consistent and strong advocacy for XML tags in Anthropic's documentation 5 suggests that Claude models are specifically tuned to leverage this structure. For AI agents, proficiency in XML-based prompting is therefore essential for optimal interaction with Claude.
 
 ### **C. Google (Gemini Models)**
 
 Google's Gemini models are multimodal and offer a range of capabilities. Their prompting strategies emphasize examples and parameter control.
 
-1\. Effective Use of Few-Shot Examples:  
-Gemini models benefit significantly from the inclusion of few-shot examples in the prompt.4 Providing concrete demonstrations of the desired input-output pattern is generally more effective than zero-shot prompting (providing no examples).4 These examples help Gemini understand the expected format, phrasing, scope, and general pattern of the desired response.4 The number of examples can be experimented with, as too many might lead to overfitting, but a few well-chosen examples are highly recommended.  
-2\. Input, Output, and Example Prefixes:  
-To further clarify the structure of prompts, especially those containing few-shot examples, Google recommends using prefixes to label different parts of the input.4 For instance, prefixes like Input:, Output:, Text:, Summary:, Question:, or Answer: can signal to the model the role of the subsequent text. This helps Gemini distinguish between instructions, user input, and example components, making the prompt easier to parse and understand.  
-3\. Managing Model Parameters:  
+1\. Effective Use of Few-Shot Examples:
+Gemini models benefit significantly from the inclusion of few-shot examples in the prompt.4 Providing concrete demonstrations of the desired input-output pattern is generally more effective than zero-shot prompting (providing no examples).4 These examples help Gemini understand the expected format, phrasing, scope, and general pattern of the desired response.4 The number of examples can be experimented with, as too many might lead to overfitting, but a few well-chosen examples are highly recommended.
+2\. Input, Output, and Example Prefixes:
+To further clarify the structure of prompts, especially those containing few-shot examples, Google recommends using prefixes to label different parts of the input.4 For instance, prefixes like Input:, Output:, Text:, Summary:, Question:, or Answer: can signal to the model the role of the subsequent text. This helps Gemini distinguish between instructions, user input, and example components, making the prompt easier to parse and understand.
+3\. Managing Model Parameters:
 AI agents interacting with Gemini models should experiment with various API parameters that control how the response is generated.4 Key parameters include:
 
-* temperature: Controls the randomness of token selection. Lower values (e.g., 0.2) lead to more deterministic and focused outputs, while higher values (e.g., 0.8) encourage more creative or diverse responses.  
-* topK and topP: These parameters also influence token selection by narrowing the pool of candidate tokens based on their probabilities.  
-* maxOutputTokens: Sets a limit on the length of the generated response. Fine-tuning these parameters is often necessary to achieve the best results for a specific task.4
+- temperature: Controls the randomness of token selection. Lower values (e.g., 0.2) lead to more deterministic and focused outputs, while higher values (e.g., 0.8) encourage more creative or diverse responses.
+- topK and topP: These parameters also influence token selection by narrowing the pool of candidate tokens based on their probabilities.
+- maxOutputTokens: Sets a limit on the length of the generated response. Fine-tuning these parameters is often necessary to achieve the best results for a specific task.4
 
-4\. Strategies for Multimodal Prompting (Brief Overview):  
-Gemini models, particularly variants like Gemini Pro Vision, are capable of processing multimodal inputs, such as combinations of text and images.4 Prompts can involve asking questions about an image, extracting information from visual data, or tasks that require reasoning across different modalities.11 While detailed multimodal prompting is a subject in itself, agents should be aware of this capability and structure prompts accordingly when visual or other non-textual data is involved.  
+4\. Strategies for Multimodal Prompting (Brief Overview):
+Gemini models, particularly variants like Gemini Pro Vision, are capable of processing multimodal inputs, such as combinations of text and images.4 Prompts can involve asking questions about an image, extracting information from visual data, or tasks that require reasoning across different modalities.11 While detailed multimodal prompting is a subject in itself, agents should be aware of this capability and structure prompts accordingly when visual or other non-textual data is involved.
 The emphasis on few-shot examples and parameter tuning in Google's guidance suggests that Gemini models are designed to be highly adaptable in-context and offer considerable control over the generation process to the developer or agent.
 
 ## **V. Comparative Guide to Prompt Structuring: Syntax and Best Practices**
@@ -151,15 +151,15 @@ The varying affinities of LLMs for these syntaxes stem from the patterns they en
 
 ### **Table 1: Comparative Prompt Formatting Syntax**
 
-| Feature/Purpose | Markdown (OpenAI Focus) | XML (Anthropic Focus) | JSON (General/Tooling) | Notes/Best Use |
-| :---- | :---- | :---- | :---- | :---- |
-| **General Instruction Separation** | Headings (\# Instructions), paragraphs, lists (\* Do X) | \<instructions\>Do X\</instructions\> | Can be part of a larger JSON structure, e.g., "instructions": "Do X" | XML offers very explicit separation. Markdown is human-readable. |
-| **Providing Document/Text Context** | Code blocks (), blockquotes (\> text) | \<document\>{{DOCUMENT\_TEXT}}\</document\>, \<context\>{{CONTEXT}}\</context\> | "context\_text": "{{TEXT}}" | XML is excellent for multiple or large documents. Markdown is good for shorter contexts. |
-| **Few-Shot Examples** | User:... \\nAssistant:... pairs, or structured lists | \<example\>\<input\>...\</input\>\<output\>...\</output\>\</example\> (can be nested) | Array of example objects: \[{"input":..., "output":...}\] | XML allows for rich, structured examples. Markdown is simpler for basic Q\&A pairs. |
-| **Chain-of-Thought/Scratchpad** | "Think step-by-step..." followed by model's reasoning | \<thinking\>{{MODEL\_REASONING}}\</thinking\>, \<scratchpad\>...\</scratchpad\> | Less common directly in prompt structure, more an instruction. | XML provides a dedicated, parseable section for the model's reasoning process, separate from the final answer. |
-| **Specifying Output Structure** | "Format as a list:", "Return a JSON..." | \<output\_format\>JSON\</output\_format\>, or by example with prefilled assistant response. | Requesting JSON output is a primary use case. | Explicit instruction is key. XML/JSON output can be requested for easier parsing. |
-| **Role Assignment** | System prompt (OpenAI API) | System prompt (Anthropic API) | Via API parameters or initial instructions. | System prompts are the standard mechanism for high-level role setting. |
-| **Metadata for Prompt Sections** | Less formal, relies on human-readable headings. | Attributes within tags, e.g. \<document source="X"\> | Key-value pairs naturally provide metadata. | XML and JSON are inherently better for embedding machine-readable metadata. |
+| Feature/Purpose                     | Markdown (OpenAI Focus)                                 | XML (Anthropic Focus)                                                                     | JSON (General/Tooling)                                               | Notes/Best Use                                                                                                 |
+| :---------------------------------- | :------------------------------------------------------ | :---------------------------------------------------------------------------------------- | :------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------- |
+| **General Instruction Separation**  | Headings (\# Instructions), paragraphs, lists (\* Do X) | \<instructions\>Do X\</instructions\>                                                     | Can be part of a larger JSON structure, e.g., "instructions": "Do X" | XML offers very explicit separation. Markdown is human-readable.                                               |
+| **Providing Document/Text Context** | Code blocks (), blockquotes (\> text)                   | \<document\>{{DOCUMENT\_TEXT}}\</document\>, \<context\>{{CONTEXT}}\</context\>           | "context_text": "{{TEXT}}"                                           | XML is excellent for multiple or large documents. Markdown is good for shorter contexts.                       |
+| **Few-Shot Examples**               | User:... \\nAssistant:... pairs, or structured lists    | \<example\>\<input\>...\</input\>\<output\>...\</output\>\</example\> (can be nested)     | Array of example objects: \[{"input":..., "output":...}\]            | XML allows for rich, structured examples. Markdown is simpler for basic Q\&A pairs.                            |
+| **Chain-of-Thought/Scratchpad**     | "Think step-by-step..." followed by model's reasoning   | \<thinking\>{{MODEL\_REASONING}}\</thinking\>, \<scratchpad\>...\</scratchpad\>           | Less common directly in prompt structure, more an instruction.       | XML provides a dedicated, parseable section for the model's reasoning process, separate from the final answer. |
+| **Specifying Output Structure**     | "Format as a list:", "Return a JSON..."                 | \<output_format\>JSON\</output_format\>, or by example with prefilled assistant response. | Requesting JSON output is a primary use case.                        | Explicit instruction is key. XML/JSON output can be requested for easier parsing.                              |
+| **Role Assignment**                 | System prompt (OpenAI API)                              | System prompt (Anthropic API)                                                             | Via API parameters or initial instructions.                          | System prompts are the standard mechanism for high-level role setting.                                         |
+| **Metadata for Prompt Sections**    | Less formal, relies on human-readable headings.         | Attributes within tags, e.g. \<document source="X"\>                                      | Key-value pairs naturally provide metadata.                          | XML and JSON are inherently better for embedding machine-readable metadata.                                    |
 
 ## **VI. Agent Self-Improvement: Testing and Optimizing Prompts**
 
@@ -179,19 +179,19 @@ To ensure consistent application of best practices, an AI agent can utilize a ch
 
 ### **Table 2: AI Agent's Prompt Engineering Checklist**
 
-| Check | Status | Notes |
-| :---- | :---- | :---- |
-| \[ \] **Objective Clearly Defined?** |  | Is the desired outcome of the prompt unambiguous? |
-| \[ \] **Sufficient Context Provided?** |  | Does the LLM have all necessary background information and data? 2 |
-| \[ \] **Instructions Specific and Unambiguous?** |  | Are the instructions precise, detailed, and free of vague language? 1 |
-| \[ \] **Persona/Role Assigned (if beneficial)?** |  | Would assigning a role improve the tone, style, or expertise of the response? 1 |
-| \[ \] **Examples Included (Few-Shot, if appropriate)?** |  | Would examples help clarify the desired output format or task? 2 |
-| \[ \] **Output Format, Length, Style Specified?** |  | Is the desired structure, size, and tone of the response clearly stated? 2 |
-| \[ \] **Instructions Framed Positively?** |  | Are instructions phrased as "do this" rather than "don't do that"? 2 |
-| \[ \] **Structure/Delimiters Used Correctly (Provider-Specific)?** |  | Are delimiters (e.g., \`\`\`, """, XML tags) used effectively to separate prompt components? 1 |
-| \[ \] **Complex Task Decomposed (if necessary)?** |  | If the task is highly complex, has it been broken into simpler sub-prompts? 1 |
-| \[ \] **CoT/Thinking Steps Encouraged (for complex reasoning)?** |  | For tasks requiring reasoning, does the prompt encourage step-by-step thinking? 1 |
-| \[ \] **Provider-Specific Syntax Adhered To (XML for Claude, etc.)?** |  | Is the prompt syntax optimized for the target LLM provider (e.g., XML for Anthropic, Markdown for OpenAI)? 5 |
+| Check                                                                 | Status | Notes                                                                                                        |
+| :-------------------------------------------------------------------- | :----- | :----------------------------------------------------------------------------------------------------------- |
+| \[ \] **Objective Clearly Defined?**                                  |        | Is the desired outcome of the prompt unambiguous?                                                            |
+| \[ \] **Sufficient Context Provided?**                                |        | Does the LLM have all necessary background information and data? 2                                           |
+| \[ \] **Instructions Specific and Unambiguous?**                      |        | Are the instructions precise, detailed, and free of vague language? 1                                        |
+| \[ \] **Persona/Role Assigned (if beneficial)?**                      |        | Would assigning a role improve the tone, style, or expertise of the response? 1                              |
+| \[ \] **Examples Included (Few-Shot, if appropriate)?**               |        | Would examples help clarify the desired output format or task? 2                                             |
+| \[ \] **Output Format, Length, Style Specified?**                     |        | Is the desired structure, size, and tone of the response clearly stated? 2                                   |
+| \[ \] **Instructions Framed Positively?**                             |        | Are instructions phrased as "do this" rather than "don't do that"? 2                                         |
+| \[ \] **Structure/Delimiters Used Correctly (Provider-Specific)?**    |        | Are delimiters (e.g., \`\`\`, """, XML tags) used effectively to separate prompt components? 1               |
+| \[ \] **Complex Task Decomposed (if necessary)?**                     |        | If the task is highly complex, has it been broken into simpler sub-prompts? 1                                |
+| \[ \] **CoT/Thinking Steps Encouraged (for complex reasoning)?**      |        | For tasks requiring reasoning, does the prompt encourage step-by-step thinking? 1                            |
+| \[ \] **Provider-Specific Syntax Adhered To (XML for Claude, etc.)?** |        | Is the prompt syntax optimized for the target LLM provider (e.g., XML for Anthropic, Markdown for OpenAI)? 5 |
 
 ## **VIII. Conclusion**
 
@@ -203,15 +203,15 @@ Ultimately, prompt engineering is an empirical and iterative discipline. Systema
 
 #### **Works cited**
 
-1. Prompt engineering \- OpenAI API \- OpenAI Platform, accessed May 12, 2025, [https://platform.openai.com/docs/guides/prompt-engineering/six-strategies-for-getting-better-results](https://platform.openai.com/docs/guides/prompt-engineering/six-strategies-for-getting-better-results)  
-2. Prompt Engineering Best Practices: Tips, Tricks, and Tools ..., accessed May 12, 2025, [https://www.digitalocean.com/resources/articles/prompt-engineering-best-practices](https://www.digitalocean.com/resources/articles/prompt-engineering-best-practices)  
-3. Prompt Engineering for AI Guide | Google Cloud, accessed May 12, 2025, [https://cloud.google.com/discover/what-is-prompt-engineering](https://cloud.google.com/discover/what-is-prompt-engineering)  
-4. Prompt design strategies | Gemini API | Google AI for Developers, accessed May 12, 2025, [https://ai.google.dev/gemini-api/docs/prompting-strategies](https://ai.google.dev/gemini-api/docs/prompting-strategies)  
-5. Use XML tags to structure your prompts \- Anthropic API, accessed May 12, 2025, [https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/use-xml-tags](https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/use-xml-tags)  
-6. What is Prompt Engineering? \- AI Prompt Engineering Explained ..., accessed May 12, 2025, [https://aws.amazon.com/what-is/prompt-engineering/](https://aws.amazon.com/what-is/prompt-engineering/)  
-7. Let Claude think (chain of thought prompting) to increase performance \- Anthropic API, accessed May 12, 2025, [https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/chain-of-thought](https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/chain-of-thought)  
-8. Extended thinking tips \- Anthropic API, accessed May 12, 2025, [https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/extended-thinking-tips](https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/extended-thinking-tips)  
-9. GPT-4.1 Prompting Guide | OpenAI Cookbook, accessed May 12, 2025, [https://cookbook.openai.com/examples/gpt4-1\_prompting\_guide](https://cookbook.openai.com/examples/gpt4-1_prompting_guide)  
-10. Mastering Prompt Engineering for Claude \- Walturn, accessed May 12, 2025, [https://www.walturn.com/insights/mastering-prompt-engineering-for-claude](https://www.walturn.com/insights/mastering-prompt-engineering-for-claude)  
-11. Getting Started with Gemini | Prompt Engineering Guide, accessed May 12, 2025, [https://www.promptingguide.ai/models/gemini](https://www.promptingguide.ai/models/gemini)  
-12. anthropic-cookbook/skills/retrieval\_augmented\_generation/guide.ipynb at main \- GitHub, accessed May 12, 2025, [https://github.com/anthropics/anthropic-cookbook/blob/main/skills/retrieval\_augmented\_generation/guide.ipynb](https://github.com/anthropics/anthropic-cookbook/blob/main/skills/retrieval_augmented_generation/guide.ipynb)
+1. Prompt engineering \- OpenAI API \- OpenAI Platform, accessed May 12, 2025, [https://platform.openai.com/docs/guides/prompt-engineering/six-strategies-for-getting-better-results](https://platform.openai.com/docs/guides/prompt-engineering/six-strategies-for-getting-better-results)
+2. Prompt Engineering Best Practices: Tips, Tricks, and Tools ..., accessed May 12, 2025, [https://www.digitalocean.com/resources/articles/prompt-engineering-best-practices](https://www.digitalocean.com/resources/articles/prompt-engineering-best-practices)
+3. Prompt Engineering for AI Guide | Google Cloud, accessed May 12, 2025, [https://cloud.google.com/discover/what-is-prompt-engineering](https://cloud.google.com/discover/what-is-prompt-engineering)
+4. Prompt design strategies | Gemini API | Google AI for Developers, accessed May 12, 2025, [https://ai.google.dev/gemini-api/docs/prompting-strategies](https://ai.google.dev/gemini-api/docs/prompting-strategies)
+5. Use XML tags to structure your prompts \- Anthropic API, accessed May 12, 2025, [https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/use-xml-tags](https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/use-xml-tags)
+6. What is Prompt Engineering? \- AI Prompt Engineering Explained ..., accessed May 12, 2025, [https://aws.amazon.com/what-is/prompt-engineering/](https://aws.amazon.com/what-is/prompt-engineering/)
+7. Let Claude think (chain of thought prompting) to increase performance \- Anthropic API, accessed May 12, 2025, [https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/chain-of-thought](https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/chain-of-thought)
+8. Extended thinking tips \- Anthropic API, accessed May 12, 2025, [https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/extended-thinking-tips](https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/extended-thinking-tips)
+9. GPT-4.1 Prompting Guide | OpenAI Cookbook, accessed May 12, 2025, [https://cookbook.openai.com/examples/gpt4-1_prompting_guide](https://cookbook.openai.com/examples/gpt4-1_prompting_guide)
+10. Mastering Prompt Engineering for Claude \- Walturn, accessed May 12, 2025, [https://www.walturn.com/insights/mastering-prompt-engineering-for-claude](https://www.walturn.com/insights/mastering-prompt-engineering-for-claude)
+11. Getting Started with Gemini | Prompt Engineering Guide, accessed May 12, 2025, [https://www.promptingguide.ai/models/gemini](https://www.promptingguide.ai/models/gemini)
+12. anthropic-cookbook/skills/retrieval_augmented_generation/guide.ipynb at main \- GitHub, accessed May 12, 2025, [https://github.com/anthropics/anthropic-cookbook/blob/main/skills/retrieval_augmented_generation/guide.ipynb](https://github.com/anthropics/anthropic-cookbook/blob/main/skills/retrieval_augmented_generation/guide.ipynb)

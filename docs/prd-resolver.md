@@ -65,13 +65,13 @@ The current abstract screening process uses two LLM-driven reviewers with distin
 
 ### FR4: Invoke Resolver Chain
 
-- The system must invoke the resolver LLM chain (using the defined `RESOLVER_MODEL` and `resolver_prompt` with structured output (targetting `ScreeningResolutionSchema`)) for each item in the disagreement batch.
+- The system must invoke the resolver LLM chain (using the defined `RESOLVER_MODEL` and `resolver_prompt` with structured output (targetting `ResolverOutputSchema`)) for each item in the disagreement batch.
 - LLM calls should include appropriate error handling (e.g., retries as defined for the screening chains).
 
-### FR5: Process Resolver Output
+### FR5: Process Resolver LLM Output
 
-- The system must parse the structured output (conforming to `ScreeningResolutionSchema`) from the resolver LLM for each resolved item.
-- The `ScreeningResolutionSchema` (as defined in `src/sr_assistant/core/schemas.py`) currently includes fields like `resolver_decision`, `resolver_reasoning`, `resolver_confidence_score`, and `resolver_include`. Note: The `resolver_include` field is subject to review in Epic 2, Story 2.2, for its necessity, naming, and typing (`list[ScreeningStrategyType]`).
+- The system must parse the structured output (conforming to `ResolverOutputSchema`) from the resolver LLM for each resolved item.
+- The `ResolverOutputSchema` (as defined in `src/sr_assistant/core/schemas.py`) currently includes fields like `resolver_decision`, `resolver_reasoning`, `resolver_confidence_score`, and `resolver_include`.
 - **Update (from original v1.0):** The schema (and corresponding prompt) must ensure a single, final decision field: `final_decision` (or `resolver_decision` as in the current schema) of type `ScreeningDecisionType`. The prompt must instruct the LLM to provide this single decision (`INCLUDE`, `EXCLUDE`, or potentially `UNCERTAIN` if resolution isn't clear based on new FR1 scope).
 
 ### FR6: Store Resolution Data
@@ -210,8 +210,8 @@ Story-1: Implement Resolver DB Integration Tests
 
 | Version | Date       | Author                | Change Description                                                                                                |
 |---------|------------|-----------------------|-------------------------------------------------------------------------------------------------------------------|
-| 1.2     | 2025-05-09 | Product Manager Agent | Corrected FR4/FR5 to reference `ScreeningResolutionSchema` instead of non-existent `ResolverOutput`.             |
-| 1.1     | 2025-05-09 | Product Manager Agent | Updated FR1: Resolver now handles disagreements involving UNCERTAIN. Updated author. Added changelog.              |
+| 1.1     | 2025-05-08 | Product Manager Agent | Added Epic structure, clarified resolver input (FR3), output (FR5 - `ResolverOutputSchema`), storage (FR6), and UI (FR7). Removed redundant sections. |
+| 1.2     | 2025-05-09 | Product Manager Agent | Corrected FR4/FR5 to reference `ResolverOutputSchema` instead of non-existent `ResolverOutput`.             |
 | 1.0     | 2025-04-04 | AIDE (AI Assistant)   | Initial draft.                                                                                                    |
 
 ---

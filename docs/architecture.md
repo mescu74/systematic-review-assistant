@@ -25,7 +25,7 @@ The architecture emphasizes a modular design with a clear separation of concerns
 -   **Pydantic for Data Transfer Objects (DTOs) & Validation:** Pydantic schemas (`schemas.py`) are extensively used for:
     -   Defining clear data contracts for service layer inputs (e.g., `SystematicReviewCreate`, `SearchResultUpdate`) and outputs (`SystematicReviewRead`, `SearchResultRead`).
     -   Validating data at the boundaries of services and before LLM interactions.
-    -   Defining the structured output expected from LLM chains (e.g., `ScreeningResponse`, `ScreeningResolutionSchema`).
+    -   Defining the structured output expected from LLM chains (e.g., `ScreeningResponse`, `ResolverOutputSchema`).
     -   *Rationale:* Enhances data integrity, provides type safety, improves developer experience with auto-completion and clear error messages, and serves as self-documentation for data structures.
 -   **LangChain Expression Language (LCEL) for LLM Orchestration:** LLM interactions, particularly for the screening and resolver agents, are built using LCEL chains (`screening_agents.py`).
     -   *Rationale:* Provides a composable and declarative way to define complex LLM workflows, manage prompts, interact with models, parse outputs, and integrate features like retries and listeners (callbacks).
@@ -147,7 +147,7 @@ graph TD
 
 -   **LLM Agent Layer (`src/sr_assistant/app/agents/`):**
     -   `screening_agents.py`: Contains the LangChain LCEL chains for abstract screening (`screen_abstracts_chain`) which includes parallel conservative and comprehensive reviewer logic. Defines prompts and LLM interactions for screening.
-    -   `Conceptual Resolver Chain`: Represents the LangChain LCEL chain (to be fully implemented based on `prd-resolver.md`) responsible for taking outputs from the two screening reviewers and producing a final `ScreeningResolutionSchema`.
+    -   `Conceptual Resolver Chain`: Represents the LangChain LCEL chain (to be fully implemented based on `prd-resolver.md`) responsible for taking outputs from the two screening reviewers and producing a final `ResolverOutputSchema`.
     -   These agents are invoked by the Service Layer (specifically `ScreeningService`).
 
 -   **Data Persistence Layer (Supabase PostgreSQL):**
@@ -262,9 +262,9 @@ sequenceDiagram
 1.  After initial screening in `screen_abstracts.py`, the page calls `ScreeningService.resolve_screening_conflicts_for_batch()` with `review` and `search_result_ids` from the batch.
 2.  `ScreeningService.identify_disagreements()` fetches relevant `SearchResult` and their associated `ScreenAbstractResult` records to find conflicts.
 3.  `ScreeningService.prepare_resolver_inputs()` constructs the input dictionaries for the resolver LLM chain.
-4.  `ScreeningService.invoke_resolver_agent_batch()` calls the `resolver_chain` (LLM Agent Layer using Google AI API or OpenAI API).
-5.  Resolver LLM returns `schemas.ScreeningResolutionSchema` data.
-6.  `ScreeningService.store_resolution_results()` creates `models.ScreeningResolution` records and updates `SearchResult.final_decision` and `SearchResult.resolution_id` via repositories.
+4.  `ScreeningService` uses the `resolver_chain` (from `screening_agents.py`) to invoke the resolver LLM.
+5.  Resolver LLM returns `schemas.ResolverOutputSchema` data.
+6.  `ScreeningService` stores this resolution data using `ScreeningResolutionRepository` (creating a `ScreeningResolution` record) and updates the `SearchResult` with the `final_decision`.
 7.  `screen_abstracts.py` refreshes data and displays the final resolved decisions and reasoning.
 
 #### Sequence Diagram: Conflict Resolution
@@ -272,39 +272,23 @@ sequenceDiagram
 sequenceDiagram
     participant ScreenAbsUI as "UI (screen_abstracts.py)"
     participant ScreeningSvc as "ScreeningService"
-    participant ResolverChain as "LLM Chain (resolver_chain)"
+    participant ResolverChain as "LLM Chain (screening_agents.py)"
     participant ExtResolverAPI as "Ext. Resolver LLM API"
-    participant ResolutionRepo as "ScreeningResolutionRepository"
-    participant SearchRepo as "SearchResultRepository"
+    participant ScreeningResolutionRepo as "ScreeningResolutionRepository"
+    participant SearchResultRepo as "SearchResultRepository"
     participant Database
 
-    ScreenAbsUI->>ScreeningSvc: resolve_screening_conflicts_for_batch(review, ids)
+    ScreenAbsUI->>ScreeningSvc: resolve_screening_conflicts_for_batch(review, search_result_ids)
     activate ScreeningSvc
     ScreeningSvc->>ScreeningSvc: identify_disagreements()
-    note right of ScreeningSvc: Fetches SearchResults & ScreenAbstractResults
     ScreeningSvc->>ScreeningSvc: prepare_resolver_inputs()
-    ScreeningSvc->>ResolverChain: batch(inputs)
-    activate ResolverChain
-    ResolverChain->>ExtResolverAPI: LLM call
-    activate ExtResolverAPI
-    ExtResolverAPI-->>ResolverChain: List[ScreeningResolutionSchema]
-    deactivate ExtResolverAPI
-    ResolverChain-->>ScreeningSvc: List[ScreeningResolutionSchema]
-    deactivate ResolverChain
-    
-    loop For each resolved item
-        ScreeningSvc->>ResolutionRepo: add(ScreeningResolution model)
-        activate ResolutionRepo
-        ResolutionRepo->>Database: INSERT screening_resolutions
-        Database-->>ResolutionRepo: Success
-        deactivate ResolutionRepo
-        ScreeningSvc->>SearchRepo: update(SearchResult with final_decision)
-        activate SearchRepo
-        SearchRepo->>Database: UPDATE search_results
-        Database-->>SearchRepo: Success
-        deactivate SearchRepo
-    end
-    ScreeningSvc-->>ScreenAbsUI: (Implicit success/status update)
+    ScreeningSvc->>ResolverChain: batch(resolver_inputs)
+    ResolverChain->>ExtResolverAPI: LLM API Call (Batch)
+    ExtResolverAPI-->>ResolverChain: List[ResolverOutputSchema]
+    ResolverChain-->>ScreeningSvc: List[ResolverOutputSchema]
+    ScreeningSvc->>ScreeningResolutionRepo: add_bulk(resolutions_to_create)
+    ScreeningSvc->>SearchResultRepo: update_bulk(search_results_to_update)
+    ScreeningSvc-->>ScreenAbsUI: (Resolution process complete / status update)
     deactivate ScreeningSvc
     ScreenAbsUI->>User: Displays updated results
 ```

@@ -8,7 +8,7 @@
 
 This epic implements the automated screening conflict resolver as detailed in the existing resolver PRD (`docs/prd-resolver.md` - content is relevant even if path is deprecated). Key technical aspects include:
 - **Data Model Changes:** Verifying and updating the existing `ScreeningResolution` table in `models.py` and updating the `SearchResult` table to include `final_decision` and a link to the resolution record. This will require an Alembic migration.
-- **Resolver Agent:** Reviewing and updating the `ScreeningResolutionSchema` Pydantic schema in `schemas.py`, updating the `resolver_prompt`, and constructing the `resolver_chain` using the `RESOLVER_MODEL`.
+- **Resolver Agent:** Reviewing and updating the `ResolverOutputSchema` Pydantic schema in `schemas.py`, updating the `resolver_prompt`, and constructing the `resolver_chain` using the `RESOLVER_MODEL`.
 - **Repository Layer:** Verifying and updating the existing `ScreeningResolutionRepository` in `repositories.py` and potentially updating `SearchResultRepository` (or its service) to handle updates to `final_decision`.
 - **Workflow Integration:** Implementing logic in `screen_abstracts.py` to identify disagreements, prepare input for the resolver, invoke the resolver chain, and process/store its output.
 - **UI Updates:** Modifying `screen_abstracts.py` to display the `final_decision` and provide access to the resolver's reasoning.
@@ -41,7 +41,7 @@ Reference: `docs/prd-resolver.md` for detailed original specifications.
     1.  **General Pydantic Schema Standards (Apply to all schemas below):**
         *   All Pydantic models MUST inherit from `core.schemas.BaseSchema` (unless a `TypedDict`).
         *   All fields MUST use field docstrings for documentation; `description` parameter in `Field()` MUST NOT be used.
-        *   Numerical range constraints for LLM output schemas (`ScreeningResponse`, `ScreeningResolutionSchema`) MUST be in docstrings, not `Field` parameters.
+        *   Numerical range constraints for LLM output schemas (`ScreeningResponse`, `ResolverOutputSchema`) MUST be in docstrings, not `Field` parameters.
         *   `AwareDatetime` MUST be imported from `pydantic`.
         *   `collections.abc.Mapping` MUST be used instead of `typing.Mapping`.
         *   Relevant linter errors in `schemas.py` MUST be resolved.
@@ -56,7 +56,7 @@ Reference: `docs/prd-resolver.md` for detailed original specifications.
         *   `ScreeningResultUpdate` (Service Input): Create new schema.
         *   `ScreeningResultRead` (Service Output): Create new schema.
     4.  **Refactor/Define `ScreeningResolution` Schemas in `schemas.py` (as per `docs/data-models.md`):**
-        *   `ScreeningResolutionSchema` (LLM Output): Verify/Align. Clarify LLM-populated vs. caller-populated fields in docstrings. Ensure `resolver_confidence_score` range is in docstring, not `Field`.
+        *   `ResolverOutputSchema` (LLM Output): Verify/Align. Clarify LLM-populated vs. caller-populated fields in docstrings. Ensure `resolver_confidence_score` range is in docstring, not `Field`.
         *   `ScreeningResolutionCreate` (Service Input): Create new schema for internal service use to construct `models.ScreeningResolution`.
         *   `ScreeningResolutionRead` (Service Output): Create new schema.
     5.  **Refactor/Define Suggestion Agent Schemas in `schemas.py` (as per `docs/data-models.md`):**
@@ -92,7 +92,7 @@ Reference: `docs/prd-resolver.md` for detailed original specifications.
         *   Refactor/Define `ScreeningResponse` (LLM output - check confidence score docstring for range).
         *   Refactor/Define `ScreeningResult` (hydrated LLM output).
         *   Create `ScreeningResultCreate`, `ScreeningResultUpdate`, `ScreeningResultRead`.
-        *   Refactor/Define `ScreeningResolutionSchema` (LLM output - check confidence score docstring, clarify caller-populated fields).
+        *   Refactor/Define `ResolverOutputSchema` (LLM output - check confidence score docstring, clarify caller-populated fields).
         *   Create `ScreeningResolutionCreate`, `ScreeningResolutionRead`.
         *   Refactor/Define `PicosSuggestions`, `SuggestionResult`.
     *   [ ] Task 2.1.3: **Repository Verification/Updates (`repositories.py`):**
@@ -107,17 +107,17 @@ Reference: `docs/prd-resolver.md` for detailed original specifications.
 
 - **User Story / Goal:** As a developer, I need a robust LLM agent (chain) that can take disagreement context as input and produce a final, reasoned screening decision, so that conflicts can be resolved automatically.
 - **Detailed Requirements:**
-  - Review and update the `ScreeningResolutionSchema` Pydantic schema in `src/sr_assistant/core/schemas.py`. Specifically address the `resolver_include` field: evaluate its necessity and utility in light of a definitive `final_decision` field being the primary outcome (as suggested in FR5 of `docs/prd-resolver.md`). If the `resolver_include` field (or a repurposed version) is retained, ensure its name is appropriate (e.g., `contributing_strategies` or similar if it serves a new purpose) and its type is `list[ScreeningStrategyType]` (from `src/sr_assistant/core/types.py`) instead of `list[str]`. The schema must accurately reflect the data intended for populating/deriving the `ScreeningResolution` model.
-  - Update/Create the `resolver_prompt` (system and human messages) in `screening_agents.py` to clearly instruct the LLM. The prompt should take all necessary context: `SearchResult` data, `SystematicReview` protocol (PICO, exclusion criteria), and the conservative/comprehensive `ScreenAbstractResult` details. The prompt must align with the (potentially updated) `ScreeningResolutionSchema` for its output structure, especially emphasizing the `final_decision`.
-  - Construct the `resolver_chain` using the `RESOLVER_MODEL`, the refined prompt, and structured output parsing (to `ScreeningResolutionSchema`).
+  - Review and update the `ResolverOutputSchema` Pydantic schema in `src/sr_assistant/core/schemas.py`. Specifically address the `resolver_include` field: evaluate its necessity and utility in light of a definitive `final_decision` field being the primary outcome (as suggested in FR5 of `docs/prd-resolver.md`). If the `resolver_include` field (or a repurposed version) is retained, ensure its name is appropriate (e.g., `contributing_strategies` or similar if it serves a new purpose) and its type is `list[ScreeningStrategyType]` (from `src/sr_assistant/core/types.py`) instead of `list[str]`. The schema must accurately reflect the data intended for populating/deriving the `ScreeningResolution` model.
+  - Update/Create the `resolver_prompt` (system and human messages) in `screening_agents.py` to clearly instruct the LLM. The prompt should take all necessary context: `SearchResult` data, `SystematicReview` protocol (PICO, exclusion criteria), and the conservative/comprehensive `ScreenAbstractResult` details. The prompt must align with the (potentially updated) `ResolverOutputSchema` for its output structure, especially emphasizing the `final_decision`.
+  - Construct the `resolver_chain` using the `RESOLVER_MODEL`, the refined prompt, and structured output parsing (to `ResolverOutputSchema`).
   - Implement error handling and retries for the `resolver_chain` similar to existing screening chains.
 - **Acceptance Criteria (ACs):**
-  - AC1: `ScreeningResolutionSchema` in `schemas.py` is correctly defined/updated; if a field like `resolver_include` is kept, it has an appropriate name and type (`list[ScreeningStrategyType]`).
+  - AC1: `ResolverOutputSchema` in `schemas.py` is correctly defined/updated; if a field like `resolver_include` is kept, it has an appropriate name and type (`list[ScreeningStrategyType]`).
   - AC2: `resolver_prompt` is implemented and includes placeholders for all required context and aligns with the output schema.
-  - AC3: `resolver_chain` is defined, uses the specified model, prompt, and structured output parsing to `ScreeningResolutionSchema`.
-  - AC4: The chain correctly processes realistically structured input data (which may contain specific test values for known scenarios) and produces an output that successfully parses into a `ScreeningResolutionSchema` instance.
-  - AC5: Integration test for `resolver_chain` (running against the actual LLM API, using approved quotas) confirms it can be invoked with representative real context and returns an output that parses correctly to the `ScreeningResolutionSchema`.
-- **Dependencies:** Story 2.1 (for `ScreeningResolutionSchema` to align with `ScreeningResolution` storage).
+  - AC3: `resolver_chain` is defined, uses the specified model, prompt, and structured output parsing to `ResolverOutputSchema`.
+  - AC4: The chain correctly processes realistically structured input data (which may contain specific test values for known scenarios) and produces an output that successfully parses into a `ResolverOutputSchema` instance.
+  - AC5: Integration test for `resolver_chain` (running against the actual LLM API, using approved quotas) confirms it can be invoked with representative real context and returns an output that parses correctly to the `ResolverOutputSchema`.
+- **Dependencies:** Story 2.1 (for `ResolverOutputSchema` to align with `ScreeningResolution` storage).
 
 ---
 
@@ -129,7 +129,7 @@ Reference: `docs/prd-resolver.md` for detailed original specifications.
     - Identify disagreements: Iterate through results, find where conservative and comprehensive decisions differ (e.g., INCLUDE vs. EXCLUDE, as per `docs/prd-resolver.md` FR1). (Note: FR1 of `docs/prd-resolver.md` specifies that cases involving `UNCERTAIN` will not be considered disagreements for automated resolution in this iteration).
     - For each disagreement, prepare the full input context required by `resolver_prompt` (FR3 from `docs/prd-resolver.md`).
     - Invoke the `resolver_chain` (preferably in a batch call if supported and efficient, or iterate) for all identified disagreements in the current screening batch.
-    - Process the output (an instance of `ScreeningResolutionSchema`) from the chain.
+    - Process the output (an instance of `ResolverOutputSchema`) from the chain.
     - Create `ScreeningResolution` model instances.
     - Use `ScreeningResolutionRepository` to save the new resolution records.
     - Update the corresponding `SearchResult` records with the `final_decision` and `resolution_id`.
@@ -216,12 +216,12 @@ Reference: `docs/prd-resolver.md` for detailed original specifications.
     2.  **Implement New Resolver-Related Methods in `ScreeningService` (as per `docs/api-reference.md`):**
         *   `identify_disagreements(self, review_id: uuid.UUID, search_result_ids: list[uuid.UUID]) -> list[models.SearchResult]`
         *   `prepare_resolver_inputs(self, review: models.SystematicReview, search_results_with_disagreements: list[models.SearchResult]) -> list[dict[str, Any]]`
-        *   `invoke_resolver_agent_batch(self, resolver_prompt_variable_inputs: list[dict[str, Any]]) -> list[schemas.ScreeningResolutionSchema]` (This method calls the LLM chain and does not directly manage DB sessions for the call itself, but subsequent storage does).
-        *   `store_resolution_results(self, review_id: uuid.UUID, search_result_id_to_resolution_data: dict[uuid.UUID, schemas.ScreeningResolutionSchema]) -> list[models.ScreeningResolution]` (This method handles DB writes and manages its session).
+        *   `invoke_resolver_agent_batch(self, resolver_prompt_variable_inputs: list[dict[str, Any]]) -> list[schemas.ResolverOutputSchema]` (This method calls the LLM chain and does not directly manage DB sessions for the call itself, but subsequent storage does).
+        *   `store_resolution_results(self, review_id: uuid.UUID, search_result_id_to_resolution_data: dict[uuid.UUID, schemas.ResolverOutputSchema]) -> list[models.ScreeningResolution]` (This method handles DB writes and manages its session).
         *   `resolve_screening_conflicts_for_batch(self, review: models.SystematicReview, search_result_ids_in_batch: list[uuid.UUID]) -> None` (Orchestration method, manages sessions for its sequence of DB operations).
     3.  **General Standards:**
         *   All new and refactored methods must manage sessions internally as appropriate.
-        *   Use defined Pydantic schemas (`ScreeningResultCreate`, `ScreeningResultUpdate`, input dicts and `ScreeningResolutionSchema` for resolver) for data interchange as per `docs/api-reference.md` and `docs/data-models.md`.
+        *   Use defined Pydantic schemas (`ScreeningResultCreate`, `ScreeningResultUpdate`, input dicts and `ResolverOutputSchema` for resolver) for data interchange as per `docs/api-reference.md` and `docs/data-models.md`.
         *   Implement robust error handling for all operations.
         *   Resolve all linter errors for `ScreeningService` in `services.py`.
 - **Acceptance Criteria (ACs):**

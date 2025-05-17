@@ -58,8 +58,8 @@ These schemas are used for data interchange with the service layer methods.
 -   If an LLM output directly leads to the creation of a database model or a service DTO, its schema might share a root name but have a distinct suffix or prefix if its structure or purpose is different before further processing.
 -   Examples:
     -   `ScreeningResponse`: Raw structured output from individual screening LLM reviewers. (Adheres to `[Action]Response`)
-    -   `ScreeningResolutionSchema`: Raw structured output from the resolver LLM. 
-        -   **Note on Convention:** Ideally, for consistency with `ScreeningResponse`, this would be named `ScreeningResolutionResponse`. The current name `ScreeningResolutionSchema` is functional but represents a minor deviation. Future refactoring should consider renaming it for improved pattern consistency. (This will also be noted in `docs/data-models.md` recommendations for `schemas.py`).
+    -   `ResolverOutputSchema`: Raw structured output from the resolver LLM.
+    -   `ScreeningResolutionCreate`, `ScreeningResolutionRead`: For service layer interaction with `ScreeningResolution` entities.
     -   `PicosSuggestions`: Structured PICO suggestions from an LLM. (Specific descriptive name, acceptable as it's not a generic "response" to an action but a specific data structure delivered by the suggestion agent).
     -   `ScreenAbstractsChainInput`: Input variables for the abstract screening chain prompt. (Clearly an input schema).
 
@@ -114,4 +114,5 @@ This document should be reviewed and updated if new categories of components or 
 | Change          | Date       | Version | Description             | Author          |
 |-----------------|------------|---------|-------------------------|-----------------|
 | Initial Draft   | 2025-05-12 | 0.1     | First draft of Naming Conventions document. | Architect Agent |
-| LLM Schema Clarification | 2025-05-12 | 0.2     | Clarified preferred naming for LLM output schemas and noted `ScreeningResolutionSchema` as a deviation for future refactoring. | Architect Agent | 
+| LLM Schema Clarification | 2025-05-12 | 0.2     | Clarified preferred naming for LLM output schemas and noted `ScreeningResolutionSchema` as a deviation for future refactoring. | Architect Agent |
+| Schema Rename | 2025-05-15 | 0.3     | Renamed `ScreeningResolutionSchema` to `ResolverOutputSchema` globally. | AI Assistant | 

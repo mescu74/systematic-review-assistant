@@ -423,9 +423,9 @@ class SearchResultUpdate(BaseSchema):
 
 These schemas define the data structures for LLM outputs related to screening, and for creating, reading, and updating `ScreenAbstractResult` and `ScreeningResolution` entities via the `ScreeningService`. All Pydantic schemas inherit from `core.schemas.BaseSchema`.
 
-#### `ScreeningResponse` (LLM Output for Reviewers)
+#### `ScreeningResponse` (LLM Output for Individual Reviewers)
 
-This schema defines the structured output expected from the conservative and comprehensive reviewer LLM chains. It is defined in `src/sr_assistant/core/schemas.py`.
+This schema defines the structured output expected from the individual screening LLM chains (conservative and comprehensive). It is defined in `src/sr_assistant/core/schemas.py`.
 
 ```python
 from pydantic import Field, JsonValue
@@ -450,7 +450,7 @@ class ScreeningResponse(BaseSchema):
     """PRISMA exclusion reason categories. Must be set if decision is EXCLUDE. Omit if INCLUDE."""
 ```
 
-#### `ScreeningResult` (Hydrated LLM Output)
+#### `ScreeningResult` (Hydrated LLM Output + Metadata)
 
 This schema represents a `ScreeningResponse` that has been processed and hydrated with additional context (like IDs, timestamps) by the `screen_abstracts_chain_on_end_cb` listener. It is defined in `src/sr_assistant/core/schemas.py`.
 
@@ -490,7 +490,7 @@ class ScreeningResult(ScreeningResponse):
     """Additional metadata from the LLM invocation (inputs, token usage, etc.)."""
 ```
 
-#### `ScreeningResultCreate` (Service Input)
+#### `ScreeningResultCreate` (Service Input for Storing Screening)
 
 Used by `ScreeningService.add_screening_decision` to create a `ScreenAbstractResult` database record. This schema takes all necessary fields from a `ScreeningResult` (which is an enriched `ScreeningResponse`).
 
@@ -666,7 +666,7 @@ class ScreeningResultRead(BaseSchema):
     # search_result_id would be here if it's part of the ScreenAbstractResult model or joined
 ```
 
-#### `ScreeningResolutionSchema` (LLM Output for Resolver)
+#### `ResolverOutputSchema` (LLM Output for Resolver)
 
 This schema defines the structured output expected from the resolver LLM chain. It is defined in `src/sr_assistant/core/schemas.py`.
 
@@ -677,7 +677,7 @@ from pydantic import Field
 from sr_assistant.core.schemas import BaseSchema
 from sr_assistant.core.types import ScreeningDecisionType
 
-class ScreeningResolutionSchema(BaseSchema):
+class ResolverOutputSchema(BaseSchema):
     resolver_decision: ScreeningDecisionType
     """The final decision made by the resolver (INCLUDE, EXCLUDE, UNCERTAIN)."""
 
@@ -686,11 +686,6 @@ class ScreeningResolutionSchema(BaseSchema):
 
     resolver_confidence_score: float = Field(ge=0.0, le=1.0)
     """Confidence score for the resolver's decision [0.0, 1.0]."""
-
-    resolver_include: list[str] = Field(default_factory=list)
-    """DEPRECATED/Legacy: List of original screening strategies the resolver agrees with. 
-    This field might be removed or re-evaluated as the primary output is `resolver_decision`.
-    """
 
     # The following fields are NOT expected from the LLM but are part of the existing
     # schema in schemas.py, intended to be populated by the calling code before DB save.
@@ -708,7 +703,7 @@ class ScreeningResolutionSchema(BaseSchema):
     comprehensive_result_id: uuid.UUID | None = None
     """ID of the comprehensive screening result. To be populated by the caller (ScreeningService)."""
 ```
-**Note:** The `ScreeningResolutionSchema` in `schemas.py` includes several IDs (`review_id`, `search_result_id`, etc.) that are marked as populated by the calling code. For a schema *strictly* representing LLM output, these would be omitted. The `ScreeningService.store_resolution_results` method would take the LLM's output (decision, reasoning, confidence) and combine it with the necessary IDs to create the `models.ScreeningResolution` DB record.
+**Note:** The `ResolverOutputSchema` in `schemas.py` includes several IDs (`review_id`, `search_result_id`, etc.) that are marked as populated by the calling code. For a schema *strictly* representing LLM output, these would be omitted. The `ScreeningService.store_resolution_results` method would take the LLM's output (decision, reasoning, confidence) and combine it with the necessary IDs to create the `models.ScreeningResolution` DB record.
 
 #### `ScreeningResolutionCreate` (Service Input - Conceptual)
 
@@ -883,12 +878,12 @@ This section summarizes key discrepancies found or recommendations made while do
 
 - **Missing `Create` Schemas (for Service Layer):**
   - `ScreeningResultCreate` is not currently defined but is the recommended input schema for `ScreeningService.add_screening_decision`.
-  - A `ScreeningResolutionCreate` (or similar) would be beneficial for `ScreeningService.store_resolution_results` to clearly define the data contract for creating a `ScreeningResolution` model, separate from the direct LLM output (`ScreeningResolutionSchema`).
+  - A `ScreeningResolutionCreate` (or similar) would be beneficial for `ScreeningService.store_resolution_results` to clearly define the data contract for creating a `ScreeningResolution` model, separate from the direct LLM output (`ResolverOutputSchema`).
 
-- **`ScreeningResolutionSchema` Fields:**
-  - **Issue:** The current `ScreeningResolutionSchema` in `schemas.py` includes fields (`review_id`, `search_result_id`, `conservative_result_id`, `comprehensive_result_id`) that are intended to be populated by the calling code (service layer) rather than being output by the LLM itself.
-  - **Recommendation:** For clarity, the schema representing *direct LLM output* for the resolver should ideally only contain `resolver_decision`, `resolver_reasoning`, `resolver_confidence_score` (and potentially the legacy `resolver_include`). The service layer would then combine this with the necessary IDs to construct the `ScreeningResolutionCreate` data for database persistence. This distinction should be made clear if `ScreeningResolutionSchema` is refactored.
-  - **Naming Convention Note:** As per `docs/naming-conventions.md`, for consistency with `ScreeningResponse`, `ScreeningResolutionSchema` should ideally be refactored to `ScreeningResolutionResponse` in the future.
+- **`ResolverOutputSchema` Fields:**
+  - **Issue:** The current `ResolverOutputSchema` in `schemas.py` includes fields (`review_id`, `search_result_id`, `conservative_result_id`, `comprehensive_result_id`) that are intended to be populated by the calling code (service layer) rather than being output by the LLM itself.
+  - **Recommendation:** For clarity, the schema representing *direct LLM output* for the resolver should ideally only contain `resolver_decision`, `resolver_reasoning`, `resolver_confidence_score` (and potentially the legacy `resolver_include`). The service layer would then combine this with the necessary IDs to construct the `ScreeningResolutionCreate` data for database persistence. This distinction should be made clear if `ResolverOutputSchema` is refactored.
+  - **Naming Convention Note:** As per `docs/naming-conventions.md`, for consistency with `ScreeningResponse`, `ResolverOutputSchema` should ideally be refactored to `ScreeningResolutionResponse` in the future.
 
 - **`ScreenAbstractResult` SQLModel `search_result_id`:**
   - **Requirement:** The `ScreenAbstractResult` SQLModel in `models.py` needs a foreign key to `SearchResult` (e.g., `search_result_id: uuid.UUID = Field(foreign_key="search_results.id")`) to properly link screening decisions to the items they screen. This is essential for the `ScreeningResultCreate` schema to function as intended with the service layer.
@@ -908,4 +903,5 @@ This section summarizes key discrepancies found or recommendations made while do
 | ERD and Patterns | 2025-05-12 | 0.6     | Added Mermaid ERD for core SQLModels. (Pattern discussion moved to architecture.md) | Architect Agent |
 | ERD Fixes        | 2025-05-12 | 0.6.1   | Corrected Mermaid ERD syntax (comments, relationship naming). | Architect Agent |
 | ERD Completeness | 2025-05-12 | 0.6.2   | Added more fields to entities in ERD and included LogRecord model. | Architect Agent |
-| Naming Convention Note | 2025-05-12 | 0.7     | Added note regarding future renaming of `ScreeningResolutionSchema`. | Architect Agent |
+| Naming Convention Note | 2025-05-12 | 0.7     | Added note regarding future renaming of `ResolverOutputSchema`. | Architect Agent |
+| Schema Rename        | 2025-05-15 | 0.8     | Renamed `ScreeningResolutionSchema` to `ResolverOutputSchema` globally. | AI Assistant |

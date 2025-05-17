@@ -5,7 +5,6 @@ from datetime import UTC, datetime
 from typing import Any
 
 import pytest
-from sqlalchemy import select
 from sqlmodel import Session, select
 
 # Assuming models are adjusted for resolver (ScreeningResolution, fields in SearchResult)

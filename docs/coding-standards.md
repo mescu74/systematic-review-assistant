@@ -14,41 +14,14 @@ This document provides a concise style guide for AI agents writing Python code, 
 
 This section outlines fundamental code style conventions based primarily on PEP 8, enforced by Ruff rules from `pycodestyle` (E, W), `flake8-quotes` (Q), `flake8-commas` (COM), and `pep8-naming` (N). Adhering to these styles improves code readability and consistency. Many of these rules are automatically fixable using Ruff's `--fix` option.
 
-### Formatting and Whitespace
+### Formatting and Linting
 
-Consistent formatting is crucial for readability.
+This project uses `ruff` with most rules enabled for linting and formatting. Refer to `pyproject.toml` for Ruff configuration. If you think a rule should be ignored, always confirm with the user before making changes to ruff configuration. Follow existing commenting conventions.
 
-- **Indentation:** Use 4 spaces per indentation level. Avoid tabs (W191) or mixing tabs and spaces.
-- **Line Length:** Limit all lines to a maximum of 88 characters (like Black formatter) or 79 characters (PEP 8 default) if preferred. Ruff rule E501.
-- **Blank Lines:**
-  - Use two blank lines to separate top-level function and class definitions (E302).
-  - Use one blank line to separate method definitions within a class (E301).
-  - Use blank lines sparingly within functions to show logical sections (E303).
-  - Avoid extraneous blank lines (E303).
-- **Whitespace in Expressions and Statements:**
-  - Avoid extraneous whitespace (E201, E202, E203).
-  - Always surround binary operators with a single space on either side (E225, E226, E227, E228). Examples: `x = 1`, `y = x + 1`, `x_squared = x**2`.
-  - Do not use spaces around the `=` sign when used for keyword arguments or default parameter values (E251). Example: `def func(arg1, arg2=None): ...`, `func(arg1=value)`.
-  - Put spaces after commas, but not before (E231). Example: `[1, 2, 3]`, `func(a, b, c)`.
-- **Imports:**
-  - Imports should usually be on separate lines (E401). Example: `import os\nimport sys` not `import os, sys`.
-  - Imports are always put at the top of the file, just after any module comments and docstrings, and before module globals and constants (E402).
-  - Order imports as follows: standard library, third-party, local application/library specific. Separate each group with a blank line. (Recommended, but not directly enforced by a single Ruff rule; however, tools like `isort`, which Ruff can integrate/emulate via `I001`, enforce this).
-  - Use absolute imports instead of relative imports where ambiguity could arise (flake8-import-conventions, `ICN001` for `importlib.resources`).
-- **Trailing Commas:**
-  - Use trailing commas when defining multi-line lists, dictionaries, function arguments, etc. (COM812). This makes it easier to add new items and results in cleaner diffs. Example:
-    ```python
-    my_list = [
-        1,
-        2,
-        3, # Trailing comma
-    ]
-    ```
-- **Quotes:**
-  - Use double quotes (`"`) for strings consistently (Q000). If a string contains double quotes, single quotes (`'`) can be used to avoid escaping, or vice-versa (Q001, Q002).
-  - For docstrings, use triple double quotes (`"""Docstring goes here."""`) (Q000, indirectly D200, D210).
-  - Avoid unnecessary `u` prefixes for strings (UP025). In Python 3, strings are Unicode by default.
-- **End-of-File:** End files with a single newline character (W292).
+- After you've applied all edits to a file, you MUST run the following workflow:
+  1. `uv run ruff check --fix edited/file.py`, then fix any remaining linter issues if related to your work. Let ruff do the fixing before attempting yourself.
+  2. `uvx pyupgrade  --py312-plus --keep-runtime-typing edited/file.py`
+  3. `uv run ruff format edited/file.py`
 
 ### Naming Conventions
 
@@ -72,10 +45,10 @@ Clear and consistent naming is vital for AI agents to understand and modify code
 
 Comments should be clear, concise, and primarily explain _why_ something is done, not _what_ is being done (the code itself should explain the what).
 
-- **Block Comments:** Indent block comments to the same level as the code they describe. Start each line with a `#` followed by a single space.
-- **Inline Comments:** Use inline comments sparingly. Separate them by at least two spaces from the statement. They should start with a `#` and a single space (E261, E262). Example: `x = x + 1  # Increment x`.
+- Use TODO comments (TODO:, HACK:, PERF:, BUG:, WARN:, etc.). Indent following lines so they align with the first line.
+- Do NOT add comments like "# add variable foobar", it is useless noise.
 - **Docstrings:** Write docstrings for all public modules, functions, classes, and methods (D100-D107).
-  - Use triple double quotes: `"""This is a docstring."""`
+  - Follow Google docstring style. """Use imperative voice end first line in a period."""
   - For multi-line docstrings, the summary line should be on the first line, followed by a blank line, then the more detailed description (D210). The closing quotes should be on a line by themselves (D200).
   - Follow PEP 257 conventions. For example, use imperative mood for the first line: `"""Calculate the sum of two numbers."""` not `"""Calculates the sum..."""` (D400, D401).
   - Document parameters, return values, and any exceptions raised, especially for complex functions or APIs. Use a consistent format (e.g., Google style, NumPy style - D107 recommends a style, and specific rules like D402 ensure sections like `Args:`, `Returns:` are present if params are documented).
@@ -162,21 +135,16 @@ These rules help prevent common bugs and improve code robustness.
   - Avoid `eval()` (S307), `exec()` (S102), `pickle` (S301, S302), `shelve` (S308), `subprocess.run` with `shell=True` without careful sanitization (S602, S603).
   - Be careful with XML parsing (S310-S320, S400-S413), ensure secure parsers are used if processing untrusted XML.
   - Do not use weak cryptographic functions (e.g., MD5, SHA1 for hashing if security is critical - S324).
-  - Do not hardcode passwords or sensitive keys (S105, S106, S107). Use environment variables or a secrets manager.
   - Ensure temporary files are created securely (S306).
-- **Pydantic Specific (PTC series):**
-  - Define Pydantic model fields in the class body, not in `__init__` (PTC001).
-  - Use `Field(default=...)` for default values, not direct assignment in class body if `Field` is also used for other purposes (PTC002, PTC007).
-  - Use `model_validate` instead of `parse_obj` (PTC017).
-  
+
 ## Pydantic Best Practices
 
 - Pydantic models are referred to as "schemas" in this project. Database models are referred to as "models".
-- **Use Model.model_validate(**obj):**
-  - **DO NOT** use `Model(**obj)`, it will cause Pyright type validation errors.
-  - **ALWAYS** use `Model.model_validate(**obj)` instead.
-- **Schemas should inheright from `sra_assistant.core.schemas.BaseSchema`:**
-  - *Rationale:* `BaseSchema` configures `model_config` with settings we want to use for all schemas unless there is a special reason not to. It's also fine to define a `FooBase(BaseSchema)` and `Bar(FooBase)`.
+- **Use Model.model_validate(obj)**:
+  - **DO NOT** use `Model(**dict)`, it will cause Pyright type validation errors and bypasses proper Pydantic validation.
+  - **ALWAYS** use `Model.model_validate(obj)` instead.
+- **Schemas should inherit from `sra_assistant.core.schemas.BaseSchema`:**
+  - _Rationale:_ `BaseSchema` configures `model_config` with settings we want to use for all schemas unless there is a special reason not to. It's also fine to define a `FooBase(BaseSchema)` and `Bar(FooBase)`.
 
 ## AI Agent Specific Best Practices
 

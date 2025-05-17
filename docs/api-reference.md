@@ -224,29 +224,23 @@ Manages screening decisions (from conservative and comprehensive LLM reviewers) 
        c. Get relevant `SystematicReview` protocol data.
        d. Construct the dictionary of prompt variables.
 
-- **`invoke_resolver_agent_batch(self, resolver_prompt_variable_inputs: list[dict[str, Any]]) -> list[schemas.ScreeningResolutionSchema]`** (New)
-  - **Purpose:** Invokes the resolver LLM agent/chain in batches with the prepared prompt variable inputs (`prd-resolver.md` FR4).
-  - **Parameters:**
-    - `resolver_prompt_variable_inputs`: A list of dictionaries, where each dictionary represents the input variables for a single invocation of the resolver chain.
-  - **Returns:** A list of `schemas.ScreeningResolutionSchema` Pydantic objects (as defined in `src/sr_assistant/core/schemas.py` and `prd-resolver.md` FR5).
-  - **Logic:**
-    1. Get the resolver LLM chain (e.g., from `screening_agents.py`).
-    2. Invoke the chain with the batch of inputs (`resolver_chain.batch(resolver_prompt_variable_inputs, config=...)`).
-    3. Handle LLM call errors (retries, logging).
+- **`invoke_resolver_agent_batch(self, resolver_prompt_variable_inputs: list[dict[str, Any]]) -> list[schemas.ResolverOutputSchema]`** (New)
+  - **Purpose:** Invokes the resolver LLM agent (chain) for a batch of disagreements.
+  - **Input:** A list of dictionaries, where each dictionary contains the prompt variables for one disagreement context (as prepared by `prepare_resolver_inputs`).
+  - **Returns:** A list of `schemas.ResolverOutputSchema` Pydantic objects (as defined in `src/sr_assistant/core/schemas.py` and `prd-resolver.md` FR5).
+  - **Logic:** This method is responsible for calling the `resolver_chain.batch()` or equivalent, handling potential LLM API errors with retries, and ensuring the output is parsed correctly.
 
-- **`store_resolution_results(self, review_id: uuid.UUID, search_result_id_to_resolution_data: dict[uuid.UUID, schemas.ScreeningResolutionSchema]) -> list[schemas.ScreeningResolutionRead]`** (New)
-  - **Purpose:** Stores outcomes from the resolver agent.
-  - **Parameters:**
-    - `review_id`: ID of the current systematic review.
-    - `search_result_id_to_resolution_data`: A dictionary mapping `SearchResult.id` to its corresponding `schemas.ScreeningResolutionSchema` data from the resolver agent.
-  - **Returns:** List of created `schemas.ScreeningResolutionRead` objects.
-  - **Session Handling:** Manages its own session and transaction internally.
+- **`store_resolution_results(self, review_id: uuid.UUID, search_result_id_to_resolution_data: dict[uuid.UUID, schemas.ResolverOutputSchema]) -> list[schemas.ScreeningResolutionRead]`** (New)
+  - **Purpose:** Stores the results from the resolver agent into the database and updates the `SearchResult` records.
+  - **Input:**
+    - `review_id`: The ID of the current systematic review.
+    - `search_result_id_to_resolution_data`: A dictionary mapping `SearchResult.id` to its corresponding `schemas.ResolverOutputSchema` data from the resolver agent.
+  - **Returns:** A list of `schemas.ScreeningResolutionRead` Pydantic objects representing the newly created resolution records.
   - **Logic:**
     1. Iterate through `search_result_id_to_resolution_data`.
-    2. For each item, create `models.ScreeningResolution` using data from `schemas.ScreeningResolutionSchema`. Ensure all necessary IDs (e.g., `review_id`, `search_result_id`, `conservative_result_id`, `comprehensive_result_id`) are correctly populated. The `conservative_result_id` and `comprehensive_result_id` might need to be fetched or passed through if not part of `ScreeningResolutionSchema` directly (though the current schema has them as optional and populated by caller).
-    3. Add to session via `ScreeningResolutionRepository.add`.
-    4. Update the corresponding `models.SearchResult.final_decision` and `resolution_id`.
-    5. Commit session.
+    2. For each item, create `models.ScreeningResolution` using data from `schemas.ResolverOutputSchema`. Ensure all necessary IDs (e.g., `review_id`, `search_result_id`, `conservative_result_id`, `comprehensive_result_id`) are correctly populated. The `conservative_result_id` and `comprehensive_result_id` might need to be fetched or passed through if not part of `ResolverOutputSchema` directly (though the current schema has them as optional and populated by caller).
+    3. Use `ScreeningResolutionRepository.add_bulk()` (or individual `add()`) to save the new `ScreeningResolution` records.
+    4. For each resolved `SearchResult`, update its `final_decision` field based on `resolver_decision` and link it to the new `ScreeningResolution.id`.
 
 - **`resolve_screening_conflicts_for_batch(self, review: models.SystematicReview, search_result_ids_in_batch: list[uuid.UUID]) -> None`** (New - Orchestration Method)
   - **Purpose:** Orchestrates the entire conflict resolution process for a batch of search results.
@@ -256,14 +250,14 @@ Manages screening decisions (from conservative and comprehensive LLM reviewers) 
 
 #### General Notes for `ScreeningService` Implementation
 - Ensure Pydantic schemas for service inputs (e.g., `ScreeningResultCreate`, `ScreeningResultUpdate`) are clearly defined in `src/sr_assistant/core/schemas.py`.
-- The output of the resolver chain is `schemas.ScreeningResolutionSchema`.
+- The output of the resolver chain is `schemas.ResolverOutputSchema`.
 - The input to the resolver chain (`invoke_resolver_agent_batch`) is a list of dictionaries, each matching the input variables of the `resolver_prompt`.
 - **Pydantic Model Instantiation:** When creating SQLModel instances (e.g., `models.ScreenAbstractResult`) from Pydantic schema data (e.g., `schemas.ScreeningResultCreate`), use the `ModelName.model_validate(data_dict)` method (e.g., `models.ScreenAbstractResult.model_validate(screening_create_data.model_dump())`) as per `docs/coding-standards.md`. Avoid direct instantiation with `**data_dict` if it leads to type errors or bypasses Pydantic v2 validation strictness.
 - Address the unused `e` variable linter error in the current `services.py` (`get_screening_result_by_strategy`).
 - Type hints for generic `dict` should be `dict[str, Any]` or a more specific `TypedDict` if applicable.
 
 #### Further Considerations for `ScreeningService`
-- The definition of Pydantic schemas used for service method inputs (e.g., `schemas.ScreeningResultCreate`, `schemas.ScreeningResultUpdate`) needs to be solidified and placed in `src/sr_assistant/core/schemas.py`. The `schemas.ScreeningResolutionSchema` is the output from the resolver LLM chain.
+- The definition of Pydantic schemas used for service method inputs (e.g., `schemas.ScreeningResultCreate`, `schemas.ScreeningResultUpdate`) needs to be solidified and placed in `src/sr_assistant/core/schemas.py`. The `schemas.ResolverOutputSchema` is the output from the resolver LLM chain.
 - Error handling within these new methods needs to be robust.
 
 ## LLM Agent APIs (Conceptual)
@@ -303,22 +297,24 @@ This function orchestrates the screening of a batch of search results using a pa
     - `conservative_result`: `schemas.ScreeningResult` or `schemas.ScreeningError`.
     - `comprehensive_result`: `schemas.ScreeningResult` or `schemas.ScreeningError`.
 
-### Resolver Chain (`resolver_chain` - conceptual, to be built based on `prd-resolver.md`)
+### Resolver Chain (`resolver_chain`)
 
 This chain is responsible for resolving disagreements between the conservative and comprehensive screening decisions.
 
-- **Input (for each disagreement, prepared by `ScreeningService.prepare_resolver_inputs`):**
-  - A dictionary of prompt variables, conceptually including:
-    - Full `models.SearchResult` data (PMID, title, abstract, etc.)
-    - Relevant `models.SystematicReview` protocol data (research question, PICO, exclusion criteria)
-    - The `schemas.ScreeningResult` from the "conservative" reviewer.
-    - The `schemas.ScreeningResult` from the "comprehensive" reviewer.
-  - The exact input variable names and structure will be determined by the `resolver_prompt` and can be inspected via `resolver_chain.get_input_schema()` once the chain is defined.
-- **Output (from the chain):** `schemas.ScreeningResolutionSchema` (Pydantic model containing `resolver_decision`, `resolver_reasoning`, etc. as defined in `src/sr_assistant/core/schemas.py`)
+- **Purpose:** To take the context of a screening disagreement (or two "uncertain" decisions) and produce a final, reasoned screening decision.
+- **Implementation:** LangChain Expression Language (LCEL) chain, defined in `src/sr_assistant/app/agents/screening_agents.py`.
+- **Input (to the chain):** A dictionary containing all necessary context: `SearchResult` data, `SystematicReview` protocol, and details from both conservative and comprehensive reviewers (decisions, rationales, confidence scores, etc.). This input is typically prepared by `ScreeningService.prepare_resolver_inputs`.
+- **Model:** `RESOLVER_MODEL` (e.g., Gemini model, configured in `src/sr_assistant/app/config.py`).
+- **Prompt:** `resolver_prompt` (system and human messages designed for deep reasoning and structured output).
+- **Output (from the chain):** `schemas.ResolverOutputSchema` (Pydantic model containing `resolver_decision`, `resolver_reasoning`, etc. as defined in `src/sr_assistant/core/schemas.py`)
+- **Key Steps in Chain:**
+    1. Format input variables into the prompt.
+    2. Invoke the LLM.
+    3. Parse the LLM's response into the `schemas.ResolverOutputSchema` structure.
 
 ## Data Models
 
-Refer to [Data Models Document](data-models.md) for detailed definitions of SQLModel database models (e.g., `SearchResult`, `SystematicReview`, `ScreenAbstractResult`, `ScreeningResolution`) and core Pydantic schemas (e.g., `ScreeningResultCreate`, `ScreeningResultUpdate`, `SearchResultUpdate`, `ScreeningResponse`, `ScreeningResolutionSchema`) used throughout the application.
+Refer to [Data Models Document](data-models.md) for detailed definitions of SQLModel database models (e.g., `SearchResult`, `SystematicReview`, `ScreenAbstractResult`, `ScreeningResolution`) and core Pydantic schemas (e.g., `ScreeningResultCreate`, `ScreeningResultUpdate`, `SearchResultUpdate`, `ScreeningResponse`, `ResolverOutputSchema`) used throughout the application.
 
 ## Change Log
 
@@ -328,5 +324,5 @@ Refer to [Data Models Document](data-models.md) for detailed definitions of SQLM
 | 2025-05-13 | 0.2     | Populated initial service API outlines (Search, Review, Screening) based on `services.py`.                                                | Architect Agent |
 | 2025-05-13 | 0.3     | Major Refactor: Corrected SearchService (encapsulation), ScreeningService (inputs, resolver methods). Defined all key Pydantic Read/Update schemas. | Architect Agent |
 | 2025-05-13 | 0.4     | Session Mgt Update: Removed session parameters from all public service methods; enforced internal session management & factory injection.     | Architect Agent |
-| 2025-05-13 | 0.5     | LLM I/O & Formatting: Clarified LLM chain I/O (`ScreenAbstractsChainOutputDict`, `ScreeningResolutionSchema`). Corrected Markdown H4/bolding. Restored sections. Added this changelog. | Architect Agent |
+| 2025-05-13 | 0.5     | LLM I/O & Formatting: Clarified LLM chain I/O (`ScreenAbstractsChainOutputDict`, `ResolverOutputSchema`). Corrected Markdown H4/bolding. Restored sections. Added this changelog. | Architect Agent |
 | 2025-05-13 | 0.6     | Service Return Types: Updated all service methods to return Pydantic `Read` schemas instead of SQLModels. Added `model_validate` note.          | Architect Agent |

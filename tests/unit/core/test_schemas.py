@@ -320,6 +320,7 @@ def test_screening_result_read_valid(
 # --- ScreeningResolution Schemas Tests ---
 
 from sr_assistant.core.schemas import (
+    ResolverOutputSchema,
     ScreeningResolutionCreate,
     ScreeningResolutionRead,  # For LLM output part
 )
@@ -329,13 +330,13 @@ from sr_assistant.core.schemas import (
 
 
 @pytest.fixture
-def valid_resolver_llm_output_data() -> dict[str, Any]:
-    """Provides base data simulating LLM output for ScreeningResolutionSchema."""
+def valid_resolver_output_schema_data() -> dict[str, Any]:
+    """Provides base data simulating LLM output for ResolverOutputSchema."""
     return {
-        "resolver_decision": ScreeningDecisionType.EXCLUDE,
-        "resolver_reasoning": "Contradictory findings between reviewers.",
-        "resolver_confidence_score": 0.85,
-        # "resolver_include" is legacy/optional in ScreeningResolutionSchema, can omit for base valid data
+        "resolver_decision": ScreeningDecisionType.INCLUDE,
+        "resolver_reasoning": "The study meets all inclusion criteria based on abstract review.",
+        "resolver_confidence_score": 0.95,
+        # "resolver_include" is legacy/optional in ResolverOutputSchema, can omit for base valid data
     }
 
 
@@ -356,14 +357,14 @@ def valid_resolution_context_data() -> dict[str, Any]:
 
 
 def test_screening_resolution_create_valid(
-    valid_resolver_llm_output_data: dict[str, Any],
+    valid_resolver_output_schema_data: dict[str, Any],
     valid_resolution_context_data: dict[str, Any],
 ):
     """Test ScreeningResolutionCreate with valid data."""
-    create_data = {**valid_resolver_llm_output_data, **valid_resolution_context_data}
+    create_data = {**valid_resolver_output_schema_data, **valid_resolution_context_data}
     try:
         resolution = ScreeningResolutionCreate.model_validate(create_data)
-        assert resolution.resolver_decision == ScreeningDecisionType.EXCLUDE
+        assert resolution.resolver_decision == ScreeningDecisionType.INCLUDE
         assert (
             resolution.search_result_id
             == valid_resolution_context_data["search_result_id"]
@@ -373,7 +374,7 @@ def test_screening_resolution_create_valid(
 
 
 def test_screening_resolution_read_valid(
-    valid_resolver_llm_output_data: dict[str, Any],
+    valid_resolver_output_schema_data: dict[str, Any],
     valid_resolution_context_data: dict[str, Any],
 ):
     """Test ScreeningResolutionRead instantiation."""
@@ -383,14 +384,14 @@ def test_screening_resolution_read_valid(
         "updated_at": datetime.now(timezone.utc),
     }
     read_data = {
-        **valid_resolver_llm_output_data,
+        **valid_resolver_output_schema_data,
         **valid_resolution_context_data,
         **db_timestamps,
     }
     try:
         resolution_read = ScreeningResolutionRead.model_validate(read_data)
         assert resolution_read.id == db_timestamps["id"]
-        assert resolution_read.resolver_decision == ScreeningDecisionType.EXCLUDE
+        assert resolution_read.resolver_decision == ScreeningDecisionType.INCLUDE
         assert resolution_read.created_at is not None
     except ValidationError as e:
         pytest.fail(f"ScreeningResolutionRead failed for valid data: {e}")
@@ -431,3 +432,131 @@ def test_picos_suggestions_missing_required(valid_picos_data: dict[str, str]):
         del data[field]
         with pytest.raises(ValidationError, match=field):
             PicosSuggestions.model_validate(data)
+
+
+@pytest.mark.unit
+def test_resolver_output_schema_invalid_decision(
+    valid_resolver_output_schema_data: dict[str, Any],
+):
+    """Test ScreeningResolutionSchema with an invalid decision type."""
+    invalid_data = valid_resolver_output_schema_data.copy()
+    invalid_data["resolver_decision"] = "MAYBE_NOT"
+    with pytest.raises(ValidationError):
+        ResolverOutputSchema(**invalid_data)
+
+
+@pytest.mark.unit
+def test_resolver_output_schema_invalid_confidence(
+    valid_resolver_output_schema_data: dict[str, Any],
+):
+    """Test ScreeningResolutionSchema with an out-of-range confidence score."""
+    # Test too high
+    invalid_data_high = valid_resolver_output_schema_data.copy()
+    invalid_data_high["resolver_confidence_score"] = 1.5
+    with pytest.raises(ValidationError):
+        ResolverOutputSchema(**invalid_data_high)
+
+    # Test too low
+    invalid_data_low = valid_resolver_output_schema_data.copy()
+    invalid_data_low["resolver_confidence_score"] = -0.5
+    with pytest.raises(ValidationError):
+        ResolverOutputSchema(**invalid_data_low)
+
+
+@pytest.mark.unit
+def test_resolver_output_schema_missing_reasoning(
+    valid_resolver_output_schema_data: dict[str, Any],
+):
+    """Test ScreeningResolutionSchema with missing mandatory resolver_reasoning."""
+    invalid_data = valid_resolver_output_schema_data.copy()
+    del invalid_data["resolver_reasoning"]
+    with pytest.raises(ValidationError):
+        ResolverOutputSchema(**invalid_data)
+
+
+# NOTE: The following tests (`test_resolver_output_schema_resolver_include_valid`
+#       and `test_resolver_output_schema_resolver_include_invalid_type`) are
+#       commented out because they test the legacy `resolver_include` field
+#       which has been renamed to `contributing_strategies`. The tests for
+#       `contributing_strategies`
+#       (`test_resolver_output_schema_contributing_strategies_valid` and
+#       `test_resolver_output_schema_contributing_strategies_invalid_type`)
+#       supersede these.
+# @pytest.mark.unit
+# def test_resolver_output_schema_resolver_include_valid(
+#     valid_resolver_output_schema_data: dict[str, Any],
+# ):
+#     """Test ScreeningResolutionSchema with valid 'resolver_include' values."""
+#     data = valid_resolver_output_schema_data.copy()
+#     data["resolver_include"] = ["conservative", "comprehensive"]
+#     loaded = ResolverOutputSchema(**data)
+#     assert loaded.resolver_include == ["conservative", "comprehensive"]
+#
+#     data["resolver_include"] = []
+#     loaded = ResolverOutputSchema(**data)
+#     assert loaded.resolver_include == []
+#
+#
+# @pytest.mark.unit
+# def test_resolver_output_schema_resolver_include_invalid_type(
+#     valid_resolver_output_schema_data: dict[str, Any],
+# ):
+#     """Test ScreeningResolutionSchema with invalid type for 'resolver_include' values."""
+#     data = valid_resolver_output_schema_data.copy()
+#     data["resolver_include"] = ["conservative", 123]  # 123 is not a string
+#     with pytest.raises(ValidationError):
+#         ResolverOutputSchema(**data)
+
+
+@pytest.mark.unit
+def test_resolver_output_schema_contributing_strategies_valid(
+    valid_resolver_output_schema_data: dict[str, Any],
+):
+    """Test ResolverOutputSchema with valid 'contributing_strategies' values."""
+    data = valid_resolver_output_schema_data.copy()
+    # Test with valid strategy strings (Pydantic will convert them to enums)
+    data["contributing_strategies"] = ["conservative", "comprehensive"]
+    loaded = ResolverOutputSchema.model_validate(data)
+    assert loaded.contributing_strategies == [
+        ScreeningStrategyType.CONSERVATIVE,
+        ScreeningStrategyType.COMPREHENSIVE,
+    ]
+
+    # Test with empty list
+    data["contributing_strategies"] = []
+    loaded = ResolverOutputSchema.model_validate(data)
+    assert loaded.contributing_strategies == []
+
+    # Test with actual enum members
+    data["contributing_strategies"] = [ScreeningStrategyType.CONSERVATIVE]
+    loaded = ResolverOutputSchema.model_validate(data)
+    assert loaded.contributing_strategies == [ScreeningStrategyType.CONSERVATIVE]
+
+
+@pytest.mark.unit
+def test_resolver_output_schema_contributing_strategies_invalid_type(
+    valid_resolver_output_schema_data: dict[str, Any],
+):
+    """Test ResolverOutputSchema with invalid type for 'contributing_strategies' values."""
+    data = valid_resolver_output_schema_data.copy()
+    # Test with a non-string, non-enum member in the list
+    data["contributing_strategies"] = ["conservative", 123]
+    with pytest.raises(ValidationError):
+        ResolverOutputSchema.model_validate(data)
+
+    # Test with a string that is not a valid enum member value
+    data["contributing_strategies"] = ["conservative", "not_a_strategy"]
+    with pytest.raises(ValidationError):
+        ResolverOutputSchema.model_validate(data)
+
+
+# Test if fields intended to be populated by caller can be None (if defaults allow)
+@pytest.mark.unit
+def test_resolver_output_schema_caller_populated_fields_default(
+    valid_resolver_output_schema_data: dict[str, Any],
+):
+    """Test that caller-populated fields in ScreeningResolutionSchema can default to None if allowed by schema."""
+    # Minimal data, relying on defaults for caller-populated fields in ScreeningResolutionSchema
+    schema = ResolverOutputSchema(**valid_resolver_output_schema_data)
+    assert schema.review_id is None
+    assert schema.search_result_id is None

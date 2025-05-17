@@ -13,7 +13,7 @@ import uuid
 from collections.abc import Mapping, MutableMapping  # noqa: TC003  # needed for tests
 from typing import TypedDict
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator
 from pydantic.types import AwareDatetime, PositiveInt  # noqa: TC002
 
 from sr_assistant.core.types import (
@@ -413,7 +413,7 @@ class SuggestionResult(TypedDict):
     raw_response: str
 
 
-class ScreeningResolutionSchema(BaseSchema):
+class ResolverOutputSchema(BaseSchema):
     """Schema for resolver model output that maps to ScreeningResolution database model.
 
     This is the structured output from the resolver model which will be used to
@@ -429,9 +429,19 @@ class ScreeningResolutionSchema(BaseSchema):
     resolver_confidence_score: float = Field(...)
     """Confidence score for the resolver's decision, between 0.0 and 1.0. Higher values indicate more confidence."""
 
-    resolver_include: list[str] = Field(default_factory=list)
-    """List of screening strategies (conservative, comprehensive) that the resolver believes are
-    appropriate. Can be empty list if the decision is EXCLUDE.
+    @field_validator("resolver_confidence_score")
+    @classmethod
+    def check_confidence_score_range(cls, v: float) -> float:
+        """Validate that resolver_confidence_score is between 0.0 and 1.0."""
+        if not (0.0 <= v <= 1.0):
+            msg = "resolver_confidence_score must be between 0.0 and 1.0"
+            raise ValueError(msg)
+        return v
+
+    contributing_strategies: list[ScreeningStrategyType] = Field(default_factory=list)
+    """List of original screening strategies (e.g., conservative, comprehensive) that the resolver found to have
+    contributed meaningfully to its final decision, or aligns with. Can be empty.
+    This field helps understand if the resolver sided more with one approach or found elements from multiple.
     """
 
     # These fields will be populated by the calling code
@@ -669,6 +679,7 @@ class ScreeningResolutionCreate(BaseSchema):
     """ID of the SystematicReview."""
 
     # IDs of the original screening results that led to this resolution
+    # FIXME: These two are NOT optional. There can be no resolution without at least two parties involved. Unless we use this for when human overrides a single LLM decision.
     conservative_result_id: uuid.UUID | None = None
     """ID of the conservative screening result, if applicable."""
 

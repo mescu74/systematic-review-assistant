@@ -44,7 +44,8 @@ import streamlit as st
 from langchain_community.callbacks.manager import get_openai_callback
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableConfig, RunnableParallel
-from langchain_openai import ChatOpenAI
+from langchain_google_genai.chat_models import ChatGoogleGenerativeAI
+from langchain_openai.chat_models import ChatOpenAI
 from loguru import logger
 from pydantic import (
     BaseModel,
@@ -58,7 +59,7 @@ from pydantic import (
 import sr_assistant.app.utils as ut
 from sr_assistant.core import models, schemas
 from sr_assistant.core.schemas import (
-    ScreeningResolutionSchema,
+    ResolverOutputSchema,
     ScreeningResponse,
     ScreeningResult,
 )
@@ -68,11 +69,442 @@ if t.TYPE_CHECKING:
     from langchain_community.callbacks.openai_info import OpenAICallbackHandler
     from langchain_core.tracers.schemas import Run
 
-resolver_model = ChatOpenAI(
-    model=os.getenv("SRA_RESOLVER_MODEL", "o3-mini-high"),
-    api_key=SecretStr(os.getenv("OPENAI_API_KEY") or ""),
-    temperature=0.0,
-).with_structured_output(ScreeningResolutionSchema)
+
+# NOTE: IMPORTANT - the order of with_structured_output and with_retry matters.
+#       with_structured_output must be before with_retry.
+resolver_model = (
+    ChatGoogleGenerativeAI(
+        model="gemini-2.5-pro-preview-05-06",
+        temperature=0,
+        max_tokens=None,
+        thinking_budget=24576,
+        timeout=None,
+        max_retries=5,
+        api_key=SecretStr(os.getenv("GOOGLE_API_KEY") or ""),
+        convert_system_message_to_human=True,
+    )
+    .with_structured_output(ResolverOutputSchema)
+    .with_retry(
+        stop_after_attempt=5,
+        wait_exponential_jitter=True,
+        retry_if_exception_type=(Exception,),
+    )
+)
+
+
+RESOLVER_SYSTEM_PROMPT = """You are an expert systematic review screening assistant, specializing in conflict resolution. You are an analytical, critical, and deep thinker.
+
+Your primary function is to resolve discrepancies in screening decisions between two independent reviewers (one 'conservative', one 'comprehensive') or to provide a definitive decision when both reviewers are 'uncertain'. Your goal is to arrive at a final, well-reasoned screening decision for a given research article based on the provided context.
+
+To achieve this, you must think step-by-step. Analyze all provided information meticulously. Consider the perspectives and rationales of both reviewers, delving into their decision-making processes by examining their provided decision, confidence, rationale, extracted quotes, and any exclusion reasons. Explain your reasoning comprehensively before stating your final decision and confidence. Show your work clearly.
+
+Your final output must conform to the specified structured format. Ensure your reasoning is thorough and directly supports your final decision.
+"""
+
+RESOLVER_HUMAN_PROMPT_TEMPLATE = """Please resolve the screening decision for the following research article based on the following detailed information.
+
+<search_result_context>
+    <title>{article_title}</title>
+    <abstract>
+{article_abstract}
+    </abstract>
+    <journal>{article_journal}</journal>
+    <year>{article_year}</year>
+    <source_id>{article_source_id}</source_id>
+    <keywords>{article_keywords}</keywords>
+    <mesh_terms>{article_mesh_terms}</mesh_terms>
+</search_result_context>
+
+<systematic_review_protocol>
+    <background>
+{review_background}
+    </background>
+    <research_question>
+{review_research_question}
+    </research_question>
+    <criteria_framework>{review_criteria_framework}</criteria_framework>
+    <inclusion_criteria>
+{review_inclusion_criteria}
+    </inclusion_criteria>
+    <exclusion_criteria>
+{review_exclusion_criteria}
+    </exclusion_criteria>
+</systematic_review_protocol>
+
+<conservative_reviewer_assessment>
+    <decision>{conservative_reviewer_decision}</decision>
+    <confidence_score>{conservative_reviewer_confidence}</confidence_score>
+    <rationale>
+{conservative_reviewer_rationale}
+    </rationale>
+    <extracted_quotes>
+{conservative_reviewer_quotes}
+    </extracted_quotes>
+    <exclusion_reasons>
+{conservative_reviewer_exclusion_reasons}
+    </exclusion_reasons>
+</conservative_reviewer_assessment>
+
+<comprehensive_reviewer_assessment>
+    <decision>{comprehensive_reviewer_decision}</decision>
+    <confidence_score>{comprehensive_reviewer_confidence}</confidence_score>
+    <rationale>
+{comprehensive_reviewer_rationale}
+    </rationale>
+    <extracted_quotes>
+{comprehensive_reviewer_quotes}
+    </extracted_quotes>
+    <exclusion_reasons>
+{comprehensive_reviewer_exclusion_reasons}
+    </exclusion_reasons>
+</comprehensive_reviewer_assessment>
+
+<instructions_for_resolver>
+Based on all the information above, please provide your final resolution.
+
+First, articulate your detailed thought process within <thinking>...</thinking> XML tags. This thinking block is for your internal reasoning and will be reviewed for quality, but it is not part of the final structured output fields like 'resolver_reasoning'. Explain how you evaluated the reviewers' inputs against the protocol and the search result. Analyze any disagreements or uncertainties in depth.
+
+After your thinking process, provide the structured output including:
+- `resolver_decision`: Your final decision (e.g., 'include', 'exclude', 'uncertain').
+- `resolver_reasoning`: A concise summary of your detailed thought process that justifies your decision. This should be a self-contained explanation.
+- `resolver_confidence_score`: Your confidence in this final decision (0.0 to 1.0).
+- `contributing_strategies`: A list of original screening strategies (e.g., ['conservative', 'comprehensive']) that you found to have contributed meaningfully to your final decision or that your decision aligns with. This can be an empty list if neither was particularly influential or if your reasoning diverged significantly.
+</instructions_for_resolver>
+"""
+
+resolver_prompt = ChatPromptTemplate.from_messages(
+    [
+        ("system", RESOLVER_SYSTEM_PROMPT),
+        ("human", RESOLVER_HUMAN_PROMPT_TEMPLATE),
+    ]
+)
+
+
+class ResolverPromptInput(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    article_title: str
+    article_abstract: str
+    article_journal: str | None
+    article_year: str | None
+    article_source_id: str
+    article_keywords: str
+    article_mesh_terms: str
+
+    review_background: str | None
+    review_research_question: str
+    review_criteria_framework: str | None
+    review_inclusion_criteria: str | None
+    review_exclusion_criteria: str
+
+    conservative_reviewer_decision: str
+    conservative_reviewer_confidence: float
+    conservative_reviewer_rationale: str
+    conservative_reviewer_quotes: str
+    conservative_reviewer_exclusion_reasons: str
+
+    comprehensive_reviewer_decision: str
+    comprehensive_reviewer_confidence: float
+    comprehensive_reviewer_rationale: str
+    comprehensive_reviewer_quotes: str
+    comprehensive_reviewer_exclusion_reasons: str
+
+
+def _format_extracted_quotes(quotes: list[str] | None) -> str:
+    if not quotes:
+        return "N/A"
+    return "\n".join(f"- {q}" for q in quotes)
+
+
+def _format_exclusion_reasons(reasons: schemas.ExclusionReasons | None) -> str:
+    if not reasons:
+        return "N/A"
+
+    formatted_parts = []
+    if reasons.population_exclusion_reasons:
+        formatted_parts.append(
+            f"Population: {', '.join(reason for reason in reasons.population_exclusion_reasons)}"
+        )
+    if reasons.intervention_exclusion_reasons:
+        formatted_parts.append(
+            f"Intervention: {', '.join(reason for reason in reasons.intervention_exclusion_reasons)}"
+        )
+    if reasons.comparison_exclusion_reasons:
+        formatted_parts.append(
+            f"Comparison: {', '.join(reason for reason in reasons.comparison_exclusion_reasons)}"
+        )
+    if reasons.outcome_exclusion_reasons:
+        formatted_parts.append(
+            f"Outcome: {', '.join(reason for reason in reasons.outcome_exclusion_reasons)}"
+        )
+    if reasons.reporting_exclusion_reasons:
+        formatted_parts.append(
+            f"Reporting: {', '.join(reason for reason in reasons.reporting_exclusion_reasons)}"
+        )
+    if reasons.study_design_exclusion_reasons:
+        formatted_parts.append(
+            f"Study Design: {', '.join(reason for reason in reasons.study_design_exclusion_reasons)}"
+        )
+
+    if not formatted_parts:
+        return "N/A"
+    return "\n".join(formatted_parts)
+
+
+def _format_raw_data_list(raw_data_list: t.Any) -> str:
+    if isinstance(raw_data_list, list):
+        return ", ".join(str(item) for item in raw_data_list)
+    if isinstance(raw_data_list, str):
+        return raw_data_list
+    return "N/A"
+
+
+def prepare_resolver_inputs_for_prompt(
+    search_result: models.SearchResult,
+    review: models.SystematicReview,
+    conservative_result: schemas.ScreeningResult,
+    comprehensive_result: schemas.ScreeningResult,
+) -> ResolverPromptInput:
+    """Prepares the input dictionary for the resolver_prompt.
+
+    Formats raw data from SearchResult, SystematicReview, and ScreeningResult
+    instances into a flat dictionary suitable for the resolver prompt template,
+    including formatting lists and structured objects into strings.
+    """
+    return ResolverPromptInput(
+        article_title=search_result.title or "N/A",
+        article_abstract=search_result.abstract or "N/A",
+        article_journal=search_result.journal or "N/A",
+        article_year=search_result.year or "N/A",
+        article_source_id=search_result.source_id or "N/A",
+        article_keywords=", ".join(search_result.keywords)
+        if search_result.keywords
+        else "N/A",
+        article_mesh_terms=_format_raw_data_list(
+            search_result.raw_data.get("mesh_terms")
+            or search_result.raw_data.get("MeshHeadings")
+        ),
+        review_background=review.background or "N/A",
+        review_research_question=review.research_question or "N/A",
+        review_criteria_framework=review.criteria_framework.value
+        if review.criteria_framework
+        else "N/A",
+        review_inclusion_criteria=review.inclusion_criteria or "N/A",
+        review_exclusion_criteria=review.exclusion_criteria or "N/A",
+        conservative_reviewer_decision=conservative_result.decision.value,
+        conservative_reviewer_confidence=conservative_result.confidence_score,
+        conservative_reviewer_rationale=conservative_result.rationale or "N/A",
+        conservative_reviewer_quotes=_format_extracted_quotes(
+            conservative_result.extracted_quotes
+        ),
+        conservative_reviewer_exclusion_reasons=_format_exclusion_reasons(
+            conservative_result.exclusion_reason_categories
+        ),
+        comprehensive_reviewer_decision=comprehensive_result.decision.value,
+        comprehensive_reviewer_confidence=comprehensive_result.confidence_score,
+        comprehensive_reviewer_rationale=comprehensive_result.rationale or "N/A",
+        comprehensive_reviewer_quotes=_format_extracted_quotes(
+            comprehensive_result.extracted_quotes
+        ),
+        comprehensive_reviewer_exclusion_reasons=_format_exclusion_reasons(
+            comprehensive_result.exclusion_reason_categories
+        ),
+    )
+
+
+class ResolverChainInputDict(t.TypedDict):
+    """Represents resolver chain prompt template input variables.
+
+    Attributes:
+        article_title (str): Title of the related article.
+        article_abstract (str): Abstract of the related article.
+        article_journal (str): Journal of the related article.
+        article_year (str): Year of the related article.
+        article_mesh_terms (list[str]): Mesh terms used in the search query. Set to "N/A" if not available.
+        article_keywords (list[str]): Keywords used in the search query. Set to "N/A" if not available.
+        review_research_question (str): Research question from the systematic review protocol (`SystematicReview.research_question`).
+        review_inclusion_criteria (str): Inclusion criteria from the systematic review protocol (`SystematicReview.criteria_framework_answers).
+        review_exclusion_criteria (str): Exclusion criteria from the systematic review protocol (`SystematicReview.exclusion_criteria`).
+        review_background (str): Background from the systematic review protocol (`SystematicReview.background`).
+        comprehensive_reviewer_decision (ScreeningResult): Comprehensive screening result to be used for context.
+        comprehensive_reviewer_reasoning (str): Reasoning for the comprehensive screening decision.
+        comprehensive_reviewer_confidence (float): Confidence score for the comprehensive screening decision. 1.0 is 100% confidence.
+        conservative_reviewer_decision (ScreeningResult): Conservative reviewr model's decision: `include` | `exclude` | `uncertain` (`Scree)
+        conservative_reviewer_reasoning (str): Reasoning for the conservative screening decision.
+        conservative_reviewer_confidence (float): Confidence score for the conservative screening decision.
+        current_date (str): Current date in ISO 8601 format. Partially bound to template, datetime.now(timezone.utc).
+    """
+
+
+class ResolverChainBatchInputDict(t.TypedDict):
+    """ressolve_screening_result_batch.batch(**this_input_dict).
+
+    Attributes:
+        inputs (list[ResolverChainInputDict])
+        config (list[RunnableConfig])
+    """
+
+    inputs: list[ResolverChainInputDict]
+    config: list[RunnableConfig]
+
+
+# TBD: class ResolverError (BaseModel or Exception?)
+
+
+class ResolverChainOutputTuple(t.NamedTuple):
+    """Tuple of search result and its resolver chain output.
+
+    Attributes:
+        search_result (SearchResult): Search result associated with this resolver
+        comprehensive_result_id (uuid.UUID): ID of the comprehensive screening result
+        conservative_result_id (uuid.UUID): ID of the conservative screening result
+        resolver_result (ResolverChainOutput | ResolverError): Resolver result for conservative strategy
+    """
+
+    search_result: models.SearchResult
+
+
+# TODO: This wsa simply copied from abstract screening chain, must be refactored for resolver chain
+#       The reason for the listener is two-fold: 1) we don't want the model to see fields not related to the task in the output JSONSSchema (function call schema),
+#       2) We want to grab the LangSmith trace_id and run id and other metadata from the LangSmith RunTree (imported from langchain as `Run`)
+# @logger.catch(onerror=lambda exc: st.error(exc) if ut.in_streamlit() else None)  # pyright: ignore [reportArgumentType]
+# def resolver_chain_on_end_cb(run_obj: Run) -> None:
+#     """Listener for resolver chain run on_end hook.
+
+
+#     See `.with_listeners <https://python.langchain.com/api_reference/_modules/langchain_core/runnables/base.html#RunnableBinding.with_listeners>`_
+
+#     Modifications to the `Run`|`RunTree` persist and no need to return anything. It's a
+#
+#     Reads the ScreeningResolutionSchema from the LLM structured output (whihch is handled by  LangChain)
+#     and maps it to (to be created) ResolverChainResult BaseModel (name TBD)
+
+#     Populates the model fields:
+#     - start_time from `run_obj.start_time`
+#     - end_time from `run_obj.end_time`
+#     - trace_id from `run_obj.trace_id`
+#     - tags from `run_obj.tags`
+#     - review_id from `run_obj.metadata.get("review_id")`
+#     - search_result_id from `run_obj.metadata.get("search_result_id")`
+#     - comprehensive_result from `run_obj.metadata.get("comprehensive_result_id")` (db lookup)
+#     - conservative_result from `run_obj.metadata.get("conservative_result_id")` (db lookup)
+#     - resolver_result from `run_obj.metadata.get("resolver_result")`
+#     - model_name from `run_obj` either from API response or if passed in during invocation then from run_obj.metadata
+#     - response_metadata from `run_obj.metadata.get("response_metadata")`
+#     """
+#     cr_logger = logger.bind(run_id=run_obj.id, run_name=run_obj.name)
+#     cr_logger.debug(f"screen_abstracts_chain_on_end_cb got RunTree: {run_obj!r}")
+#     if not run_obj.outputs:
+#         cr_logger.warning(f"No outputs for run: {run_obj!r}")
+#         return
+#     # Each child run is one screening chain invocation within RunnableParallel. This
+#     # parent RunTree is the RunnableParallel itself.
+#     for cr in run_obj.child_runs:
+#         cr_logger = logger.bind(
+#             run_id=cr.id,
+#             run_name=cr.name,
+#             parent_run_id=run_obj.id,
+#             parent_run_name=run_obj.name,
+#         )
+#         cr_logger.debug(f"screen_abstracts_chain_on_end_cb got child run: {cr!r}")
+#         if cr.outputs is None:
+#             cr_logger.warning(f"No outputs for child run: {cr!r}")
+#             continue
+#         # Can't pass the strategy in the invocation metadata as its parallel.
+#         # So run tags populated by LC/LS is the only way to get it. `map:key:...` is
+#         # a kwarg key in RunnableParallel input dict.
+#         output_key: ScreeningStrategyType
+#         if isinstance(cr.tags, list):
+#             maybe_output_key = next(
+#                 (
+#                     t.removeprefix("map:key:")
+#                     for t in cr.tags
+#                     if t.startswith("map:key:")
+#                 ),
+#                 None,
+#             )
+#             if maybe_output_key in ScreeningStrategyType:
+#                 output_key = ScreeningStrategyType(maybe_output_key)
+#                 cr_logger.debug(f"Output key for run: {cr.id!r} is {output_key}")
+#             else:
+#                 cr_logger.error("Unknown output key for run")
+#                 continue
+#         else:
+#             cr_logger.error(f"No tags for run: {cr.id!r}, tags: {cr.tags!r}")
+#             continue
+#         orig_resp_model = cr.outputs.get("output")
+#         if not isinstance(orig_resp_model, ScreeningResponse):
+#             # We simply return the output as is and let caller make it a ScreeningError
+#             cr_logger.error(f"Unknown response type: {orig_resp_model!r}")
+#             continue
+#         review_id = cr.metadata.get("review_id")
+#         if not review_id:
+#             cr_logger.error(f"Missing review_id in metadata: {cr.metadata!r}")
+#             continue
+#         review_id = uuid.UUID(review_id)
+#         search_result_id = cr.metadata.get("search_result_id")
+#         if not search_result_id:
+#             cr_logger.error(f"Missing search_result_id in metadata: {cr.metadata!r}")
+#             continue
+#         search_result_id = uuid.UUID(search_result_id)
+#         result_id = cr.id
+#         trace_id = cr.trace_id  # this is shared between invocations with same input
+#         inputs = cr.inputs
+#         start_time = cr.start_time
+#         end_time = cr.end_time
+#         if not end_time:
+#             cr_logger.warning("No end time for run: {cr!r}, setting to now")
+#             end_time = datetime.now(tz=timezone.utc)
+#         resp_metadata = {}  # FIXME: these don't work
+#         invocation_params = {}
+#         for ccr in cr.child_runs:
+#             # TODO: parse model_id from openai metadata
+#             if ccr.run_type == "chat_model":
+#                 resp_metadata = ccr.extra.get("metadata", {})
+#                 if not resp_metadata:
+#                     cr_logger.warning(
+#                         "No response metadata for chat_model child child run: {ccr!r}",
+#                         ccr=ccr,
+#                     )
+#                 invocation_params = ccr.extra.get("invocation_params", {})
+#                 if not invocation_params:
+#                     cr_logger.warning(
+#                         "No invocation_params for chat_model child child run:  {ccr!r}",
+#                         ccr=ccr,
+#                     )
+#                 cr_logger.debug(f"chat_model child child run: {ccr!r}")
+#         model_name = resp_metadata.get(
+#             "ls_model_name", invocation_params.get("model_name", "not_found")
+#         )
+#         screening_result = ScreeningResult(
+#             id=result_id,
+#             trace_id=trace_id,  # this is shared between invocations with same input
+#             review_id=review_id,
+#             search_result_id=search_result_id,
+#             start_time=start_time,
+#             end_time=end_time,
+#             model_name=model_name,
+#             screening_strategy=output_key,
+#             response_metadata=dict(
+#                 inputs=inputs,
+#                 run_name=run_obj.name,
+#                 **resp_metadata,
+#                 **invocation_params,
+#             ),
+#             **orig_resp_model.model_dump(),
+#         )
+#         cr.metadata["screening_strategy"] = output_key
+
+#         strategy_tag = f"sra:screening_strategy:{output_key}"
+#         cr.tags.append(strategy_tag)
+#         if run_obj.tags and strategy_tag not in run_obj.tags:
+#             run_obj.tags.append(strategy_tag)
+
+#         if output_key not in run_obj.outputs:
+#             logger.warning(
+#                 f"Missing output key: {output_key!r} in {run_obj.outputs!r}, assigning as new key ..."
+#             )
+#         run_obj.outputs[output_key] = screening_result
 
 
 class ScreenAbstractsChainOutputDict(t.TypedDict):
@@ -746,3 +1178,66 @@ def screen_abstracts_batch(
 #        results=chain_outputs,
 #        cb=cb,
 #    )
+
+
+resolver_chain = resolver_prompt | resolver_model
+
+
+@logger.catch(
+    onerror=lambda exc: (
+        st.error(f"Resolver Chain Error: {exc!r}") if ut.in_streamlit() else None,
+        None,
+    )[-1]
+)  # pyright: ignore [reportArgumentType]
+def invoke_resolver_chain(
+    search_result: models.SearchResult,
+    review: models.SystematicReview,
+    conservative_result: schemas.ScreeningResult,
+    comprehensive_result: schemas.ScreeningResult,
+    run_config: RunnableConfig | None = None,
+) -> ResolverOutputSchema | None:
+    """Invokes the resolver_chain with the given inputs and configuration.
+
+    Args:
+        search_result: The search result to be resolved.
+        review: The systematic review protocol.
+        conservative_result: The screening result from the conservative reviewer.
+        comprehensive_result: The screening result from the comprehensive reviewer.
+        run_config: Optional LangChain RunnableConfig for the invocation.
+
+    Returns:
+        ResolverOutputSchema if successful, None otherwise (error will be logged by @logger.catch).
+    """
+    chain_input_model = prepare_resolver_inputs_for_prompt(
+        search_result=search_result,
+        review=review,
+        conservative_result=conservative_result,
+        comprehensive_result=comprehensive_result,
+    )
+    chain_input_dict = chain_input_model.model_dump()
+
+    logger.info(f"Invoking resolver chain for SearchResult ID: {search_result.id!r}")
+    try:
+        response = resolver_chain.invoke(chain_input_dict, config=run_config)
+        if isinstance(response, ResolverOutputSchema):
+            logger.success(
+                f"Resolver chain completed for SearchResult ID: {search_result.id!r}"
+            )
+            return response
+
+        logger.error(
+            f"Resolver chain for SearchResult ID: {search_result.id!r} returned unexpected type: {type(response)!r}. Response: {response!r}"
+        )
+        return None
+    except Exception:  # Exception details will be logged by @logger.catch
+        # The @logger.catch decorator handles logging the exception.
+        # This block ensures 'None' is returned to the caller on error.
+        logger.error(
+            f"Resolver chain invocation failed internally for SearchResult ID: {search_result.id!r}. See @logger.catch details."
+        )
+        return None
+
+
+# class ResolverChainBatchInputDict(t.TypedDict):
+#     \"\"\"ressolve_screening_result_batch.batch(**this_input_dict).
+# No more 'existing code' after this point, ensure the file ends cleanly.
