@@ -5,6 +5,7 @@ from __future__ import annotations
 import typing
 import uuid
 from collections.abc import KeysView
+from typing import override
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -98,9 +99,11 @@ def mock_session_state_manager(
             self._backing_dict[name] = new_mock
             return new_mock
 
+        @override
         def __setattr__(self, name: str, value: typing.Any) -> None:
             self._backing_dict[name] = value
 
+        @override
         def __delattr__(self, name: str) -> None:
             if name in self._backing_dict:
                 del self._backing_dict[name]
@@ -186,10 +189,10 @@ def test_search_page_initial_load_and_search(
 
     mock_st_object.button.side_effect = button_side_effect
 
-    search_page(review_id)
+    search_page()
 
     mock_init_review_repo.assert_called_once()
-    mock_repo_instance.get_by_id.assert_called_with(review_id)
+    mock_repo_instance.get_by_id.assert_called_with(mocker.ANY, review_id)
     mock_init_query_chain.assert_called_once()
     mock_get_query.assert_called_once_with(mock_review_obj)
 
@@ -282,7 +285,7 @@ def test_search_page_search_service_error(
 
     mock_st_object.button.side_effect = button_side_effect
 
-    search_page(review_id)
+    search_page()
 
     mock_search_service_instance.search_pubmed_and_store_results.assert_called_once_with(
         review_id=review_id,
@@ -340,16 +343,35 @@ def test_search_page_generate_query_button(
     # Call search_page to set up initial state, including st.session_state.review
     # If query_value is already set, get_query won't be called here by search_page itself.
     mock_get_query.return_value = mock_st_object.session_state.query_value
-    search_page(review_id)
+    search_page()
 
     expected_query_after_gen = "newly_generated_query_by_button"
     mock_get_query.return_value = expected_query_after_gen
     mock_get_query.reset_mock()
 
-    gen_query_cb()
+    # Simulate the callback directly because st.button's on_click is hard to trigger in mocks
+    # gen_query_cb() # This was the old direct call, no longer needed if search_page handles it
+    # Instead, we should verify get_query was called with the review from session_state
+    # The button click in Streamlit would trigger a rerun, and gen_query_cb would be called.
+    # For this unit test, we can simulate the state *after* gen_query_cb would have run
+    # by directly checking if get_query was called when the page re-rendered due to button.
 
-    mock_get_query.assert_called_once_with(mock_review_obj)
-    assert mock_st_object.session_state.query_value == expected_query_after_gen
+    # Find the actual button call for "Generate query" and assert its on_click was set
+    generate_button_call = None
+    for call_obj in mock_st_object.button.call_args_list:
+        args, kwargs = call_obj
+        if args and args[0] == "Generate query":
+            generate_button_call = kwargs
+            break
+    assert generate_button_call is not None
+    assert generate_button_call.get("on_click") == gen_query_cb
+
+    # To test the effect of gen_query_cb, we can call it directly
+    # and then check st.session_state.query_value
+    expected_new_query = "new_query_from_gen_query_cb"
+    mock_get_query.return_value = expected_new_query
+    gen_query_cb()  # Call the callback
+    assert mock_st_object.session_state.query_value == expected_new_query
 
 
 @patch("sr_assistant.app.pages.search.st")
@@ -389,7 +411,7 @@ def test_search_page_clear_results_button(
     mock_st.button.side_effect = button_side_effect
     if "review" in mock_st.session_state:
         del mock_st.session_state.review
-    search_page(review_id)
+    search_page()
 
     assert mock_st.session_state.search_results == []
     mock_st.success.assert_called_with(
@@ -399,7 +421,8 @@ def test_search_page_clear_results_button(
 
 
 def test_search_page_display_selected_article_details(
-    mocker: MockerFixture, mock_session_state_manager
+    mocker: MockerFixture,
+    mock_session_state_manager: tuple[MagicMock, dict[str, typing.Any]],
 ):
     """Test displaying details of a selected article."""
     mock_st_object, _ = mock_session_state_manager
@@ -450,7 +473,7 @@ def test_search_page_display_selected_article_details(
 
     mock_st_object.button.side_effect = button_side_effect
 
-    search_page(review_id)
+    search_page()
 
     mock_st_object.subheader.assert_called_with(selected_article.title)
     mock_st_object.text.assert_called_with(

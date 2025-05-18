@@ -89,7 +89,16 @@ def main() -> None:  # noqa: C901
             st.session_state.session_factory = session_factory
         if "asession_factory" not in st.session_state:
             st.session_state.asession_factory = asession_factory
-        logger.info("main() initialized")
+
+        # Remove review_id dependent logger configuration from main.py
+        # Individual pages will handle their review-specific logging context.
+        # if "logger_extra_configured" not in st.session_state:
+        #     # This was problematic as st.session_state.review might not be valid here
+        #     # logger.configure(extra={"review_id": st.session_state.review.id})
+        #     st.session_state.logger_extra_configured = True
+        logger.info(
+            "main() initialized"
+        )  # This log will no longer try to add a potentially invalid review_id
     else:
         pg = st.navigation([login_page])
 

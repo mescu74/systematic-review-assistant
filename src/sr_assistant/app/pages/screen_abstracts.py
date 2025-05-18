@@ -14,7 +14,7 @@ from sr_assistant.app.agents.screening_agents import (
     ScreeningError,
     ScreeningResult,
     ScreeningStrategyType,
-    resolve_screening_conflict,
+    invoke_resolver_chain,
     screen_abstracts_batch,
     screen_abstracts_chain,
 )
@@ -101,7 +101,7 @@ def render_df() -> None:
     )
     df_data = [
         {
-            "PMID": search_result.pmid,
+            "PMID": search_result.source_id,
             "Title": search_result.title,
             "Strategy": screening_result.screening_strategy,
             "Decision": screening_result.decision,
@@ -120,45 +120,60 @@ def render_df() -> None:
         st.subheader("Results")
         st.dataframe(df_data, use_container_width=True, hide_index=True)
 
-        if pmid := st.selectbox("View details:", [pm.pmid for pm, _ in results]):
-            search_result, conservative_screening_result = next(
-                (search_result, screening_result)
-                for search_result, screening_result in results
-                if search_result.pmid == pmid
-                and screening_result.screening_strategy
-                == ScreeningStrategyType.CONSERVATIVE
-            )
-            search_result, comprehensive_screening_result = next(
-                (search_result, screening_result)
-                for search_result, screening_result in results
-                if search_result.pmid == pmid
-                and screening_result.screening_strategy
-                == ScreeningStrategyType.COMPREHENSIVE
-            )
-            st.subheader(f"{search_result.pmid}: {search_result.title}")
-            st.text(f"{search_result.journal} ({search_result.year})")
-            st.markdown(
-                f"[SearchResult](https://pubmed.ncbi.nlm.nih.gov/{search_result.pmid})"
-            )
-            st.json(search_result.model_dump(mode="json"))
-            if conservative_screening_result:
-                st.markdown(
-                    f"[Conservative Screening Result](https://pubmed.ncbi.nlm.nih.gov/{search_result.pmid})"
+        if pmid_selection := st.selectbox(
+            "View details:",
+            [item["PMID"] for item in df_data],
+            key="details_select_main_df",
+        ):
+            selected_sr_object = None
+            cons_selected_screening_res = None
+            comp_selected_screening_res = None
+
+            for sr, scr_res in st.session_state.screen_abstracts_results:
+                if sr.source_id == pmid_selection:
+                    if selected_sr_object is None:
+                        selected_sr_object = sr
+                    if scr_res.screening_strategy == ScreeningStrategyType.CONSERVATIVE:
+                        cons_selected_screening_res = scr_res
+                    elif (
+                        scr_res.screening_strategy
+                        == ScreeningStrategyType.COMPREHENSIVE
+                    ):
+                        comp_selected_screening_res = scr_res
+
+            if selected_sr_object:
+                st.subheader(
+                    f"{selected_sr_object.source_id}: {selected_sr_object.title}"
                 )
-                st.json(conservative_screening_result.model_dump(mode="json"))
-            else:
-                st.warning("No conservative screening result")
-            if comprehensive_screening_result:
+                st.text(f"{selected_sr_object.journal} ({selected_sr_object.year})")
                 st.markdown(
-                    f"[Comprehensive Screening Result](https://pubmed.ncbi.nlm.nih.gov/{search_result.pmid})"
+                    f"[SearchResult](https://pubmed.ncbi.nlm.nih.gov/{selected_sr_object.source_id})"
                 )
-                st.json(comprehensive_screening_result.model_dump(mode="json"))
+                st.json(selected_sr_object.model_dump(mode="json"))
+                if cons_selected_screening_res:
+                    st.markdown(
+                        f"[Conservative Screening Result](https://pubmed.ncbi.nlm.nih.gov/{selected_sr_object.source_id})"
+                    )
+                    st.json(cons_selected_screening_res.model_dump(mode="json"))
+                else:
+                    st.warning(f"No conservative screening result for {pmid_selection}")
+                if comp_selected_screening_res:
+                    st.markdown(
+                        f"[Comprehensive Screening Result](https://pubmed.ncbi.nlm.nih.gov/{selected_sr_object.source_id})"
+                    )
+                    st.json(comp_selected_screening_res.model_dump(mode="json"))
+                else:
+                    st.warning(
+                        f"No comprehensive screening result for {pmid_selection}"
+                    )
             else:
-                st.warning("No comprehensive screening result")
+                st.warning(
+                    f"Details for selected Source ID {pmid_selection} not fully found."
+                )
 
     df_conflicts_data = [
         {
-            "PMID": pm.pmid,
+            "PMID": pm.source_id,
             "Conservative Decision": conservative_result.decision,
             "Conservative Confidence": conservative_result.confidence_score,
             "Conservative Rationale": conservative_result.rationale,
@@ -176,52 +191,53 @@ def render_df() -> None:
         st.subheader("Conflicts")
         st.dataframe(df_conflicts, use_container_width=True, hide_index=True)
 
-        if pmid := st.selectbox(
-            "View details", [row["PMID"] for row in df_conflicts_data]
+        if pmid_conflict_selection := st.selectbox(
+            "View details",
+            [row["PMID"] for row in df_conflicts_data],
+            key="conflict_details_select",
         ):
-            search_result = st.session_state.search_repo.get_by_pmid(
-                pmid, st.session_state.review_id
+            selected_conflict_tuple = next(
+                (
+                    (sr, cons_res, comp_res)
+                    for sr, cons_res, comp_res in st.session_state.get(
+                        "screen_abstracts_conflicts", []
+                    )
+                    if sr.source_id == pmid_conflict_selection
+                ),
+                None,
             )
-            (
-                search_result,
-                conservative_screening_result,
-                comprehensive_screening_result,
-            ) = next(
+
+            if selected_conflict_tuple:
                 (
                     search_result,
                     conservative_screening_result,
                     comprehensive_screening_result,
+                ) = selected_conflict_tuple
+                st.subheader(f"{search_result.source_id}: {search_result.title}")
+                st.text(f"{search_result.journal} ({search_result.year})")
+                st.markdown(
+                    f"[SearchResult](https://pubmed.ncbi.nlm.nih.gov/{search_result.source_id})"
                 )
-                for (
-                    search_result,
-                    conservative_screening_result,
-                    comprehensive_screening_result,
-                ) in st.session_state.screen_abstracts_conflicts
-                if search_result.pmid == pmid
-            )
-            st.subheader(f"{search_result.pmid}: {search_result.title}")
-            st.text(f"{search_result.journal} ({search_result.year})")
-            search_result.conservative_result_id = conservative_screening_result.id
-            search_result.comprehensive_result_id = comprehensive_screening_result.id
-            st.markdown(
-                f"[SearchResult](https://pubmed.ncbi.nlm.nih.gov/{search_result.pmid})"
-            )
-            st.json(search_result.model_dump(mode="json"))
+                st.json(search_result.model_dump(mode="json"))
 
-            if conservative_screening_result:
-                st.markdown(
-                    f"[Conservative Screening Result](https://pubmed.ncbi.nlm.nih.gov/{search_result.pmid})"
-                )
-                st.json(conservative_screening_result.model_dump(mode="json"))
+                if conservative_screening_result:
+                    st.markdown(
+                        f"[Conservative Screening Result](https://pubmed.ncbi.nlm.nih.gov/{search_result.source_id})"
+                    )
+                    st.json(conservative_screening_result.model_dump(mode="json"))
+                else:
+                    st.warning("No conservative screening result")
+                if comprehensive_screening_result:
+                    st.markdown(
+                        f"[Comprehensive Screening Result](https://pubmed.ncbi.nlm.nih.gov/{search_result.source_id})"
+                    )
+                    st.json(comprehensive_screening_result.model_dump(mode="json"))
+                else:
+                    st.warning("No comprehensive screening result")
             else:
-                st.warning("No conservative screening result")
-            if comprehensive_screening_result:
-                st.markdown(
-                    f"[Comprehensive Screening Result](https://pubmed.ncbi.nlm.nih.gov/{search_result.pmid})"
+                st.warning(
+                    f"Conflict details for selected Source ID {pmid_conflict_selection} not found."
                 )
-                st.json(comprehensive_screening_result.model_dump(mode="json"))
-            else:
-                st.warning("No comprehensive screening result")
 
 
 @st.fragment
@@ -233,7 +249,7 @@ def render_errors() -> None:
         for err in errors:
             if is_screening_error(err):
                 # st.json(err.model_dump(mode="json"))
-                st.write(f"PMID: {err.search_result.pmid}")
+                st.write(f"PMID: {err.search_result.source_id}")
                 st.error(repr(err.error))
             else:
                 st.write(repr(err))
@@ -432,34 +448,38 @@ def screen_abstracts(  # noqa: C901
             f"Resolving {len(conflicts_to_resolve)} conflicts...", expanded=True
         )
         with resolution_status:
-            resolution_repo = init_screen_resolution_repository()
-            pubmed_repo = init_pubmed_repository()
             resolved_count = 0
             for pm_result, cons_res, comp_res in conflicts_to_resolve:
                 try:
-                    st.write(f"Resolving conflict for PMID: {pm_result.pmid}")
-                    resolution = resolve_screening_conflict(
+                    st.write(f"Resolving conflict for PMID: {pm_result.source_id}")
+                    resolution_output = invoke_resolver_chain(
                         search_result=pm_result,
                         review=review,
                         conservative_result=cons_res,
                         comprehensive_result=comp_res,
                     )
-                    # Save resolution
-                    saved_resolution = resolution_repo.add(resolution)
-                    # Update SearchResult
-                    pm_result.final_decision = saved_resolution.resolver_decision
-                    pm_result.resolution_id = saved_resolution.id
-                    pubmed_repo.update(pm_result)  # Use update method
-                    st.session_state.screen_abstracts_resolved.append(saved_resolution)
-                    resolved_count += 1
-                    st.write(
-                        f"Resolved PMID {pm_result.pmid}: {saved_resolution.resolver_decision}"
-                    )
+                    if resolution_output:
+                        logger.info(
+                            f"Simulated resolution for PMID {pm_result.source_id}: {resolution_output.resolver_decision.value}"
+                        )
+                        st.session_state.screen_abstracts_resolved.append(
+                            resolution_output
+                        )
+                        resolved_count += 1
+                        st.write(
+                            f"Resolved PMID {pm_result.source_id}: {resolution_output.resolver_decision.value}"
+                        )
+                    else:
+                        st.error(
+                            f"Failed to get resolution for PMID {pm_result.source_id}. Check logs."
+                        )
+
                 except Exception as e:
-                    msg = f"Error resolving conflict for PMID {pm_result.pmid}: {e}"
+                    msg = (
+                        f"Error resolving conflict for PMID {pm_result.source_id}: {e}"
+                    )
                     logger.exception(msg)
                     st.error(msg)
-                    # Optionally add to a separate error list for resolutions
 
             resolution_status.update(
                 label=f"Conflict resolution finished. Resolved {resolved_count}/{len(conflicts_to_resolve)}.",

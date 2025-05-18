@@ -10,7 +10,7 @@ graph TD
         E1S1_3["1.3 Impl. SearchResultRepo Methods (Done)"]
         E1S1_2["1.2 Refactor SearchService (Done)"]
         E1S1_1["1.1 search.py Usage of Service (Done)"]
-        E1S1_4("1.4 E2E Search Workflow Stablzn. (Planned)")
+        E1S1_4["1.4 E2E Search Workflow Stablzn. (Done)"]
 
         E1S1_5 --> E1S1_2
         E1S1_5 --> E1S1_1
@@ -39,7 +39,7 @@ graph TD
         E2S2_2 --> E2S2_4
         E2S2_1 --> E2S2_4
     end
-    
+
     %% Epic 3
     subgraph "Epic 3: Comprehensive Testing & DB Integrity"
         E3S3_1("3.1 Finalize Unit Test Suite (Planned)")
@@ -59,7 +59,7 @@ graph TD
         E3S3_3 --> E3S3_5
         E3S3_4 --> E3S3_5
     end
-    
+
     %% Styling notes from mermaid-synxtax-always.mdc:
     %% - Node labels in quotes: A["Label"]
     %% - GitHub handles styling, so no classDef or style.
@@ -68,6 +68,7 @@ graph TD
 ```
 
 ## Diagram Key
--   `[Story ID "Description (Done)"]`: Represents a completed story (rectangle shape).
--   `(Story ID "Description (Planned)")`: Represents a planned story (rounded rectangle shape).
--   Arrows (`-->`) indicate a direct dependency where the preceding story is a prerequisite. 
+
+- `[Story ID "Description (Done)"]`: Represents a completed story (rectangle shape).
+- `(Story ID "Description (Planned)")`: Represents a planned story (rounded rectangle shape).
+- Arrows (`-->`) indicate a direct dependency where the preceding story is a prerequisite.

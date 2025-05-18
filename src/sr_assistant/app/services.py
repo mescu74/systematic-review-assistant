@@ -1,3 +1,4 @@
+# pyright: reportPrivateUsage=false
 """Application Service Layer - Synchronous Implementation."""
 
 from __future__ import annotations
@@ -481,7 +482,9 @@ class SearchService(BaseService):
         else:
             logger.warning("NCBI_API_KEY not set. PubMed searches may be rate-limited.")
 
-        # Initialize added_results_output here to ensure it's always defined before the final return
+        fetched_pmids: list[str] = []
+        new_pmids_to_fetch_details: list[str] = []
+        mapped_model_results: list[models.SearchResult] = []
         added_search_result_models_for_conversion: list[models.SearchResult] = []
 
         try:
@@ -492,23 +495,50 @@ class SearchService(BaseService):
             search_results_raw = Entrez.read(handle)
             handle.close()
 
-            pmids: list[str] = []
             if isinstance(search_results_raw, Mapping):
-                pmids = search_results_raw.get("IdList", [])
+                fetched_pmids = search_results_raw.get("IdList", [])
             else:
                 logger.error(
                     f"Entrez.esearch returned unexpected type: {type(search_results_raw)}"
                 )
-                # pmids remains empty, will lead to empty return
 
-            if not pmids:
-                logger.info("No PMIDs found by Entrez.esearch.")
+            if not fetched_pmids:
+                logger.info("No PMIDs found by Entrez.esearch for query.")
                 return []
 
             logger.debug(
-                f"Found {len(pmids)} PMIDs. Fetching details with Entrez.efetch..."
+                f"Found {len(fetched_pmids)} PMIDs from PubMed initial search."
             )
-            handle = Entrez.efetch(db="pubmed", id=pmids, rettype="xml", retmode="xml")
+
+            # Check for existing PMIDs in the database for this review
+            with (
+                self.session_factory() as session
+            ):  # Use a new session for this read operation
+                existing_pmids_in_db = self.search_repo.get_existing_source_ids(
+                    session,
+                    review_id,
+                    SearchDatabaseSource.PUBMED,
+                    fetched_pmids,
+                )
+
+            new_pmids_to_fetch_details = [
+                pmid for pmid in fetched_pmids if pmid not in existing_pmids_in_db
+            ]
+
+            if not new_pmids_to_fetch_details:
+                logger.info(
+                    f"All {len(fetched_pmids)} PMIDs found already exist in the database for review {review_id!r}. No new articles to fetch."
+                )
+                # To provide feedback on existing articles, one might consider fetching and returning them here,
+                # but current story implies returning newly added ones. For now, return empty.
+                return []
+
+            logger.debug(
+                f"{len(new_pmids_to_fetch_details)} new PMIDs to fetch details for with Entrez.efetch..."
+            )
+            handle = Entrez.efetch(
+                db="pubmed", id=new_pmids_to_fetch_details, rettype="xml", retmode="xml"
+            )
             papers_raw_data = Entrez.read(handle)
             handle.close()
 
@@ -545,14 +575,11 @@ class SearchService(BaseService):
 
             if not actual_articles_data:
                 logger.info(
-                    "No article data extracted after cleaning PubMed efetch results."
+                    "No article data extracted after cleaning PubMed efetch results for new PMIDs."
                 )
                 return []
 
-            mapped_model_results: list[models.SearchResult] = []
-            for article_dict in actual_articles_data:  # article_dict is already known to be a dict here if list comprehension was robust
-                # The linter error was here: isinstance(article_dict, dict) is redundant
-                # Assuming actual_articles_data is correctly populated with dicts
+            for article_dict in actual_articles_data:
                 mapped_model = self._map_pubmed_to_search_result(
                     review_id, article_dict
                 )
@@ -561,35 +588,30 @@ class SearchService(BaseService):
 
             if not mapped_model_results:
                 logger.info(
-                    f"No results successfully mapped from PubMed for review {review_id!r}."
+                    f"No new results successfully mapped from PubMed for review {review_id!r}."
                 )
                 return []
 
-            # Assign to the variable that will be used in the final return statement
-            added_search_result_models_for_conversion = mapped_model_results
-
         except Exception as e:
             logger.opt(exception=True).error(
-                f"Error during PubMed API interaction for query '{query}': {e!r}"
+                f"Error during PubMed API interaction or mapping for query '{query}': {e!r}"
             )
             raise ServiceError(
-                f"PubMed API interaction failed for query '{query}'."
+                f"PubMed API interaction or mapping failed for query '{query}'."
             ) from e
 
-        # This block handles database storage and transaction
+        # This block handles database storage and transaction for NEW articles
+        if (
+            not mapped_model_results
+        ):  # Should be redundant if logic above is correct, but safeguard
+            logger.info("No new mapped models to store.")
+            return []
+
         try:
             with self.session_factory.begin() as session:
-                # Use the already mapped model results from the API interaction block
-                if (
-                    not added_search_result_models_for_conversion
-                ):  # Should have been caught above, but as a safeguard
-                    logger.info(
-                        "No mapped models to store after API interaction phase concluded."
-                    )
-                    return []
-
                 persisted_models = self.search_repo.add_all(
-                    session, added_search_result_models_for_conversion
+                    session,
+                    mapped_model_results,  # Only try to add new, mapped models
                 )
 
                 refreshed_models: list[models.SearchResult] = []
@@ -597,25 +619,27 @@ class SearchService(BaseService):
                     session.refresh(model_instance)
                     refreshed_models.append(model_instance)
 
-                # Update the list for final conversion with refreshed models
                 added_search_result_models_for_conversion = refreshed_models
 
                 logger.info(
-                    f"Successfully stored and refreshed {len(added_search_result_models_for_conversion)} results from PubMed for review {review_id!r}"
+                    f"Successfully stored and refreshed {len(added_search_result_models_for_conversion)} new results from PubMed for review {review_id!r}"
                 )
-                # The conversion to schema happens outside this try/except, using the final list of models
 
-        except repositories.ConstraintViolationError as e:
+        except (
+            repositories.ConstraintViolationError
+        ) as e:  # Should be less likely with proactive check, but good to keep
             logger.warning(
-                f"Constraint violation storing PubMed results for review {review_id!r}, likely duplicates: {e!r}"
+                f"Constraint violation storing new PubMed results for review {review_id!r}, this is unexpected after proactive check: {e!r}"
             )
-            return []  # Return empty list on constraint violation
+            # Depending on desired behavior, could try to return already existing ones or just fail.
+            # For now, returning empty, signaling no *new* articles were successfully added and persisted in this transaction.
+            return []
         except Exception as e:
             logger.opt(exception=True).error(
-                f"Database error storing PubMed results for review {review_id!r}: {e!r}"
+                f"Database error storing new PubMed results for review {review_id!r}: {e!r}"
             )
             raise ServiceError(
-                f"Failed to store PubMed results for review {review_id!r}."
+                f"Failed to store new PubMed results for review {review_id!r}."
             ) from e
 
         # Final conversion to schema and return
@@ -784,7 +808,15 @@ class ReviewService(BaseService):
         """Creates a new systematic review."""
         logger.debug(f"Creating review: {review_data.research_question[:50]}...")
         review_dict = review_data.model_dump(exclude_none=True)
+
+        # Ensure the ID from review_data (if provided) is used, otherwise generate a new one.
+        if review_data.id is not None:
+            review_dict["id"] = review_data.id
+        elif "id" not in review_dict:  # If not in review_data and not in dump, generate
+            review_dict["id"] = uuid.uuid4()
+
         review = models.SystematicReview.model_validate(review_dict)
+
         with self.session_factory.begin() as session:
             try:
                 added_review = self.review_repo.add(session, review)
@@ -894,7 +926,7 @@ class ScreeningService(BaseService):
         start_time: datetime | None = None,
         end_time: datetime | None = None,
         model_name: str | None = "unknown",
-        response_metadata: dict | None = None,
+        response_metadata: dict[str, t.Any] | None = None,
     ) -> models.ScreenAbstractResult:
         logger.debug(f"Adding {strategy.name} screening result for review {review_id}")
         result_id = run_id or uuid.uuid4()
@@ -923,14 +955,18 @@ class ScreeningService(BaseService):
                 session.commit()
                 try:
                     session.refresh(added_result)
-                except Exception:
-                    logger.warning(f"Could not refresh screening result {result_id}")
+                except Exception as e_refresh:
+                    logger.warning(
+                        f"Could not refresh screening result {result_id}: {e_refresh!r}"
+                    )
                 logger.info(f"Added screening result {added_result.id}")
                 return added_result
-            except Exception as e:
+            except Exception as e_add:
                 logger.exception("Error adding screening result")
                 session.rollback()
-                raise ServiceError(f"Failed to add screening result: {e}") from e
+                raise ServiceError(
+                    f"Failed to add screening result: {e_add!r}"
+                ) from e_add
 
     # --- New Methods ---
     def get_screening_result_by_strategy(
@@ -965,7 +1001,7 @@ class ScreeningService(BaseService):
         start_time: datetime | None = None,
         end_time: datetime | None = None,
         model_name: str | None = "unknown",
-        response_metadata: dict | None = None,
+        response_metadata: dict[str, t.Any] | None = None,
     ) -> models.ScreenAbstractResult:
         """Adds a new screening result or updates it based on run_id or review/strategy match."""
         logger.debug(
@@ -986,11 +1022,12 @@ class ScreeningService(BaseService):
                         session, review_id, strategy
                     )
 
-                result_id = run_id or (
+                result_id_to_use = run_id or (
                     existing_result.id if existing_result else uuid.uuid4()
                 )
 
-                update_data = {
+                # Prepare a dictionary with correctly typed values for model creation/update
+                update_payload: dict[str, t.Any] = {
                     "review_id": review_id,
                     "decision": screening_response.decision,
                     "confidence_score": screening_response.confidence_score,
@@ -1013,16 +1050,22 @@ class ScreeningService(BaseService):
                     logger.info(
                         f"Updating existing screening result {existing_result.id}"
                     )
-                    updated_result_model = existing_result.sqlmodel_update(update_data)
-                    # Pass the specific model instance to update
+                    # SQLModel's sqlmodel_update is good for applying partial updates
+                    # It updates the instance in place and returns None.
+                    existing_result.sqlmodel_update(update_payload)
+                    updated_result_model = (
+                        existing_result  # Use the instance that was updated in place
+                    )
+
                     updated_result = self.screen_repo.update(
                         session, updated_result_model
                     )
                 else:
-                    logger.info(f"Creating new screening result with id {result_id}")
-                    # Create new model instance including the ID
+                    logger.info(
+                        f"Creating new screening result with id {result_id_to_use}"
+                    )
                     new_result_model = models.ScreenAbstractResult(
-                        id=result_id, **update_data
+                        id=result_id_to_use, **update_payload
                     )
                     updated_result = self.screen_repo.add(session, new_result_model)
 

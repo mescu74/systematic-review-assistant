@@ -377,6 +377,48 @@ class SearchResultRepository(BaseRepository[SearchResult]):
             logger.exception(msg)
             raise RepositoryError(msg) from exc
 
+    def get_existing_source_ids(
+        self,
+        session: Session,
+        review_id: uuid.UUID,
+        source_db: SearchDatabaseSource,
+        source_ids: list[str],
+    ) -> set[str]:
+        """Checks a list of source_ids against the database for a given review_id and source_db,
+        and returns a set of those that already exist.
+
+        Args:
+            session: The database session.
+            review_id: The ID of the systematic review.
+            source_db: The source database (e.g., PubMed, Scopus).
+            source_ids: A list of source identifiers (e.g., PMIDs) to check.
+
+        Returns:
+            A set of source_ids from the input list that already exist in the database
+            for the given review_id and source_db.
+
+        Raises:
+            RepositoryError: If a database error occurs.
+        """
+        if not source_ids:
+            return set()
+        try:
+            stmt = (
+                select(self.model_cls.source_id)
+                .where(self.model_cls.review_id == review_id)
+                .where(self.model_cls.source_db == source_db)
+                .where(self.model_cls.source_id.in_(source_ids))  # type: ignore[attr-defined]
+            )
+            existing_ids = session.exec(stmt).all()
+            return set(existing_ids)
+        except SQLAlchemyError as exc:
+            msg = (
+                f"Database error in get_existing_source_ids for review {review_id}, "
+                f"source {source_db.name}, with {len(source_ids)} source_ids: {exc}"
+            )
+            logger.exception(msg)
+            raise RepositoryError(msg) from exc
+
     def advanced_search(
         self,
         session: Session,

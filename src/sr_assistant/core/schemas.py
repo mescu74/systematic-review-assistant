@@ -10,7 +10,7 @@ Todo:
 from __future__ import annotations
 
 import uuid
-from collections.abc import Mapping, MutableMapping  # noqa: TC003  # needed for tests
+from collections.abc import MutableMapping  # noqa: TC003  # needed for tests
 from typing import TypedDict
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator
@@ -462,69 +462,74 @@ class ResolverOutputSchema(BaseSchema):
 
 
 class SystematicReviewBase(BaseSchema):
-    """Base schema for Systematic Review, common fields."""
+    """Base Pydantic schema for SystematicReview, encapsulating common fields."""
 
-    background: str | None = None
-    research_question: str
-    criteria_framework: CriteriaFramework | None = None
-    criteria_framework_answers: MutableMapping[str, JsonValue] = Field(
-        default_factory=dict
+    research_question: str = Field(
+        ..., description="The main research question of the systematic review."
     )
-    inclusion_criteria: str | None = None
-    exclusion_criteria: str  # Mandatory for creation based on model
-    review_metadata: MutableMapping[str, JsonValue] = Field(default_factory=dict)
+    background: str | None = Field(
+        None, description="Background information and rationale for the review."
+    )
+    criteria_framework: CriteriaFramework | None = Field(
+        default=CriteriaFramework.PICO,
+        description="Framework used for criteria (e.g., PICO, PECO).",
+    )
+    criteria_framework_answers: MutableMapping[str, JsonValue] | None = Field(
+        default=None,
+        description="Answers related to the criteria framework (e.g., PICO elements as a dict).",
+    )
+    inclusion_criteria: str | None = Field(
+        None, description="Detailed inclusion criteria for study selection."
+    )
+    exclusion_criteria: str | None = Field(
+        None, description="Detailed exclusion criteria for study selection."
+    )
+    review_metadata: MutableMapping[str, JsonValue] | None = Field(
+        default=None,
+        description="Additional metadata for the review (e.g., tags, notes) as JSON.",
+    )
 
 
 class SystematicReviewCreate(SystematicReviewBase):
-    """Schema for creating a new Systematic Review."""
+    """Schema for creating a new systematic review."""
 
-    background: str | None = None
-    """Optional background context for the systematic review."""
-
-    research_question: str
-    """The primary research question the systematic review aims to answer. This field is mandatory."""
-
-    criteria_framework: CriteriaFramework | None = None
-    """The specific criteria framework being used (e.g., PICO, SPIDER)."""
-
-    criteria_framework_answers: MutableMapping[str, JsonValue] = Field(
-        default_factory=dict
+    id: uuid.UUID | None = Field(
+        default=None, description="Optional client-provided ID for the new review."
     )
-    """A dictionary holding the answers/components for the chosen criteria_framework."""
-
-    inclusion_criteria: str | None = None
-    """A string representation of inclusion criteria. Used by the screening LLM chain."""
-
-    exclusion_criteria: str
-    """A string representation of explicit exclusion criteria. This field is mandatory."""
-
-    review_metadata: MutableMapping[str, JsonValue] = Field(default_factory=dict)
-    """Any additional metadata associated with the review, stored as a JSON object."""
+    # Override to make it mandatory for creation, aligning with DB model
+    exclusion_criteria: str = Field(
+        ...,
+        description="Detailed exclusion criteria for study selection. This is mandatory for new reviews.",
+    )
+    # research_question is inherited as mandatory from SystematicReviewBase
 
 
-class SystematicReviewUpdate(BaseSchema):
+class SystematicReviewUpdate(SystematicReviewBase):
     """Schema for updating a Systematic Review (all fields optional)."""
 
-    background: str | None = None
-    """Optional background context for the systematic review."""
-
-    research_question: str | None = None
-    """The primary research question the systematic review aims to answer."""
-
-    criteria_framework: CriteriaFramework | None = None
-    """The specific criteria framework being used (e.g., PICO, SPIDER)."""
-
-    criteria_framework_answers: MutableMapping[str, JsonValue] | None = None
-    """A dictionary holding the answers/components for the chosen criteria_framework."""
-
-    inclusion_criteria: str | None = None
-    """A string representation of inclusion criteria."""
-
-    exclusion_criteria: str | None = None
-    """A string representation of explicit exclusion criteria."""
-
-    review_metadata: MutableMapping[str, JsonValue] | None = None
-    """Any additional metadata associated with the review, stored as a JSON object."""
+    research_question: str | None = Field(
+        default=None, description="The main research question of the systematic review."
+    )
+    background: str | None = Field(
+        default=None, description="Background information and rationale for the review."
+    )
+    criteria_framework: CriteriaFramework | None = Field(
+        default=None, description="Framework used for criteria (e.g., PICO, PECO)."
+    )
+    criteria_framework_answers: MutableMapping[str, JsonValue] | None = Field(
+        default=None,
+        description="Answers related to the criteria framework (e.g., PICO elements as a dict).",
+    )
+    inclusion_criteria: str | None = Field(
+        default=None, description="Detailed inclusion criteria for study selection."
+    )
+    exclusion_criteria: str | None = Field(
+        default=None, description="Detailed exclusion criteria for study selection."
+    )
+    review_metadata: MutableMapping[str, JsonValue] | None = Field(
+        default=None,
+        description="Additional metadata for the review (e.g., tags, notes) as JSON.",
+    )
 
 
 class SystematicReviewRead(SystematicReviewBase):
@@ -604,10 +609,10 @@ class SearchResultRead(BaseSchema):
     keywords: list[str] | None
     """A list of keywords associated with the publication."""
 
-    raw_data: Mapping[str, JsonValue]
+    raw_data: MutableMapping[str, JsonValue]
     """The original raw data record fetched from the source API."""
 
-    source_metadata: Mapping[str, JsonValue]
+    source_metadata: MutableMapping[str, JsonValue]
     """Additional source-specific metadata."""
 
     created_at: AwareDatetime | None
@@ -652,10 +657,10 @@ class SearchResultUpdate(BaseSchema):
     keywords: list[str] | None = None
     """A list of keywords."""
 
-    raw_data: Mapping[str, JsonValue] | None = None
+    raw_data: MutableMapping[str, JsonValue] | None = None
     """The original raw data record."""
 
-    source_metadata: Mapping[str, JsonValue] | None = None
+    source_metadata: MutableMapping[str, JsonValue] | None = None
     """Additional source-specific metadata."""
 
     final_decision: ScreeningDecisionType | None = None

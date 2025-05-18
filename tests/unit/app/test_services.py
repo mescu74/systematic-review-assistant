@@ -1,17 +1,18 @@
 """Unit tests for the Service layer in sr_assistant.app.services."""
 
+# pyright: reportPrivateUsage=false
+
 from __future__ import annotations
 
-import typing as t  # Add import for typing as t
-from typing import override  # For Python 3.12+ - MOVED OUTSIDE TYPE_CHECKING
+import typing as t
+from typing import override
 
 if t.TYPE_CHECKING:
-    # from typing import override # For Python 3.12+ - Original position
-    from pydantic import JsonValue  # Try importing for casting raw_data
-import copy  # Import copy for deepcopy
+    from pydantic import JsonValue
+import copy
 import uuid
-from datetime import UTC, datetime  # ADDED UTC
-from unittest.mock import (  # Import call for checking multiple calls
+from datetime import UTC, datetime
+from unittest.mock import (
     MagicMock,
     patch,
 )
@@ -21,7 +22,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlmodel import Session
 
 from sr_assistant.app import services
-from sr_assistant.core import models, repositories, schemas  # Import schemas
+from sr_assistant.core import models, repositories, schemas
 from sr_assistant.core.types import SearchDatabaseSource
 
 
@@ -675,7 +676,7 @@ class TestSearchServiceSearchPubmedAndStoreResults:
         mock_entrez.esearch.side_effect = Exception("ESearch network error")
 
         with pytest.raises(
-            services.ServiceError, match="PubMed API interaction failed"
+            services.ServiceError, match="PubMed API interaction or mapping failed"
         ):
             search_service.search_pubmed_and_store_results(uuid.uuid4(), "query")
 
@@ -696,7 +697,7 @@ class TestSearchServiceSearchPubmedAndStoreResults:
         )  # If efetch itself raises
 
         with pytest.raises(
-            services.ServiceError, match="PubMed API interaction failed"
+            services.ServiceError, match="PubMed API interaction or mapping failed"
         ):
             search_service.search_pubmed_and_store_results(uuid.uuid4(), "query")
 

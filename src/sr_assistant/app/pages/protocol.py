@@ -131,6 +131,7 @@ def persist_review(review_model: SystematicReview) -> SystematicReview:
         else:
             logger.debug("Adding new review {} via ReviewService", review_model.id)
             create_data = app_schemas.SystematicReviewCreate(
+                id=review_model.id,
                 research_question=review_model.research_question
                 if review_model.research_question
                 else "Default RQ",
