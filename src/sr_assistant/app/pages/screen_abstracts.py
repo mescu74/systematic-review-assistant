@@ -18,6 +18,7 @@ from sr_assistant.app.agents.screening_agents import (
     screen_abstracts_batch,
     screen_abstracts_chain,
 )
+from sr_assistant.app.database import session_factory
 from sr_assistant.core.models import (
     SearchResult,
     SystematicReview,
@@ -516,10 +517,31 @@ def screen_abstracts_page(review_id: uuid.UUID | None = None) -> None:
         st.session_state.review = review
 
     screening_notification_widget = st.empty()
-    # Get search results and existing screening decisions
-    if "search_results" not in st.session_state:
-        st.session_state.search_results = st.session_state.search_repo.get_by_review_id(
-            review_id
+
+    # Always fetch fresh SearchResult *model* instances for screening from the database.
+    # This ensures we have the SQLModel instances that can be modified by screen_abstracts_batch,
+    # overriding any SearchResultRead instances that might be in session_state from the search page.
+    # The review_id used here is confirmed to be non-None by guards at the start of screen_abstracts_page.
+    confirmed_review_id = (
+        st.session_state.review_id
+    )  # This is guaranteed to be a UUID by prior checks
+    logger.info(
+        f"Screening page: Fetching SearchResult models for review_id: {confirmed_review_id}"
+    )
+    search_repo = init_pubmed_repository()
+    with session_factory() as db_session:
+        # Pass the session to the repository method
+        # And use the confirmed_review_id which is known to be a UUID
+        retrieved_search_results = search_repo.get_by_review_id(
+            session=db_session, review_id=confirmed_review_id
+        )
+        st.session_state.search_results = list(
+            retrieved_search_results
+        )  # Convert Sequence to list
+
+    if not st.session_state.search_results:
+        logger.warning(
+            f"No search results found in DB for review_id: {confirmed_review_id} on screening page."
         )
 
     st.subheader("Screening review")
@@ -548,16 +570,19 @@ def screen_abstracts_page(review_id: uuid.UUID | None = None) -> None:
         st.session_state.screen_abstracts_total_cost = 0.0
         st.session_state.screen_abstracts_successful_requests = 0
 
-        search_results = st.session_state.search_results
-        if not search_results:
-            st.error("No PubMed results found, please run a PubMed search first.")
-            st.page_link(
-                "pages/search.py", label="PubMed Search", icon=":material/search:"
+        # Ensure search_results for screening is a list of models.SearchResult
+        search_results_for_screening = list(st.session_state.search_results)
+        if not search_results_for_screening:
+            st.error(
+                "No PubMed results found in the database for this review. Please run a PubMed search first."
             )
+            # st.page_link(
+            #     "pages/search.py", label="PubMed Search", icon=":material/search:"
+            # )
             st.stop()
 
         # renders metrics, progress bar, dataframe fragments for results, and errors (TODO: not working)
-        screen_abstracts(search_results, review)
+        screen_abstracts(search_results_for_screening, review)
 
         result_count = len(st.session_state.screen_abstracts_results)
         conflict_count = len(st.session_state.screen_abstracts_conflicts)

@@ -279,7 +279,7 @@ class ScreeningResultCreate(BaseSchema):
     """Name of the LLM used for this screening decision."""
 
     screening_strategy: ScreeningStrategyType
-    """The strategy used (e.g., CONSERVATIVE, COMPREHENSIVE)."""
+    """The strategy used (e.g., conservative, comprehensive)."""
 
     start_time: AwareDatetime | None = None
     """UTC timestamp when the LLM chain invocation started. Must be timezone-aware if not None."""

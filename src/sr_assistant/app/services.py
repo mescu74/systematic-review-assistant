@@ -643,8 +643,20 @@ class SearchService(BaseService):
             ) from e
 
         # Final conversion to schema and return
+        # return [
+        #     schemas.SearchResultRead.model_validate(model_res, from_attributes=True)
+        #     for model_res in added_search_result_models_for_conversion
+        # ]
+        # Explicitly select fields for SearchResultRead to avoid validation errors with extra model attributes
+        search_result_read_fields = schemas.SearchResultRead.model_fields.keys()
         return [
-            schemas.SearchResultRead.model_validate(model_res, from_attributes=True)
+            schemas.SearchResultRead.model_validate(
+                {
+                    field: getattr(model_res, field)
+                    for field in search_result_read_fields
+                    if hasattr(model_res, field)
+                }
+            )
             for model_res in added_search_result_models_for_conversion
         ]
 
@@ -653,25 +665,28 @@ class SearchService(BaseService):
     ) -> Sequence[schemas.SearchResultRead]:  # MODIFIED return type
         """Retrieves all search results associated with a given review ID (sync), converted to schemas."""  # MODIFIED comment
         logger.debug(f"Getting search results for review_id: {review_id!r}")
-        # Use the internal session factory with .begin() for transaction management
         with self.session_factory.begin() as session:
             try:
-                # Pass the internally managed session to the repository method
                 results_models = self.search_repo.get_by_review_id(session, review_id)
                 logger.debug(
                     f"Found {len(results_models)} search results for review {review_id!r}"
                 )
-                # Convert to Pydantic schema before returning
+                search_result_read_fields = schemas.SearchResultRead.model_fields.keys()
                 return [
-                    schemas.SearchResultRead.model_validate(res, from_attributes=True)
+                    schemas.SearchResultRead.model_validate(
+                        {
+                            field: getattr(res, field)
+                            for field in search_result_read_fields
+                            if hasattr(res, field)
+                        }
+                    )
                     for res in results_models
-                ]  # MODIFIED
-            except Exception as e:
+                ]
+            except Exception as e_ex:
                 logger.exception(
                     f"Error getting search results for review {review_id!r}"
                 )
-                # Rollback is handled automatically by .begin() context manager on exception
-                raise ServiceError("Failed to get search results") from e
+                raise ServiceError("Failed to get search results") from e_ex
 
     def get_search_result_by_source_details(
         self,
@@ -683,28 +698,32 @@ class SearchService(BaseService):
         logger.debug(
             f"Getting search result for review {review_id!r}, source {source_db.name!r}, id {source_id!r}"
         )
-        # Use the internal session factory with .begin() for transaction management
         with self.session_factory.begin() as session:
             try:
-                # Pass the internally managed session to the repository method
                 result_model = self.search_repo.get_by_source_details(
                     session, review_id, source_db, source_id
                 )
                 if result_model:
                     logger.debug(f"Found search result {result_model.id!r}")
+                    search_result_read_fields = (
+                        schemas.SearchResultRead.model_fields.keys()
+                    )
                     return schemas.SearchResultRead.model_validate(
-                        result_model, from_attributes=True
-                    )  # MODIFIED
+                        {
+                            field: getattr(result_model, field)
+                            for field in search_result_read_fields
+                            if hasattr(result_model, field)
+                        }
+                    )
                 logger.debug("Search result not found by source details.")
-                return None  # MODIFIED (ensure None is returned if model not found)
-            except Exception as e:
+                return None
+            except Exception as e_ex:
                 logger.exception(
                     f"Error getting search result for review {review_id!r}, source {source_db.name!r}, id {source_id!r}"
                 )
-                # Rollback is handled automatically by .begin() context manager on exception
                 raise ServiceError(
                     "Failed to get search result by source details"
-                ) from e
+                ) from e_ex
 
     # Implement sync update method
     def update_search_result(
@@ -715,56 +734,48 @@ class SearchService(BaseService):
         """Updates an existing search result using Pydantic schema for update data, returns updated schema."""  # MODIFIED comment
         logger.debug(f"Updating search result id: {result_id!r}")
 
-        with (
-            self.session_factory.begin() as session
-        ):  # Use .begin() for transaction management
+        with self.session_factory.begin() as session:
             try:
-                # Fetch the existing SearchResult object
                 db_search_result_model = self.search_repo.get_by_id(session, result_id)
                 if not db_search_result_model:
-                    # Raise a specific error if not found, to be handled by caller or logger
                     raise repositories.RecordNotFoundError(
                         f"SearchResult with id {result_id} not found for update."
                     )
 
-                # Apply updates from the Pydantic schema to the SQLModel instance
-                # model_dump(exclude_unset=True) ensures only provided fields are used for update
                 update_dict = update_data.model_dump(exclude_unset=True)
                 for key, value in update_dict.items():
-                    # Map screening_decision from update schema to final_decision on the model
                     if key == "screening_decision":
                         db_search_result_model.final_decision = value
                     else:
                         setattr(db_search_result_model, key, value)
 
-                # The repository's update method should handle adding to session and flushing.
                 updated_result_from_repo_model = self.search_repo.update(
                     session, db_search_result_model
                 )
-
-                # Explicitly refresh the instance after the repository has flushed it,
-                # to ensure all server-side changes (e.g., onupdate timestamps) are loaded.
                 session.refresh(updated_result_from_repo_model)
 
                 logger.info(
                     f"Successfully updated search result {updated_result_from_repo_model.id!r}"
                 )
-                # Commit is handled by session_factory.begin() on successful exit
+                search_result_read_fields = schemas.SearchResultRead.model_fields.keys()
                 return schemas.SearchResultRead.model_validate(
-                    updated_result_from_repo_model, from_attributes=True
-                )  # MODIFIED
+                    {
+                        field: getattr(updated_result_from_repo_model, field)
+                        for field in search_result_read_fields
+                        if hasattr(updated_result_from_repo_model, field)
+                    }
+                )
 
-            except repositories.RecordNotFoundError:  # Specific re-raise
-                # Logged by repo or service can log here too. Re-raise to inform caller.
+            except repositories.RecordNotFoundError:
                 logger.warning(
                     f"Update failed for SearchResult {result_id!r}: Record not found."
                 )
-                raise  # Re-raise the RecordNotFoundError
-
-            except Exception as e:
+                raise
+            except Exception as e_ex:
                 logger.exception(f"Error updating search result {result_id!r}")
-                # Rollback is handled by session_factory.begin() on exception
-                raise ServiceError(f"Failed to update search result: {e!r}") from e
+                raise ServiceError(
+                    f"Failed to update search result: {e_ex!r}"
+                ) from e_ex
 
     # Implement sync delete method
     def delete_search_result(self, result_id: uuid.UUID) -> None:
@@ -987,8 +998,10 @@ class ScreeningService(BaseService):
                     )
                 return results[0]
             return None
-        except Exception as e:
-            logger.exception("Error getting specific screening result by strategy")
+        except Exception as e_ex:  # Changed e to e_ex
+            logger.exception(
+                f"Error getting specific screening result by strategy: {e_ex!r}"
+            )  # Use e_ex
             return None
 
     def add_or_update_screening_result(
