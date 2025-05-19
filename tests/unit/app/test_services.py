@@ -18,12 +18,28 @@ from unittest.mock import (
 )
 
 import pytest
+from pytest_mock import MockerFixture
 from sqlalchemy.orm import sessionmaker
 from sqlmodel import Session
 
 from sr_assistant.app import services
+from sr_assistant.app.agents.screening_agents import (
+    ScreenAbstractResultTuple,
+    ScreenAbstractsBatchOutput,
+    # screen_abstracts_batch, # Will be mocked
+)
 from sr_assistant.core import models, repositories, schemas
-from sr_assistant.core.types import SearchDatabaseSource
+from sr_assistant.core.schemas import (
+    ExclusionReasons,
+    ScreeningDecisionType,
+)
+from sr_assistant.core.schemas import (
+    ScreeningResult as ScreeningResultSchema,  # Alias to avoid clash with models.ScreeningResult if any
+)
+from sr_assistant.core.types import (
+    ScreeningStrategyType,
+    SearchDatabaseSource,
+)
 
 
 # --- Test Data ---
@@ -905,7 +921,7 @@ class TestSearchServiceGetAndUpdateMethods:
         review_id = uuid.uuid4()
         update_payload = schemas.SearchResultUpdate(
             title="Updated Title",
-            screening_decision=schemas.ScreeningDecisionType.INCLUDE,
+            final_decision=schemas.ScreeningDecisionType.INCLUDE,
         )
 
         # Model as it would be fetched from the DB
@@ -946,8 +962,7 @@ class TestSearchServiceGetAndUpdateMethods:
             authors=["Original Author"],
             keywords=["orig_kw"],
             source_metadata={"orig_meta": "val"},
-            final_decision=schemas.ScreeningDecisionType.INCLUDE,  # This is the field that should be updated
-            # screening_rationale, tags, notes are NOT fields on models.SearchResult
+            final_decision=schemas.ScreeningDecisionType.INCLUDE,  # This should be updated based on payload
         )
         mock_repo.update.return_value = expected_model_after_repo_update_and_refresh
 
@@ -1213,3 +1228,239 @@ class TestReviewService:
         mock_session_factory.begin.return_value.__exit__.assert_called_once()  # For rollback due to error
 
     # TODO: Add tests for get_all_reviews, update_review, delete_review
+
+
+@pytest.fixture
+def screening_service_with_mocks(mocker: MockerFixture) -> dict[str, t.Any]:
+    """Provides a ScreeningService instance with mocked dependencies."""
+    mock_session_factory = mocker.MagicMock(spec=sessionmaker)
+    mock_session = mocker.MagicMock(spec=Session)
+    mock_session_factory.return_value.__enter__.return_value = (
+        mock_session  # Mock the session context manager
+    )
+
+    mock_review_repo = mocker.MagicMock(spec=repositories.SystematicReviewRepository)
+    mock_search_repo = mocker.MagicMock(spec=repositories.SearchResultRepository)
+    mock_screen_repo = mocker.MagicMock(
+        spec=repositories.ScreenAbstractResultRepository
+    )
+
+    # Patch the agent function imported in services.py
+    mock_agent_screen_batch = mocker.patch(
+        "sr_assistant.app.services.screen_abstracts_batch"
+    )
+
+    service_instance = services.ScreeningService(
+        factory=mock_session_factory,
+        review_repo=mock_review_repo,
+        search_repo=mock_search_repo,
+        screen_repo=mock_screen_repo,
+    )
+    return {
+        "service": service_instance,
+        "mock_session_factory": mock_session_factory,
+        "mock_session": mock_session,
+        "mock_review_repo": mock_review_repo,
+        "mock_search_repo": mock_search_repo,
+        "mock_screen_repo": mock_screen_repo,
+        "mock_agent_screen_batch": mock_agent_screen_batch,
+    }
+
+
+class TestScreeningService:
+    def test_perform_batch_screening_success(
+        self, screening_service_with_mocks: dict[str, t.Any], mocker: MockerFixture
+    ):
+        service_mocks = screening_service_with_mocks
+        service = service_mocks["service"]
+        mock_session = service_mocks["mock_session"]
+        mock_review_repo = service_mocks["mock_review_repo"]
+        mock_search_repo = service_mocks["mock_search_repo"]
+        mock_screen_repo = service_mocks["mock_screen_repo"]
+        mock_agent_screen_batch = service_mocks["mock_agent_screen_batch"]
+
+        review_id = uuid.uuid4()
+        sr_id1 = uuid.uuid4()
+        sr_id2 = uuid.uuid4()
+        search_result_ids_to_screen = [sr_id1, sr_id2]
+
+        mock_review = models.SystematicReview(
+            id=review_id, research_question="Test RQ", exclusion_criteria="Test Excl"
+        )
+        mock_review_repo.get_by_id.return_value = mock_review
+
+        mock_sr1 = models.SearchResult(
+            id=sr_id1,
+            review_id=review_id,
+            title="SR1",
+            source_db=SearchDatabaseSource.PUBMED,
+            source_id="pmid1",
+            year="2023",
+        )
+        mock_sr2 = models.SearchResult(
+            id=sr_id2,
+            review_id=review_id,
+            title="SR2",
+            source_db=SearchDatabaseSource.PUBMED,
+            source_id="pmid2",
+            year="2024",
+        )
+
+        # Configure side_effect for get_by_id if called multiple times
+        def search_repo_get_by_id_side_effect(session: Session, id_val: uuid.UUID):
+            if id_val == sr_id1:
+                return mock_sr1
+            if id_val == sr_id2:
+                return mock_sr2
+            return None
+
+        mock_search_repo.get_by_id.side_effect = search_repo_get_by_id_side_effect
+
+        # Explicitly import inside the test method for diagnosis
+
+        kons_run_id1 = uuid.uuid4()
+        comp_run_id1 = uuid.uuid4()
+        kons_run_id2 = uuid.uuid4()
+        comp_run_id2 = uuid.uuid4()
+
+        mock_kons_res1 = ScreeningResultSchema(
+            id=kons_run_id1,
+            review_id=review_id,
+            search_result_id=sr_id1,
+            trace_id=uuid.uuid4(),
+            model_name="kons-model",
+            screening_strategy=ScreeningStrategyType.CONSERVATIVE,
+            decision=ScreeningDecisionType.INCLUDE,
+            confidence_score=0.9,
+            rationale="Kons R1",
+            start_time=datetime.now(UTC),
+            end_time=datetime.now(UTC),
+        )
+        mock_comp_res1 = ScreeningResultSchema(
+            id=comp_run_id1,
+            review_id=review_id,
+            search_result_id=sr_id1,
+            trace_id=uuid.uuid4(),
+            model_name="comp-model",
+            screening_strategy=ScreeningStrategyType.COMPREHENSIVE,
+            decision=ScreeningDecisionType.INCLUDE,
+            confidence_score=0.95,
+            rationale="Comp R1",
+            start_time=datetime.now(UTC),
+            end_time=datetime.now(UTC),
+        )
+
+        # Correctly use one of the literal string values defined for PopulationExclusionReason type alias
+        sample_pop_exclusion_reason_str = "Wrong age range for inclusion criteria"
+
+        mock_kons_res2 = ScreeningResultSchema(
+            id=kons_run_id2,
+            review_id=review_id,
+            search_result_id=sr_id2,
+            trace_id=uuid.uuid4(),
+            model_name="kons-model",
+            screening_strategy=ScreeningStrategyType.CONSERVATIVE,
+            decision=ScreeningDecisionType.EXCLUDE,
+            confidence_score=0.85,
+            rationale="Kons R2",
+            exclusion_reason_categories=ExclusionReasons(
+                population_exclusion_reasons=[sample_pop_exclusion_reason_str]
+            ),
+            start_time=datetime.now(UTC),
+            end_time=datetime.now(UTC),
+        )
+        mock_comp_res2 = ScreeningResultSchema(
+            id=comp_run_id2,
+            review_id=review_id,
+            search_result_id=sr_id2,
+            trace_id=uuid.uuid4(),
+            model_name="comp-model",
+            screening_strategy=ScreeningStrategyType.COMPREHENSIVE,
+            decision=ScreeningDecisionType.EXCLUDE,
+            confidence_score=0.88,
+            rationale="Comp R2",
+            exclusion_reason_categories=ExclusionReasons(
+                population_exclusion_reasons=[sample_pop_exclusion_reason_str]
+            ),
+            start_time=datetime.now(UTC),
+            end_time=datetime.now(UTC),
+        )
+
+        agent_results_tuples = [
+            ScreenAbstractResultTuple(
+                search_result=mock_sr1,
+                conservative_result=mock_kons_res1,
+                comprehensive_result=mock_comp_res1,
+            ),
+            ScreenAbstractResultTuple(
+                search_result=mock_sr2,
+                conservative_result=mock_kons_res2,
+                comprehensive_result=mock_comp_res2,
+            ),
+        ]
+        mock_agent_screen_batch.return_value = ScreenAbstractsBatchOutput(
+            results=agent_results_tuples, cb=mocker.MagicMock()
+        )
+
+        # Mock repository add and update methods to return the object passed to them
+        mock_screen_repo.add.side_effect = lambda session, obj: obj
+        mock_search_repo.update.side_effect = lambda session, obj: obj
+
+        # Call the service method
+        returned_results = service.perform_batch_abstract_screening(
+            review_id, search_result_ids_to_screen
+        )
+
+        # Assertions
+        mock_review_repo.get_by_id.assert_called_once_with(mock_session, review_id)
+        assert mock_search_repo.get_by_id.call_count == 2
+        mock_search_repo.get_by_id.assert_any_call(mock_session, sr_id1)
+        mock_search_repo.get_by_id.assert_any_call(mock_session, sr_id2)
+
+        mock_agent_screen_batch.assert_called_once()
+        agent_call_args = mock_agent_screen_batch.call_args[1]  # kwargs
+        assert agent_call_args["review"] == mock_review
+        assert len(agent_call_args["batch"]) == 2
+        assert mock_sr1 in agent_call_args["batch"]
+        assert mock_sr2 in agent_call_args["batch"]
+
+        assert mock_screen_repo.add.call_count == 4  # 2 per search result (kons & comp)
+        # Check a few details of what was added
+        first_add_call_args = mock_screen_repo.add.call_args_list[0][0][
+            1
+        ]  # (session, obj) -> obj
+        assert isinstance(first_add_call_args, models.ScreenAbstractResult)
+        assert first_add_call_args.id == kons_run_id1
+        # assert first_add_call_args.search_result_id == sr_id1 # This field does not exist on ScreenAbstractResult
+        assert first_add_call_args.decision == ScreeningDecisionType.INCLUDE
+
+        fourth_add_call_args = mock_screen_repo.add.call_args_list[3][0][1]
+        assert isinstance(fourth_add_call_args, models.ScreenAbstractResult)
+        assert fourth_add_call_args.id == comp_run_id2
+        # assert fourth_add_call_args.search_result_id == sr_id2 # This field does not exist on ScreenAbstractResult
+        assert fourth_add_call_args.decision == ScreeningDecisionType.EXCLUDE
+
+        assert mock_search_repo.update.call_count == 2
+        # Check that sr1 was updated with correct IDs
+        assert mock_sr1.conservative_result_id == kons_run_id1
+        assert mock_sr1.comprehensive_result_id == comp_run_id1
+        # Check that sr2 was updated with correct IDs
+        assert mock_sr2.conservative_result_id == kons_run_id2
+        assert mock_sr2.comprehensive_result_id == comp_run_id2
+
+        # Ensure the objects passed to update were the modified mock_sr1 and mock_sr2
+        update_calls = mock_search_repo.update.call_args_list
+        updated_sr_ids = {
+            call[0][1].id for call in update_calls
+        }  # call[0] is args, call[0][1] is the SearchResult obj
+        assert sr_id1 in updated_sr_ids
+        assert sr_id2 in updated_sr_ids
+
+        mock_session.commit.assert_called_once()
+
+        # Check returned results (should be a deepcopy of agent's output)
+        assert len(returned_results) == 2
+        assert returned_results[0].search_result.id == sr_id1
+        assert returned_results[0].conservative_result.id == kons_run_id1  # type: ignore
+        assert returned_results[1].search_result.id == sr_id2
+        assert returned_results[1].comprehensive_result.id == comp_run_id2  # type: ignore

@@ -6,10 +6,10 @@ Systematic reviews require rigorous screening of literature to identify relevant
 
 At the heart of screening evaluation is the confusion matrix, which categorizes screening decisions into four fundamental outcomes [1] [2] [3]:
 
-|                       | Articles Actually Relevant | Articles Actually Irrelevant |
-| :-------------------- | :----------------------- | :--------------------------- |
-| **Predicted Relevant** | True Positives (TP)      | False Positives (FP)         |
-| **Predicted Irrelevant**| False Negatives (FN)     | True Negatives (TN)          |
+|                          | Articles Actually Relevant | Articles Actually Irrelevant |
+| :----------------------- | :------------------------- | :--------------------------- |
+| **Predicted Relevant**   | True Positives (TP)        | False Positives (FP)         |
+| **Predicted Irrelevant** | False Negatives (FN)       | True Negatives (TN)          |
 
 This $2 \times 2$ classification forms the basis for calculating all performance metrics in systematic review screening. Each cell represents an important outcome that affects the review's reliability and efficiency.
 
@@ -80,6 +80,7 @@ Cohen's Kappa measures inter-rater reliability adjusted for chance agreement [13
 $$ \kappa = \frac{p_o - p_e}{1 - p_e} $$
 
 Where:
+
 - $p_o$ is the observed agreement proportion (i.e., $\frac{\text{TP} + \text{TN}}{\text{Total}}$)
 - $p_e$ is the expected agreement proportion due to chance
 
@@ -103,7 +104,7 @@ $$ \text{LR-} = \frac{1 - \text{Sensitivity}}{\text{Specificity}} $$
 
 ### Prioritizing Sensitivity
 
-In systematic review screening, sensitivity is generally prioritized over specificity or precision [15]. Research indicates that a recall (sensitivity) over 0.95 should be targeted to ensure comprehensive literature coverage [5]. This prioritization stems from the fundamental principle that missing relevant studies introduces more serious bias than including some irrelevant ones initially.
+In systematic review screening, sensitivity is generally prioritized over specificity or precision [15]. Research indicates that a recall (sensitivity) over 0.99 should be targeted to ensure comprehensive literature coverage [5]. This prioritization stems from the fundamental principle that missing relevant studies introduces more serious bias than including some irrelevant ones initially.
 
 ### Performance in Modern Automated Screening
 

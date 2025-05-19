@@ -9,14 +9,13 @@ import streamlit as st
 from loguru import logger
 
 import sr_assistant.app.utils as ut
+from sr_assistant.app import services
 from sr_assistant.app.agents.screening_agents import (
-    # ScreeningResponse,
+    ScreenAbstractResultTuple,
     ScreeningError,
     ScreeningResult,
     ScreeningStrategyType,
     invoke_resolver_chain,
-    screen_abstracts_batch,
-    screen_abstracts_chain,
 )
 from sr_assistant.app.database import session_factory
 from sr_assistant.core.models import (
@@ -24,6 +23,7 @@ from sr_assistant.core.models import (
     SystematicReview,
 )
 from sr_assistant.core.repositories import (
+    RecordNotFoundError,
     ScreenAbstractResultRepository,
     ScreeningResolutionRepository,
     SearchResultRepository,
@@ -59,12 +59,6 @@ def init_screen_resolution_repository() -> ScreeningResolutionRepository:
         repo = ScreeningResolutionRepository()
         st.session_state.repo_screen_resolution = repo
     return st.session_state.repo_screen_resolution
-
-
-def init_screen_abstracts_chain():
-    if "screen_abstracts_chain" not in st.session_state:
-        st.session_state.screen_abstracts_chain = screen_abstracts_chain
-    return st.session_state.screen_abstracts_chain
 
 
 # @st.fragment(run_every=st.session_state.run_every)
@@ -314,17 +308,33 @@ def render_progress_bar() -> None:
         )
 
 
+def init_screening_service() -> services.ScreeningService:
+    if "screening_service" not in st.session_state:
+        # Repositories are already initialized and available in session_state by this point usually
+        # or can be initialized here if preferred.
+        # For simplicity, assuming they are available or ScreeningService defaults work.
+        st.session_state.screening_service = services.ScreeningService(
+            # factory=session_factory, # Uses default
+            # screen_repo=st.session_state.repo_screen_abstracts, # Can be passed if already init
+            # search_repo=st.session_state.search_repo,
+            # review_repo=st.session_state.repo_review
+        )
+    return st.session_state.screening_service
+
+
 @logger.catch(onerror=lambda exc: st.error(exc) if ut.in_streamlit() else None)  # pyright: ignore [reportArgumentType]
 def screen_abstracts(  # noqa: C901
-    search_results: list[SearchResult],
+    search_results_to_process: list[SearchResult],
     review: SystematicReview,
+    screening_service: services.ScreeningService,
 ) -> None:
     ut.init_state_key("screen_abstracts_results", [])
     ut.init_state_key("screen_abstracts_errors", [])
-    ut.init_state_key("screen_abstracts_chain", screen_abstracts_chain)
-    ut.init_state_key("screen_abstracts_total_tokens", 0)
-    ut.init_state_key("screen_abstracts_successful_requests", 0)
-    ut.init_state_key("screen_abstracts_total_cost", 0.0)
+    # ut.init_state_key("screen_abstracts_chain", screen_abstracts_chain) # No longer directly used here
+    # Removed token/cost tracking that relied on direct agent cb
+    # ut.init_state_key("screen_abstracts_total_tokens", 0)
+    # ut.init_state_key("screen_abstracts_successful_requests", 0)
+    # ut.init_state_key("screen_abstracts_total_cost", 0.0)
     ut.init_state_key("screen_abstracts_included", 0)
     ut.init_state_key("screen_abstracts_excluded", 0)
     ut.init_state_key("screen_abstracts_uncertain", 0)
@@ -332,68 +342,80 @@ def screen_abstracts(  # noqa: C901
     ut.init_state_key("screen_abstracts_conflicts", [])
     ut.init_state_key("screen_abstracts_resolved", [])
 
-    batch_size = st.session_state.screen_abstracts_batch_size
-    batch_idx = st.session_state.screen_abstracts_batch_idx = -1
-    total_batches = (
-        st.session_state.get("screen_abstracts_to_be_screened", 0) // batch_size
+    # batch_size = st.session_state.screen_abstracts_batch_size # Service handles batching internally or not at all for this method
+    # batch_idx = st.session_state.screen_abstracts_batch_idx = -1
+    # total_batches = (
+    #     st.session_state.get("screen_abstracts_to_be_screened", 0) // batch_size
+    # )
+    total_to_screen = len(search_results_to_process)
+    st.session_state.screen_abstracts_to_be_screened = (
+        total_to_screen  # Update this for progress bar
     )
+
     screening_status = st.status(
-        f"Screening {st.session_state.screen_abstracts_to_be_screened} abstracts about to start ...",
+        f"Screening {total_to_screen} abstracts...",
         expanded=True,
     )
 
     with screening_status:
-        for i in range(0, len(search_results), batch_size):
-            batch = search_results[i : i + batch_size]
-            batch_size = len(batch)
-            batch_idx += 1
-            st.session_state.screen_abstracts_batch_idx = batch_idx
-            # runs in executor
-            logger.info(f"Screening batch {batch_idx} of size {batch_size} ...")
-            screening_status.text(
-                f"Screening batch {batch_idx + 1}/{total_batches} of size {batch_size} ..."
+        search_result_ids = [sr.id for sr in search_results_to_process]
+        if not search_result_ids:
+            st.error("No valid search result IDs to screen.")
+            screening_status.update(label="Screening failed: No IDs.", state="error")
+            return
+
+        logger.info(
+            f"Calling ScreeningService for {len(search_result_ids)} search results."
+        )
+        screening_status.text(
+            f"Invoking screening service for {len(search_result_ids)} abstracts..."
+        )
+
+        try:
+            # Call the service
+            # The service handles fetching fresh models by ID, persistence, and transactions.
+            service_results: list[ScreenAbstractResultTuple] = (
+                screening_service.perform_batch_abstract_screening(
+                    review_id=review.id, search_result_ids_to_screen=search_result_ids
+                )
             )
-            batch_output = screen_abstracts_batch(batch, batch_idx, review)
             logger.info(
-                f"Screening batch {batch_idx}/{total_batches} of size {batch_size} ... done"
+                f"ScreeningService returned {len(service_results)} result tuples."
             )
-            if not batch_output:
-                msg = f"Screening batch {batch_idx + 1}/{total_batches} of size {batch_size} returned no results"
-                logger.error(msg)
-                screening_status.text(msg)
-                st.session_state.screen_abstracts_errors.extend([None] * batch_size)
-                return
-            cb = batch_output.cb
-            results = batch_output.results
-            st.session_state.screen_abstracts_total_tokens += cb.total_tokens
-            st.session_state.screen_abstracts_total_cost += cb.total_cost
-            st.session_state.screen_abstracts_successful_requests += (
-                cb.successful_requests
+
+            # Reset counters before processing, as service might return partials or all
+            st.session_state.screen_abstracts_included = 0
+            st.session_state.screen_abstracts_excluded = 0
+            st.session_state.screen_abstracts_uncertain = 0
+            st.session_state.screen_abstracts_screened = (
+                0  # Will be incremented per search result processed
             )
-            for j, res in enumerate(results):
-                pm_r = res.search_result
+            st.session_state.screen_abstracts_results = []  # Clear previous results from UI perspective
+            st.session_state.screen_abstracts_errors = []
+            st.session_state.screen_abstracts_conflicts = []
 
-                if pm_r.id != batch[j].id:
-                    msg = f"Search result id mismatch: {pm_r.id} != {batch[j].id}, skipping ... res: {res!r}"
-                    logger.bind(output=pm_r.id, input=batch[j].id).error(msg)
-                    screening_status.text(msg)
-                    st.session_state.screen_abstracts_errors.append(
-                        ScreeningError(search_result=pm_r, error=res, message=msg)
-                    )
-                    continue
+            # Process results returned by the service
+            for res_tuple in service_results:
+                # The search_result in res_tuple is the one processed by the agent.
+                # It should have conservative_result_id and comprehensive_result_id set if screening was successful.
+                pm_r = res_tuple.search_result
 
-                if not isinstance(res.conservative_result, ScreeningResult):
-                    msg = f"Conservative screening error: {type(res.conservative_result)}: {res.conservative_result!r}"
+                # Note: The service ensures that ScreenAbstractResult records are persisted
+                # and SearchResult records are updated with linkage IDs (conservative_result_id, comprehensive_result_id).
+                # The UI's main job here is to display these results and count metrics.
+
+                if not isinstance(res_tuple.conservative_result, ScreeningResult):
+                    # This is a ScreeningError for conservative path
+                    msg = f"Conservative screening error for {pm_r.source_id}: {res_tuple.conservative_result!r}"
                     logger.error(msg)
-                    screening_status.text(msg)
                     st.session_state.screen_abstracts_errors.append(
-                        res.conservative_result
+                        res_tuple.conservative_result
                     )
                 else:
                     st.session_state.screen_abstracts_results.append(
-                        (pm_r, res.conservative_result)
+                        (pm_r, res_tuple.conservative_result)
                     )
-                    match res.conservative_result.decision:
+                    match res_tuple.conservative_result.decision:
                         case ScreeningDecisionType.INCLUDE:
                             st.session_state.screen_abstracts_included += 1
                         case ScreeningDecisionType.EXCLUDE:
@@ -401,48 +423,79 @@ def screen_abstracts(  # noqa: C901
                         case ScreeningDecisionType.UNCERTAIN:
                             st.session_state.screen_abstracts_uncertain += 1
 
-                if not isinstance(res.comprehensive_result, ScreeningResult):
-                    msg = f"Comprehensive screening error: {type(res.comprehensive_result)}: {res.comprehensive_result!r}"
+                if not isinstance(res_tuple.comprehensive_result, ScreeningResult):
+                    # This is a ScreeningError for comprehensive path
+                    msg = f"Comprehensive screening error for {pm_r.source_id}: {res_tuple.comprehensive_result!r}"
                     logger.error(msg)
-                    screening_status.text(msg)
                     st.session_state.screen_abstracts_errors.append(
-                        res.comprehensive_result
+                        res_tuple.comprehensive_result
                     )
                 else:
                     st.session_state.screen_abstracts_results.append(
-                        (pm_r, res.comprehensive_result)
+                        (pm_r, res_tuple.comprehensive_result)
                     )
-                    match res.comprehensive_result.decision:
-                        case ScreeningDecisionType.INCLUDE:
-                            st.session_state.screen_abstracts_included += 1
-                        case ScreeningDecisionType.EXCLUDE:
-                            st.session_state.screen_abstracts_excluded += 1
-                        case ScreeningDecisionType.UNCERTAIN:
-                            st.session_state.screen_abstracts_uncertain += 1
+                    # Avoid double counting for overall included/excluded/uncertain if one strategy errored
+                    # but we still want to capture the successful strategy's decision for metrics.
+                    # This logic might need refinement based on how metrics should reflect partial success.
+                    # For simplicity, let's assume if one strategy is successful, its decision contributes to metrics.
+                    # A search result is considered "screened" if at least one strategy produced a result (error or success).
+                    if not isinstance(
+                        res_tuple.conservative_result, ScreeningResult
+                    ):  # only add if conservative errored
+                        match res_tuple.comprehensive_result.decision:
+                            case ScreeningDecisionType.INCLUDE:
+                                st.session_state.screen_abstracts_included += 1
+                            case ScreeningDecisionType.EXCLUDE:
+                                st.session_state.screen_abstracts_excluded += 1
+                            case ScreeningDecisionType.UNCERTAIN:
+                                st.session_state.screen_abstracts_uncertain += 1
 
-                st.session_state.screen_abstracts_screened += 1
+                st.session_state.screen_abstracts_screened += (
+                    1  # Count as screened if we got a tuple for it
+                )
 
+                # Conflict detection
                 if (
-                    isinstance(res.conservative_result, ScreeningResult)
-                    and isinstance(res.comprehensive_result, ScreeningResult)
-                    and res.conservative_result.decision
-                    != res.comprehensive_result.decision
+                    isinstance(res_tuple.conservative_result, ScreeningResult)
+                    and isinstance(res_tuple.comprehensive_result, ScreeningResult)
+                    and res_tuple.conservative_result.decision
+                    != res_tuple.comprehensive_result.decision
                 ):
                     st.session_state.screen_abstracts_conflicts.append(
-                        (pm_r, res.conservative_result, res.comprehensive_result)
+                        (
+                            pm_r,
+                            res_tuple.conservative_result,
+                            res_tuple.comprehensive_result,
+                        )
                     )
 
-                # FIXME: these don't update ...
-                # render_metrics()
-                # render_progress_bar()
-                # render_df()
-                # render_errors()
+        except RecordNotFoundError as e:
+            logger.error(f"Service error (RecordNotFound): {e}")
+            st.error(f"Error during screening: {e}")
+            screening_status.update(label=f"Screening failed: {e}", state="error")
+            return  # Stop processing
+        except services.ServiceError as e:
+            logger.error(f"Service error: {e}")
+            st.error(f"An unexpected error occurred during screening: {e}")
+            screening_status.update(label=f"Screening failed: {e}", state="error")
+            return
+        except Exception as e:  # Catch any other unexpected error from the service call
+            logger.error(
+                f"Unexpected error calling screening service: {e}", exc_info=True
+            )
+            st.error(f"A critical error occurred: {e}")
+            screening_status.update(
+                label=f"Screening failed critically: {e}", state="error"
+            )
+            return
 
     screening_status.update(
-        label="Screening complete", state="complete", expanded=False
+        label=f"Screening of {st.session_state.screen_abstracts_screened}/{total_to_screen} abstracts processed by service.",
+        state="complete",
+        expanded=False,
     )
 
-    # --- Resolve Conflicts --- #
+    # --- Resolve Conflicts --- # (This logic can largely remain, as it depends on st.session_state.screen_abstracts_conflicts)
     conflicts_to_resolve = st.session_state.screen_abstracts_conflicts
     if conflicts_to_resolve:
         resolution_status = st.status(
@@ -508,13 +561,24 @@ def screen_abstracts_page(review_id: uuid.UUID | None = None) -> None:
     init_pubmed_repository()
     init_screen_abstracts_repository()
     init_screen_resolution_repository()
-    init_screen_abstracts_chain()
+    screening_service = init_screening_service()  # Initialize ScreeningService
 
     # init review
     review = st.session_state.get("review")
+    # Ensure review is fetched if not in session state or not the correct type
     if not isinstance(review, SystematicReview):
-        review = st.session_state.repo_review.get_by_id(review_id)
-        st.session_state.review = review
+        review_repo = st.session_state.repo_review  # Get the initialized repo
+        with session_factory() as db_session:  # Obtain a session
+            # Call get_by_id with both session and id arguments
+            review = review_repo.get_by_id(session=db_session, id=review_id)
+            st.session_state.review = review  # Store the fetched review
+
+    # Add a guard in case the review could not be fetched
+    if not review:
+        st.error(
+            f"Systematic Review with ID {review_id} not found. Please ensure it exists."
+        )
+        st.stop()
 
     screening_notification_widget = st.empty()
 
@@ -557,7 +621,7 @@ def screen_abstracts_page(review_id: uuid.UUID | None = None) -> None:
     )
     if col3.button("Start Abstract Screening"):
         st.session_state.screen_abstracts_screened = 0
-        st.session_state.screen_abstracts_batch_idx = 0
+        # st.session_state.screen_abstracts_batch_idx = 0 # Not needed
         st.session_state.screen_abstracts_done = False
         st.session_state.screen_abstracts_results = []
         st.session_state.screen_abstracts_errors = []
@@ -566,29 +630,27 @@ def screen_abstracts_page(review_id: uuid.UUID | None = None) -> None:
         st.session_state.screen_abstracts_included = 0
         st.session_state.screen_abstracts_excluded = 0
         st.session_state.screen_abstracts_uncertain = 0
-        st.session_state.screen_abstracts_total_tokens = 0
-        st.session_state.screen_abstracts_total_cost = 0.0
-        st.session_state.screen_abstracts_successful_requests = 0
 
-        # Ensure search_results for screening is a list of models.SearchResult
         search_results_for_screening = list(st.session_state.search_results)
         if not search_results_for_screening:
             st.error(
                 "No PubMed results found in the database for this review. Please run a PubMed search first."
             )
-            # st.page_link(
-            #     "pages/search.py", label="PubMed Search", icon=":material/search:"
-            # )
             st.stop()
 
-        # renders metrics, progress bar, dataframe fragments for results, and errors (TODO: not working)
-        screen_abstracts(search_results_for_screening, review)
+        # Call the refactored screen_abstracts function, passing the service
+        screen_abstracts(
+            search_results_for_screening, review, screening_service
+        )  # Pass service
 
-        result_count = len(st.session_state.screen_abstracts_results)
+        result_count = len(
+            st.session_state.screen_abstracts_results
+        )  # This is now 2x num_articles if both strats succeed
+        actual_articles_processed = st.session_state.screen_abstracts_screened
         conflict_count = len(st.session_state.screen_abstracts_conflicts)
         error_count = len(st.session_state.screen_abstracts_errors)
         screening_notification_widget.success(
-            f"Screening complete! {result_count} results, {conflict_count} conflicts, {error_count} errors."
+            f"Screening processing complete! {actual_articles_processed} articles processed. {result_count} individual screening results. {conflict_count} conflicts. {error_count} errors."
         )
         st.session_state.screen_abstracts_done = True
 
@@ -603,23 +665,7 @@ def screen_abstracts_page(review_id: uuid.UUID | None = None) -> None:
         render_errors()
 
 
-# For quick testing
-if "review_id" not in st.session_state:
-    st.session_state.review_id = uuid.UUID(
-        hex="60057808-f51c-4f9e-8bcf-8860cf4b718d"
-    )  # seemingly deleted uuid.UUID(hex="393f5e13-175a-4314-b47e-45b804ab3d6f")
-if "logger_extra_configured" not in st.session_state:
-    logger.configure(extra={"review_id": st.session_state.review_id})
-    st.session_state.logger_extra_configured = True
-init_screen_abstracts_repository()
-init_review_repository()
-if "review" not in st.session_state:
-    review = st.session_state.repo_review.get_by_id(st.session_state.review_id)
-    logger.info(f"review: {review!r}")
-    st.session_state.review = review
-init_pubmed_repository()
-if "search_results" not in st.session_state:
-    st.session_state.search_results = st.session_state.search_repo.get_by_review_id(
-        st.session_state.review_id
-    )
-screen_abstracts_page()
+# Ensure the main page logic is called when the script is run by AppTest or Streamlit.
+# The test fixture app_test_env will have set up st.session_state.review_id and st.session_state.review.
+# For direct streamlit run, review_id might need to be handled (e.g. from query params or a default).
+screen_abstracts_page(st.session_state.get("review_id"))

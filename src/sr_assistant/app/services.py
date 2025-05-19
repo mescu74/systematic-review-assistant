@@ -8,6 +8,7 @@ import re
 import typing as t
 import uuid
 from collections.abc import Mapping
+from copy import deepcopy
 from datetime import datetime
 
 # Import BioPython Entrez for PubMed API interaction
@@ -17,8 +18,15 @@ from loguru import logger
 from sqlalchemy.orm import sessionmaker
 from sqlmodel import Session
 
+from sr_assistant.app.agents.screening_agents import (
+    ScreenAbstractResultTuple,
+    ScreenAbstractsBatchOutput,
+    ScreeningError,
+    screen_abstracts_batch,
+)
 from sr_assistant.app.database import session_factory
 from sr_assistant.core import models, repositories, schemas
+from sr_assistant.core.repositories import RecordNotFoundError
 from sr_assistant.core.types import (
     ScreeningStrategyType,
     SearchDatabaseSource,
@@ -919,6 +927,7 @@ class ScreeningService(BaseService):
         screen_repo: repositories.ScreenAbstractResultRepository | None = None,
         resolution_repo: repositories.ScreeningResolutionRepository | None = None,
         search_repo: repositories.SearchResultRepository | None = None,
+        review_repo: repositories.SystematicReviewRepository | None = None,
     ):
         super().__init__(factory)
         self.screen_repo = screen_repo or repositories.ScreenAbstractResultRepository()
@@ -926,6 +935,7 @@ class ScreeningService(BaseService):
             resolution_repo or repositories.ScreeningResolutionRepository()
         )
         self.search_repo = search_repo or repositories.SearchResultRepository()
+        self.review_repo = review_repo or repositories.SystematicReviewRepository()
 
     def add_screening_result(
         self,
@@ -1111,6 +1121,201 @@ class ScreeningService(BaseService):
                     f"Error getting screening results for review {review_id}"
                 )
                 raise ServiceError(f"Failed to get screening results: {e}") from e
+
+    def perform_batch_abstract_screening(
+        self, review_id: uuid.UUID, search_result_ids_to_screen: list[uuid.UUID]
+    ) -> list[ScreenAbstractResultTuple]:
+        """Orchestrates batch abstract screening for a given review and list of search results.
+
+        - Fetches the SystematicReview.
+        - Fetches the SearchResult models.
+        - Invokes the screen_abstracts_batch agent.
+        - Persists ScreeningResult data as ScreenAbstractResult records.
+        - Updates SearchResult records with conservative_result_id and comprehensive_result_id.
+        - Handles errors from the screening agent.
+        """
+        logger.info(
+            f"Starting batch abstract screening for review {review_id} "
+            f"and {len(search_result_ids_to_screen)} search results."
+        )
+        processed_agent_results: list[ScreenAbstractResultTuple] = []
+
+        with self.session_factory() as session:  # Manages commit/rollback
+            review = self.review_repo.get_by_id(session, review_id)
+            if not review:
+                logger.error(f"SystematicReview with ID {review_id} not found.")
+                raise RecordNotFoundError(
+                    f"SystematicReview with ID {review_id} not found."
+                )
+
+            search_results_to_screen_models: list[models.SearchResult] = []
+            if search_result_ids_to_screen:
+                for sr_id in search_result_ids_to_screen:
+                    sr = self.search_repo.get_by_id(session, sr_id)
+                    if sr and sr.review_id == review_id:
+                        search_results_to_screen_models.append(sr)
+                    else:
+                        logger.warning(
+                            f"SearchResult with ID {sr_id} not found or does not belong to review {review_id}."
+                        )
+
+            if not search_results_to_screen_models:
+                logger.warning(
+                    f"No valid SearchResults found to screen for review {review_id}."
+                )
+                return []
+
+            # Assuming screen_abstracts_batch is a potentially long-running operation.
+            # The agent's signature: screen_abstracts_batch(batch: list[models.SearchResult], batch_idx: int, review: models.SystematicReview) -> ScreenAbstractsBatchOutput | None
+            agent_output: ScreenAbstractsBatchOutput | None = screen_abstracts_batch(
+                batch=search_results_to_screen_models, batch_idx=0, review=review
+            )
+
+            if not agent_output:
+                logger.error(f"Screening agent returned None for review {review_id}.")
+                return []  # Or raise an error based on requirements
+
+            # Deepcopy to ensure we are working with mutable copies if agent_output.results contains mutable structures,
+            # though NamedTuple with Pydantic models should generally be fine.
+            # This also helps in modifying processed_agent_results to include errors without affecting original agent output.
+            processed_agent_results = deepcopy(agent_output.results)
+
+            for i, result_tuple in enumerate(agent_output.results):
+                # Find the corresponding SearchResult model from the ones fetched in this session
+                # This ensures we're updating the attached instances.
+                original_search_result_from_agent = result_tuple.search_result
+                current_search_result_in_session = next(
+                    (
+                        sr_model
+                        for sr_model in search_results_to_screen_models
+                        if sr_model.id == original_search_result_from_agent.id
+                    ),
+                    None,
+                )
+
+                if not current_search_result_in_session:
+                    logger.error(
+                        f"Critical: Could not find search result {original_search_result_from_agent.id} from agent output in the current session's list. Skipping persistence for this item."
+                    )
+                    # Update the processed_agent_results to reflect this issue if needed,
+                    # e.g., by replacing the tuple with one containing an error.
+                    # For now, just logging and skipping.
+                    continue
+
+                # Process conservative result
+                if isinstance(
+                    result_tuple.conservative_result, schemas.ScreeningResult
+                ):
+                    kons_screening_result_dto: schemas.ScreeningResult = (
+                        result_tuple.conservative_result
+                    )
+                    kons_create_dto = schemas.ScreeningResultCreate(
+                        id=kons_screening_result_dto.id,
+                        review_id=review_id,
+                        decision=kons_screening_result_dto.decision,
+                        confidence_score=kons_screening_result_dto.confidence_score,
+                        rationale=kons_screening_result_dto.rationale,
+                        extracted_quotes=kons_screening_result_dto.extracted_quotes,
+                        exclusion_reason_categories=kons_screening_result_dto.exclusion_reason_categories,
+                        trace_id=kons_screening_result_dto.trace_id,
+                        model_name=kons_screening_result_dto.model_name,
+                        screening_strategy=kons_screening_result_dto.screening_strategy,
+                        start_time=kons_screening_result_dto.start_time,
+                        end_time=kons_screening_result_dto.end_time,
+                        response_metadata=kons_screening_result_dto.response_metadata,
+                    )
+                    # Ensure exclusion_reason_categories is a dict, and its inner lists are not None
+                    kons_dump = kons_create_dto.model_dump()
+                    erc_value_kons = kons_dump.get("exclusion_reason_categories")
+                    if isinstance(erc_value_kons, dict):
+                        for reason_key in erc_value_kons:
+                            if erc_value_kons[reason_key] is None:
+                                erc_value_kons[reason_key] = []
+                    elif erc_value_kons is None:
+                        kons_dump["exclusion_reason_categories"] = {}
+
+                    # Create instance from DTO dump. ScreenAbstractResult does NOT have search_result_id.
+                    kons_db_model = models.ScreenAbstractResult(**kons_dump)
+
+                    persisted_kons = self.screen_repo.add(session, kons_db_model)
+                    # The link is made on the SearchResult model instance:
+                    current_search_result_in_session.conservative_result_id = (
+                        persisted_kons.id
+                    )
+                elif isinstance(result_tuple.conservative_result, ScreeningError):
+                    logger.error(
+                        f"Conservative screening error for SearchResult {original_search_result_from_agent.id}: {result_tuple.conservative_result.error!r} - {result_tuple.conservative_result.message}"
+                    )
+                    # Ensure the error is reflected in the returned results
+                    processed_agent_results[i] = processed_agent_results[i]._replace(
+                        conservative_result=result_tuple.conservative_result
+                    )
+
+                # Process comprehensive result
+                if isinstance(
+                    result_tuple.comprehensive_result, schemas.ScreeningResult
+                ):
+                    comp_screening_result_dto: schemas.ScreeningResult = (
+                        result_tuple.comprehensive_result
+                    )
+                    comp_create_dto = schemas.ScreeningResultCreate(
+                        id=comp_screening_result_dto.id,
+                        review_id=review_id,
+                        decision=comp_screening_result_dto.decision,
+                        confidence_score=comp_screening_result_dto.confidence_score,
+                        rationale=comp_screening_result_dto.rationale,
+                        extracted_quotes=comp_screening_result_dto.extracted_quotes,
+                        exclusion_reason_categories=comp_screening_result_dto.exclusion_reason_categories,
+                        trace_id=comp_screening_result_dto.trace_id,
+                        model_name=comp_screening_result_dto.model_name,
+                        screening_strategy=comp_screening_result_dto.screening_strategy,
+                        start_time=comp_screening_result_dto.start_time,
+                        end_time=comp_screening_result_dto.end_time,
+                        response_metadata=comp_screening_result_dto.response_metadata,
+                    )
+                    # Ensure exclusion_reason_categories is a dict, and its inner lists are not None
+                    comp_dump = comp_create_dto.model_dump()
+                    erc_value_comp = comp_dump.get("exclusion_reason_categories")
+                    if isinstance(erc_value_comp, dict):
+                        for reason_key in erc_value_comp:
+                            if erc_value_comp[reason_key] is None:
+                                erc_value_comp[reason_key] = []
+                    elif erc_value_comp is None:
+                        comp_dump["exclusion_reason_categories"] = {}
+
+                    # Create instance from DTO dump. ScreenAbstractResult does NOT have search_result_id.
+                    comp_db_model = models.ScreenAbstractResult(**comp_dump)
+
+                    persisted_comp = self.screen_repo.add(session, comp_db_model)
+                    # The link is made on the SearchResult model instance:
+                    current_search_result_in_session.comprehensive_result_id = (
+                        persisted_comp.id
+                    )
+                elif isinstance(result_tuple.comprehensive_result, ScreeningError):
+                    logger.error(
+                        f"Comprehensive screening error for SearchResult {original_search_result_from_agent.id}: {result_tuple.comprehensive_result.error!r} - {result_tuple.comprehensive_result.message}"
+                    )
+                    # Ensure the error is reflected in the returned results
+                    processed_agent_results[i] = processed_agent_results[i]._replace(
+                        comprehensive_result=result_tuple.comprehensive_result
+                    )
+
+                # Update SearchResult in DB if any screening result ID was set
+                if (
+                    current_search_result_in_session.conservative_result_id
+                    or current_search_result_in_session.comprehensive_result_id
+                ):
+                    self.search_repo.update(session, current_search_result_in_session)
+                    logger.debug(
+                        f"Updated SearchResult {current_search_result_in_session.id} with screening linkage."
+                    )
+
+            session.commit()
+            logger.info(
+                f"Batch abstract screening completed successfully for review {review_id}."
+            )
+
+        return processed_agent_results
 
     # TODO: get_conflicting_results(...)
     # TODO: add_resolution(...)

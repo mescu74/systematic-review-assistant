@@ -1046,57 +1046,63 @@ def screen_abstracts_batch(
     chain_inputs = make_screen_abstracts_chain_input(batch, review)
     chain_outputs: list[ScreenAbstractResultTuple] = []
 
-    with get_openai_callback() as cb:
-        res = st.session_state.screen_abstracts_chain.batch(**chain_inputs)
-        if len(res) < len(batch):
-            pad_size = len(batch) - len(res)
-            res += [None] * pad_size
-            batch_logger.warning(
-                f"screen_abstracts_chain returned {len(res)} results, expected {len(batch)}, padding with None"
-            )
+    with get_openai_callback() as cb_openai:
+        try:
+            # logger.debug(f"Invoking chain with inputs: {chain_inputs!r}")
+            # OLD: res = st.session_state.screen_abstracts_chain.batch(**chain_inputs)
+            res = screen_abstracts_chain.batch(
+                **chain_inputs
+            )  # Use globally defined chain
 
-        for i, parallel_invocation in enumerate(res):
-            search_result = batch[i]
-            if isinstance(parallel_invocation, dict):
-                conservative = parallel_invocation.get(
-                    ScreeningStrategyType.CONSERVATIVE, parallel_invocation
-                )
-                comprehensive = parallel_invocation.get(
-                    ScreeningStrategyType.COMPREHENSIVE, parallel_invocation
-                )
-            else:
-                conservative = parallel_invocation
-                comprehensive = parallel_invocation
+            # Ensure results are correctly formed into ScreenAbstractResultTuple
+            # The on_end listener (screen_abstracts_chain_on_end_cb) is supposed to populate
+            for i, parallel_invocation in enumerate(res):
+                search_result = batch[i]
+                if isinstance(parallel_invocation, dict):
+                    conservative = parallel_invocation.get(
+                        ScreeningStrategyType.CONSERVATIVE, parallel_invocation
+                    )
+                    comprehensive = parallel_invocation.get(
+                        ScreeningStrategyType.COMPREHENSIVE, parallel_invocation
+                    )
+                else:
+                    conservative = parallel_invocation
+                    comprehensive = parallel_invocation
 
-            if not isinstance(conservative, ScreeningResult):
-                conservative = ScreeningError(
+                if not isinstance(conservative, ScreeningResult):
+                    conservative = ScreeningError(
+                        search_result=search_result,
+                        error=conservative,
+                    )
+                    batch_logger.error(f"Conservative reviewer error: {conservative!r}")
+                else:
+                    search_result.conservative_result_id = conservative.id
+
+                if not isinstance(comprehensive, ScreeningResult):
+                    comprehensive = ScreeningError(
+                        search_result=search_result,
+                        error=comprehensive,
+                    )
+                    batch_logger.error(
+                        f"Comprehensive reviewer error: {comprehensive!r}"
+                    )
+                else:
+                    search_result.comprehensive_result_id = comprehensive.id
+
+                res_tuple = ScreenAbstractResultTuple(
                     search_result=search_result,
-                    error=conservative,
+                    conservative_result=conservative,
+                    comprehensive_result=comprehensive,
                 )
-                batch_logger.error(f"Conservative reviewer error: {conservative!r}")
-            else:
-                search_result.conservative_result_id = conservative.id
+                chain_outputs.append(res_tuple)
 
-            if not isinstance(comprehensive, ScreeningResult):
-                comprehensive = ScreeningError(
-                    search_result=search_result,
-                    error=comprehensive,
-                )
-                batch_logger.error(f"Comprehensive reviewer error: {comprehensive!r}")
-            else:
-                search_result.comprehensive_result_id = comprehensive.id
-
-            res_tuple = ScreenAbstractResultTuple(
-                search_result=search_result,
-                conservative_result=conservative,
-                comprehensive_result=comprehensive,
+            return ScreenAbstractsBatchOutput(
+                results=chain_outputs,
+                cb=deepcopy(cb_openai),
             )
-            chain_outputs.append(res_tuple)
-
-        return ScreenAbstractsBatchOutput(
-            results=chain_outputs,
-            cb=deepcopy(cb),
-        )
+        except Exception:
+            batch_logger.error("Exception occurred during screen_abstracts_batch")
+            return None
 
 
 # TODO: update
