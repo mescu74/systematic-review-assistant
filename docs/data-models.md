@@ -816,6 +816,8 @@ class ScreeningResolutionRead(BaseSchema):
 
 These schemas are used for creating, reading, and updating `BenchmarkRun` and `BenchmarkResultItem` entities. All schemas inherit from `core.schemas.BaseSchema`.
 
+The `BenchmarkRun` SQLModel itself (defined in `src/sr_assistant/core/models.py`) will have database-generated `created_at` and `updated_at` fields, similar to `SystematicReview`. The `review_id` field serves as a foreign key to `SystematicReview.id`.
+
 #### `BenchmarkRunBase`
 
 Base schema for benchmark runs, containing common fields. All fields are optional to facilitate inheritance by `BenchmarkRunUpdate` and to allow `BenchmarkRunCreate` to specify only necessary fields for initial creation.
@@ -829,7 +831,7 @@ from sr_assistant.core.schemas import BaseSchema
 from sr_assistant.core.types import AwareDatetime # Assuming AwareDatetime is defined
 
 class BenchmarkRunBase(BaseSchema):
-    benchmark_review_id: uuid.UUID | None = None
+    review_id: uuid.UUID | None = None
     """ID of the SystematicReview used as the protocol for this benchmark run."""
     config_details: Dict[str, Any] | None = None # Using Dict[str, Any] for flexibility, maps to JSONB
     """Flexible JSONB field to store configuration details used for this run (e.g., LLM models, prompt versions)."""
@@ -879,7 +881,7 @@ from pydantic import Field
 from sr_assistant.core.schemas import BaseSchema # Assuming BaseSchema path
 
 class BenchmarkRunCreate(BenchmarkRunBase):
-    benchmark_review_id: uuid.UUID
+    review_id: uuid.UUID
     """ID of the SystematicReview (protocol) for this run. This is mandatory for creation."""
     config_details: Dict[str, Any] = Field(default_factory=dict)
     """Configuration details for the run, defaults to an empty dict."""
@@ -914,10 +916,10 @@ class BenchmarkRunRead(BenchmarkRunBase):
     id: uuid.UUID
     """Unique identifier of the benchmark run."""
     created_at: AwareDatetime
-    """Timestamp of when the benchmark run was created."""
+    """Timestamp of when the benchmark run was created (database-generated)."""
     updated_at: AwareDatetime
-    """Timestamp of when the benchmark run was last updated."""
-    benchmark_review_id: uuid.UUID # Should be non-optional after creation
+    """Timestamp of when the benchmark run was last updated (database-generated)."""
+    review_id: uuid.UUID # Should be non-optional after creation
     """ID of the SystematicReview (protocol) used for this run."""
     config_details: Dict[str, Any] # Should be non-optional if always present
     """Configuration details used for the run."""
@@ -1000,9 +1002,9 @@ class BenchmarkResultItemRead(BenchmarkResultItemBase):
     id: uuid.UUID
     """Unique identifier of the benchmark result item."""
     created_at: AwareDatetime
-    """Timestamp of when the item was created."""
+    """Timestamp of when the item was created (database-generated)."""
     updated_at: AwareDatetime
-    """Timestamp of when the item was last updated."""
+    """Timestamp of when the item was last updated (database-generated)."""
     # All fields from BenchmarkResultItemBase are inherited.
     # Ensure benchmark_run_id and search_result_id are non-optional for read.
     benchmark_run_id: uuid.UUID
@@ -1049,3 +1051,4 @@ This section summarizes key discrepancies found or recommendations made while do
 | Schema Rename        | 2025-05-15 | 0.8     | Renamed `ScreeningResolutionSchema` to `ResolverOutputSchema` globally. | AI Assistant |
 | Data Model Updates for Benchmark | 2025-05-16 | 0.8 (DM) | Added SQLModel and Pydantic schema definitions for BenchmarkRun and BenchmarkResultItem. Updated ERD. | Architect Agent |
 | Data Model Refinements | 2025-05-20 | 0.8.1 (DM) | Added Benchmark models/schemas. Corrected `BenchmarkResultItem.final_decision` naming (SRA's output for run) & updated notes on existing schemas. | Architect Agent |
+| BenchmarkRun FK & Timestamps | 2025-05-20 | 0.8.2 (DM) | Corrected `BenchmarkRun.review_id` (was `benchmark_review_id`) and clarified database-generated timestamps. Updated ERD. | AI Assistant |
