@@ -57,10 +57,10 @@ The current abstract screening process uses two LLM-driven reviewers with distin
 ### FR3: Prepare Resolver Input
 
 - For each disagreement, the system must gather the necessary context:
-  - Full `PubMedResult` data (PMID, title, abstract, journal, year, etc.).
-  - Relevant `SystematicReview` protocol data (background, research question, PICO components from `criteria_framework_answers`, exclusion criteria string).
-  - The complete `ScreeningResult` object from the "conservative" reviewer.
-  - The complete `ScreeningResult` object from the "comprehensive" reviewer.
+    - Full `PubMedResult` data (PMID, title, abstract, journal, year, etc.).
+    - Relevant `SystematicReview` protocol data (background, research question, PICO components from `criteria_framework_answers`, exclusion criteria string).
+    - The complete `ScreeningResult` object from the "conservative" reviewer.
+    - The complete `ScreeningResult` object from the "comprehensive" reviewer.
 - This context must be formatted according to the input schema expected by the resolver prompt (`resolver_prompt` in `screening_agents.py`).
 
 ### FR4: Invoke Resolver Chain
@@ -78,20 +78,20 @@ The current abstract screening process uses two LLM-driven reviewers with distin
 
 - A new database table, `screening_resolutions`, must be created to store the resolver's output.
 - **Schema:**
-  - `id`: UUID (Primary Key)
-  - `pubmed_result_id`: UUID (Foreign Key to `pubmed_results.id`)
-  - `systematic_review_id`: UUID (Foreign Key to `systematic_reviews.id`)
-  - `conservative_result_id`: UUID (Foreign Key to `screening_results.id`)
-  - `comprehensive_result_id`: UUID (Foreign Key to `screening_results.id`)
-  - `resolver_decision`: `ScreeningDecisionType` (Enum: INCLUDE, EXCLUDE, UNCERTAIN) - The final decision from the resolver.
-  - `resolver_reasoning`: TEXT - The reasoning provided by the resolver.
-  - `resolver_confidence_score`: FLOAT - The confidence score from the resolver.
-  - `resolver_model_name`: VARCHAR - The name of the LLM used for resolution.
-  - `created_at`: TIMESTAMPTZ (default now())
-  - `trace_id`: `uuid.UUID | None` (optional, for linking to LangSmith trace)
+    - `id`: UUID (Primary Key)
+    - `pubmed_result_id`: UUID (Foreign Key to `pubmed_results.id`)
+    - `systematic_review_id`: UUID (Foreign Key to `systematic_reviews.id`)
+    - `conservative_result_id`: UUID (Foreign Key to `screening_results.id`)
+    - `comprehensive_result_id`: UUID (Foreign Key to `screening_results.id`)
+    - `resolver_decision`: `ScreeningDecisionType` (Enum: INCLUDE, EXCLUDE, UNCERTAIN) - The final decision from the resolver.
+    - `resolver_reasoning`: TEXT - The reasoning provided by the resolver.
+    - `resolver_confidence_score`: FLOAT - The confidence score from the resolver.
+    - `resolver_model_name`: VARCHAR - The name of the LLM used for resolution.
+    - `created_at`: TIMESTAMPTZ (default now())
+    - `trace_id`: `uuid.UUID | None` (optional, for linking to LangSmith trace)
 - The `PubMedResult` table must be updated with:
-  - `final_decision`: `ScreeningDecisionType | None` (Enum, nullable) - Stores the final outcome after potential resolution. Default is NULL.
-  - `resolution_id`: `uuid.UUID | None` (Foreign Key to `screening_resolutions.id`, nullable) - Links to the resolution record if one exists.
+    - `final_decision`: `ScreeningDecisionType | None` (Enum, nullable) - Stores the final outcome after potential resolution. Default is NULL.
+    - `resolution_id`: `uuid.UUID | None` (Foreign Key to `screening_resolutions.id`, nullable) - Links to the resolution record if one exists.
 - After successful resolution, the system must create a new `ScreeningResolution` record and update the corresponding `PubMedResult` record's `final_decision` and `resolution_id` fields.
 
 ### FR7: Update Screening Results UI
@@ -135,34 +135,34 @@ The current abstract screening process uses two LLM-driven reviewers with distin
 
 - **Task:** Create a new function `resolve_batch_disagreements(batch_results: list[ScreenAbstractResultTuple], review: SystematicReview)`.
 - **Task:** Inside `resolve_batch_disagreements`:
-  - Iterate through `batch_results` to identify disagreements based on FR1 logic.
-  - If disagreements exist:
-    - Prepare resolver input data for each disagreement (FR3).
-    - Batch the inputs.
-    - Invoke `resolver_chain.batch(...)` (FR4).
-    - Process results:
-      - Parse `ResolverOutput` (FR5).
-      - Create `ScreeningResolution` model instances.
-      - Use `ScreeningResolutionRepository` to save resolution records (FR6).
-      - Use `PubMedResultRepository` to update `final_decision` and `resolution_id` on the `PubMedResult` records (FR6).
-    - Handle potential errors during the resolver batch call.
+    - Iterate through `batch_results` to identify disagreements based on FR1 logic.
+    - If disagreements exist:
+        - Prepare resolver input data for each disagreement (FR3).
+        - Batch the inputs.
+        - Invoke `resolver_chain.batch(...)` (FR4).
+        - Process results:
+            - Parse `ResolverOutput` (FR5).
+            - Create `ScreeningResolution` model instances.
+            - Use `ScreeningResolutionRepository` to save resolution records (FR6).
+            - Use `PubMedResultRepository` to update `final_decision` and `resolution_id` on the `PubMedResult` records (FR6).
+        - Handle potential errors during the resolver batch call.
 - **Task:** Modify the main workflow in `screen_abstracts.py`:
-  - After the call to `screen_abstracts_batch` and processing its results:
-    - Display a status indicator for the resolution step.
-    - Call `resolve_batch_disagreements` with the results.
-    - Update the status indicator upon completion or error.
-    - Ensure the UI display logic (TD5) uses the potentially updated `PubMedResult` data.
+    - After the call to `screen_abstracts_batch` and processing its results:
+        - Display a status indicator for the resolution step.
+        - Call `resolve_batch_disagreements` with the results.
+        - Update the status indicator upon completion or error.
+        - Ensure the UI display logic (TD5) uses the potentially updated `PubMedResult` data.
 
 ### TD5: UI Update (`src/sr_assistant/app/pages/screen_abstracts.py`)
 
 - **Task:** Modify the data loading/preparation for the results display (e.g., the dataframe) to include `final_decision` and `resolution_id` from the `PubMedResult` objects.
 - **Task:** Update the display logic:
-  - Show `final_decision` if it exists, otherwise show the original decisions (or indicate conflict).
-  - Add a visual cue (e.g., icon, 'Resolved' tag) if `resolution_id` is present.
+    - Show `final_decision` if it exists, otherwise show the original decisions (or indicate conflict).
+    - Add a visual cue (e.g., icon, 'Resolved' tag) if `resolution_id` is present.
 - **Task:** Implement a way to show `resolver_reasoning`. Options:
-  - Add a column to the dataframe (might be too verbose).
-  - Use a tooltip on the visual cue.
-  - Add an expander or button that fetches and displays the `ScreeningResolution` details (reasoning, confidence, model) using the `resolution_id`.
+    - Add a column to the dataframe (might be too verbose).
+    - Use a tooltip on the visual cue.
+    - Add an expander or button that fetches and displays the `ScreeningResolution` details (reasoning, confidence, model) using the `resolution_id`.
 
 ### TD6: Testing
 

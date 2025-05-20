@@ -1,3 +1,6 @@
+# Copyright 2025 Gareth Morgan
+# SPDX-License-Identifier: MIT
+
 """Screening prompts and agents/chains. Also Streamlit chat UI agent(s).
 
 These are not agents, just chains.
@@ -34,7 +37,6 @@ under the hood.
 
 from __future__ import annotations
 
-import os
 import typing as t
 import uuid
 from copy import deepcopy
@@ -51,12 +53,12 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
-    SecretStr,
     TypeAdapter,
     model_validator,
 )
 
 import sr_assistant.app.utils as ut
+from sr_assistant.app.config import get_settings
 from sr_assistant.core import models, schemas
 from sr_assistant.core.schemas import (
     ResolverOutputSchema,
@@ -77,11 +79,11 @@ resolver_model = (
         model="gemini-2.5-pro-preview-05-06",
         temperature=0,
         max_tokens=None,
-        thinking_budget=24576,
+        # thinking_budget=24576,  # TODO: This is a langchain-google-genai v2.1.4 featere, but we can't upgrade due to LangChain minor version upgrade breaking the way on_end listener works (its modifications to RunTree are not present in chain output in later versions. We will file a bug report for this as it's an undocumented breaking change.) For now we've pinned LangChain and Pydantic versions to known working versions. We may need to refactor screening logic later on, for now we stick with this setup. Gemini uses thinking by default, without a budget, how deeply it thinks is dependent on the prompt, so it must encourage deep analysis!)  # noqa: W505
         timeout=None,
         max_retries=5,
-        api_key=SecretStr(os.getenv("GOOGLE_API_KEY") or ""),
-        convert_system_message_to_human=True,
+        api_key=get_settings().GOOGLE_API_KEY,
+        convert_system_message_to_human=True,  # Gemini doesn't support system messages
     )
     .with_structured_output(ResolverOutputSchema)
     .with_retry(
@@ -1051,23 +1053,19 @@ def screen_abstracts_batch(
             # logger.debug(f"Invoking chain with inputs: {chain_inputs!r}")
             # OLD: res = st.session_state.screen_abstracts_chain.batch(**chain_inputs)
             res = screen_abstracts_chain.batch(
-                **chain_inputs
+                **chain_inputs  # type: ignore
             )  # Use globally defined chain
 
             # Ensure results are correctly formed into ScreenAbstractResultTuple
             # The on_end listener (screen_abstracts_chain_on_end_cb) is supposed to populate
             for i, parallel_invocation in enumerate(res):
                 search_result = batch[i]
-                if isinstance(parallel_invocation, dict):
-                    conservative = parallel_invocation.get(
-                        ScreeningStrategyType.CONSERVATIVE, parallel_invocation
-                    )
-                    comprehensive = parallel_invocation.get(
-                        ScreeningStrategyType.COMPREHENSIVE, parallel_invocation
-                    )
-                else:
-                    conservative = parallel_invocation
-                    comprehensive = parallel_invocation
+                conservative = parallel_invocation.get(
+                    ScreeningStrategyType.CONSERVATIVE, parallel_invocation
+                )
+                comprehensive = parallel_invocation.get(
+                    ScreeningStrategyType.COMPREHENSIVE, parallel_invocation
+                )
 
                 if not isinstance(conservative, ScreeningResult):
                     conservative = ScreeningError(
@@ -1101,7 +1099,7 @@ def screen_abstracts_batch(
                 cb=deepcopy(cb_openai),
             )
         except Exception:
-            batch_logger.error("Exception occurred during screen_abstracts_batch")
+            batch_logger.exception("Exception occurred during screen_abstracts_batch")
             return None
 
 
@@ -1238,7 +1236,7 @@ def invoke_resolver_chain(
     except Exception:  # Exception details will be logged by @logger.catch
         # The @logger.catch decorator handles logging the exception.
         # This block ensures 'None' is returned to the caller on error.
-        logger.error(
+        logger.exception(
             f"Resolver chain invocation failed internally for SearchResult ID: {search_result.id!r}. See @logger.catch details."
         )
         return None

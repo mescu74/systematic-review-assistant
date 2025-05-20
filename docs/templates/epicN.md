@@ -27,16 +27,16 @@
 
 - **User Story / Goal:** {Describe the story goal, ideally in "As a [role], I want [action], so that [benefit]" format, or clearly state the technical goal.}
 - **Detailed Requirements:**
-  - {Bulleted list explaining the specific functionalities, behaviors, or tasks required for this story.}
-  - {Reference other documents for context if needed, e.g., "Handle data according to `docs/data-models.md#EntityName`".}
-  - {Include any technical constraints or details identified during refinement - added by Architect/PM/Tech SM.}
+    - {Bulleted list explaining the specific functionalities, behaviors, or tasks required for this story.}
+    - {Reference other documents for context if needed, e.g., "Handle data according to `docs/data-models.md#EntityName`".}
+    - {Include any technical constraints or details identified during refinement - added by Architect/PM/Tech SM.}
 - **Acceptance Criteria (ACs):**
-  - AC1: {Specific, verifiable condition that must be met.}
-  - AC2: {Another verifiable condition.}
-  - ACN: {...}
+    - AC1: {Specific, verifiable condition that must be met.}
+    - AC2: {Another verifiable condition.}
+    - ACN: {...}
 - **Tasks (Optional Initial Breakdown):**
-  - [ ] {High-level task 1}
-  - [ ] {High-level task 2}
+    - [ ] {High-level task 1}
+    - [ ] {High-level task 2}
 - **Dependencies:** {List any dependencies on other stories or epics. Note if this story builds on functionality from previous epics.}
 
 ---
@@ -45,12 +45,12 @@
 
 - **User Story / Goal:** {...}
 - **Detailed Requirements:**
-  - {...}
+    - {...}
 - **Acceptance Criteria (ACs):**
-  - AC1: {...}
-  - AC2: {...}
+    - AC1: {...}
+    - AC2: {...}
 - **Tasks (Optional Initial Breakdown):**
-  - [ ] {...}
+    - [ ] {...}
 - **Dependencies:** {List dependencies, if any}
 
 ---

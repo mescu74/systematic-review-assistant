@@ -7,10 +7,11 @@ This document details the key SQLModel database models and Pydantic schemas used
 - [Guiding Principles](#guiding-principles)
 - [SQLModel Database Models (Overview)](#sqlmodel-database-models-overview)
 - [Pydantic Schemas for API Operations and LLM Interactions](#pydantic-schemas-for-api-operations-and-llm-interactions)
-  - [Systematic Review Schemas](#systematic-review-schemas)
-  - [Search Result Schemas](#search-result-schemas)
-  - [Screening Schemas (LLM and Service Layer)](#screening-schemas-llm-and-service-layer)
-  - [Suggestion Agent Schemas](#suggestion-agent-schemas)
+    - [Systematic Review Schemas](#systematic-review-schemas)
+    - [Search Result Schemas](#search-result-schemas)
+    - [Screening Schemas (LLM and Service Layer)](#screening-schemas-llm-and-service-layer)
+    - [Benchmark Schemas](#benchmark-schemas)
+    - [Suggestion Agent Schemas](#suggestion-agent-schemas)
 - [Notes on Existing `src/sr_assistant/core/schemas.py`](#notes-on-existing-srcsr_assistantcoreschemaspy)
 
 ## Guiding Principles
@@ -234,7 +235,7 @@ class SystematicReviewUpdate(BaseSchema):
     """Any additional metadata associated with the review, stored as a JSON object."""
 ```
 
-**Note on existing `schemas.py`:** The current `SystematicReviewUpdate` in `schemas.py` inherits from a `SystematicReviewBase` which has non-optional fields, causing linter errors when `SystematicReviewUpdate` tries to make them optional. The definition above, with all fields explicitly optional and typed with `| None = None`, is the correct pattern for an update schema.
+**Note on `schemas.py`:** The `SystematicReviewUpdate` in `schemas.py` correctly makes all fields optional for partial updates by redefining them with `| None = Field(default=None, ...)` within its own definition, inheriting from `SystematicReviewBase` but ensuring optionality.
 
 #### `SystematicReviewRead`
 
@@ -365,10 +366,7 @@ class SearchResultRead(BaseSchema):
     # resolution: "ScreeningResolutionRead" | None = None
 ```
 
-**Note on existing `schemas.py`:**
-- The current `SearchResultRead` in `schemas.py` has `year: str | None` (which is correct per `models.py`).
-- It uses `t.Mapping` which should be `collections.abc.Mapping`.
-- It may be missing `final_decision` and `resolution_id`. Add these.
+**Note on `schemas.py`:** The `SearchResultRead` in `schemas.py` correctly defines `year` as `str | None`. It uses `MutableMapping[str, JsonValue]` (from `collections.abc`) for `raw_data` and `source_metadata`. Key fields like `final_decision` and `resolution_id` are present in the schema definition in `schemas.py`.
 
 #### `SearchResultUpdate`
 
@@ -417,7 +415,8 @@ class SearchResultUpdate(BaseSchema):
     resolution_id: uuid.UUID | None = None
     """Identifier of the ScreeningResolution record."""
 ```
-**Recommendation for `schemas.py`:** Create the `SearchResultUpdate` schema as defined above.
+
+**Note on `schemas.py`:** The `SearchResultUpdate` schema is defined in `schemas.py` and aligns with the structure presented here, allowing partial updates to `SearchResult` records.
 
 ### Screening Schemas (LLM and Service Layer)
 
@@ -552,9 +551,10 @@ class ScreeningResultCreate(BaseSchema):
     """Additional metadata from the LLM invocation (inputs, token usage, etc.)."""
 ```
 **Note on linking `ScreenAbstractResult` to `SearchResult`:**
-The `models.SearchResult` (defined in `src/sr_assistant/core/models.py`) already contains `conservative_result_id` and `comprehensive_result_id`. These fields are foreign keys to `ScreenAbstractResult.id`. 
+The `models.SearchResult` (defined in `src/sr_assistant/core/models.py`) already contains `conservative_result_id` and `comprehensive_result_id`. These fields are foreign keys to `ScreenAbstractResult.id`.
 This means a `ScreenAbstractResult` record is created first (using data from this `ScreeningResultCreate` schema).
 The `ScreeningService.add_screening_decision` method (defined in `docs/api-reference.md`) is then responsible for:
+
    1. Taking `search_result_id` and `screening_strategy` as parameters (alongside `ScreeningResultCreate` data).
    2. Creating the `ScreenAbstractResult` record.
    3. Updating the corresponding `SearchResult` record's `conservative_result_id` or `comprehensive_result_id` field with the ID of the newly created `ScreenAbstractResult`.
@@ -812,86 +812,228 @@ class ScreeningResolutionRead(BaseSchema):
     # comprehensive_result_id: uuid.UUID | None
 ```
 
-### Suggestion Agent Schemas
+### Benchmark Schemas
 
-These schemas are related to the PICO suggestion agent functionality in `protocol.py`. All schemas inherit from `core.schemas.BaseSchema`.
+These schemas are used for creating, reading, and updating `BenchmarkRun` and `BenchmarkResultItem` entities. All schemas inherit from `core.schemas.BaseSchema`.
 
-#### `PicosSuggestions` (LLM Output)
+#### `BenchmarkRunBase`
 
-Structured PICO suggestions from the LLM, as defined in `src/sr_assistant/core/schemas.py`.
+Base schema for benchmark runs, containing common fields. All fields are optional to facilitate inheritance by `BenchmarkRunUpdate` and to allow `BenchmarkRunCreate` to specify only necessary fields for initial creation.
 
 ```python
+import uuid
+from typing import Dict, Any
+from pydantic import Field, JsonValue # Assuming JsonValue is appropriate for config_details
+
 from sr_assistant.core.schemas import BaseSchema
+from sr_assistant.core.types import AwareDatetime # Assuming AwareDatetime is defined
 
-class PicosSuggestions(BaseSchema):
-    population: str
-    """Suggested Population/Problem description based on context."""
-
-    intervention: str
-    """Suggested Intervention/Exposure description."""
-
-    comparison: str
-    """Suggested Comparison/Control description."""
-
-    outcome: str
-    """Suggested Outcome description."""
-
-    general_critique: str
-    """General critique and suggestions for the overall protocol based on the input research question and background."""
+class BenchmarkRunBase(BaseSchema):
+    benchmark_review_id: uuid.UUID | None = None
+    """ID of the SystematicReview used as the protocol for this benchmark run."""
+    config_details: Dict[str, Any] | None = None # Using Dict[str, Any] for flexibility, maps to JSONB
+    """Flexible JSONB field to store configuration details used for this run (e.g., LLM models, prompt versions)."""
+    run_notes: str | None = None
+    """Optional user-provided notes about the benchmark run."""
+    tp: int | None = None
+    """True Positives count."""
+    fp: int | None = None
+    """False Positives count."""
+    fn: int | None = None
+    """False Negatives count."""
+    tn: int | None = None
+    """True Negatives count."""
+    sensitivity: float | None = None
+    """Sensitivity score (Recall)."""
+    specificity: float | None = None
+    """Specificity score."""
+    accuracy: float | None = None
+    """Overall accuracy score."""
+    ppv: float | None = None
+    """Positive Predictive Value (Precision)."""
+    npv: float | None = None
+    """Negative Predictive Value."""
+    f1_score: float | None = None
+    """F1 Score."""
+    mcc_score: float | None = None
+    """Matthews Correlation Coefficient."""
+    cohen_kappa: float | None = None
+    """Cohen's Kappa for inter-rater reliability (AI vs Human)."""
+    pabak: float | None = None
+    """Prevalence and Bias Adjusted Kappa."""
+    lr_plus: float | None = None
+    """Positive Likelihood Ratio."""
+    lr_minus: float | None = None
+    """Negative Likelihood Ratio."""
 ```
 
-#### `SuggestionResult` (Agent Output)
+#### `BenchmarkRunCreate`
 
-A `TypedDict` (defined in `src/sr_assistant/core/schemas.py`) that wraps the output from the suggestion agent.
+Schema for creating a new benchmark run. Metrics are typically calculated and populated later via an update.
 
 ```python
-from typing import TypedDict
-# from .picos_suggestions import PicosSuggestions # If PicosSuggestions is in a separate file
+import uuid
+from typing import Dict, Any # Python 3.9+ can use dict instead of Dict
+from pydantic import Field
 
-class SuggestionResult(TypedDict):
-    pico: PicosSuggestions | None
-    """The structured PICO suggestions, or None if not applicable/generated."""
+from sr_assistant.core.schemas import BaseSchema # Assuming BaseSchema path
 
-    raw_response: str
-    """The raw textual response from the LLM, which includes the general critique."""
+class BenchmarkRunCreate(BenchmarkRunBase):
+    benchmark_review_id: uuid.UUID
+    """ID of the SystematicReview (protocol) for this run. This is mandatory for creation."""
+    config_details: Dict[str, Any] = Field(default_factory=dict)
+    """Configuration details for the run, defaults to an empty dict."""
+    # Metrics are not set on creation, they are calculated and updated later.
+    # run_notes can be set on creation if desired, or later.
+```
+
+#### `BenchmarkRunUpdate`
+
+Schema for updating an existing benchmark run, primarily used to populate calculated metrics and potentially add notes.
+
+```python
+from sr_assistant.core.schemas import BaseSchema # Assuming BaseSchema path
+
+class BenchmarkRunUpdate(BenchmarkRunBase):
+    # All fields are inherited as Optional from BenchmarkRunBase, allowing partial updates.
+    pass
+```
+
+#### `BenchmarkRunRead`
+
+Schema for returning benchmark run data, including database-generated fields and calculated metrics.
+
+```python
+import uuid
+from typing import Dict, Any
+
+from sr_assistant.core.schemas import BaseSchema
+from sr_assistant.core.types import AwareDatetime
+
+class BenchmarkRunRead(BenchmarkRunBase):
+    id: uuid.UUID
+    """Unique identifier of the benchmark run."""
+    created_at: AwareDatetime
+    """Timestamp of when the benchmark run was created."""
+    updated_at: AwareDatetime
+    """Timestamp of when the benchmark run was last updated."""
+    benchmark_review_id: uuid.UUID # Should be non-optional after creation
+    """ID of the SystematicReview (protocol) used for this run."""
+    config_details: Dict[str, Any] # Should be non-optional if always present
+    """Configuration details used for the run."""
+    # Metric fields inherited from BenchmarkRunBase remain Optional[float/int], 
+    # as they might not be populated if a run is in progress or failed before calculation.
+```
+
+#### `BenchmarkResultItemBase`
+
+Base schema for individual benchmark result items.
+
+```python
+import uuid
+from pydantic import Field
+
+from sr_assistant.core.schemas import BaseSchema
+from sr_assistant.core.types import ScreeningDecisionType, AwareDatetime
+
+class BenchmarkResultItemBase(BaseSchema):
+    benchmark_run_id: uuid.UUID | None = None
+    """ID of the BenchmarkRun this item belongs to."""
+    search_result_id: uuid.UUID | None = None
+    """ID of the SearchResult being benchmarked."""
+    human_decision: bool | None = None
+    """Ground truth human decision (True for include, False for exclude)."""
+    conservative_decision: ScreeningDecisionType | None = None
+    """Decision from the SRA's conservative reviewer."""
+    conservative_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    """Confidence score from the conservative reviewer."""
+    conservative_rationale: str | None = None
+    """Rationale from the conservative reviewer."""
+    comprehensive_decision: ScreeningDecisionType | None = None
+    """Decision from the SRA's comprehensive reviewer."""
+    comprehensive_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    """Confidence score from the comprehensive reviewer."""
+    comprehensive_rationale: str | None = None
+    """Rationale from the comprehensive reviewer."""
+    final_decision: ScreeningDecisionType | None = None
+    """The SRA's overall output decision for this item in this specific benchmark run."""
+    classification: str | None = None
+    """Classification of the SRA's decision against human ground truth (e.g., TP, FP, TN, FN)."""
+```
+
+#### `BenchmarkResultItemCreate`
+
+Schema for creating a new benchmark result item.
+
+```python
+import uuid
+
+from sr_assistant.core.schemas import BaseSchema # Assuming BaseSchema path
+from sr_assistant.core.types import ScreeningDecisionType
+
+class BenchmarkResultItemCreate(BenchmarkResultItemBase):
+    benchmark_run_id: uuid.UUID
+    """ID of the BenchmarkRun this item belongs to. Mandatory."""
+    search_result_id: uuid.UUID
+    """ID of the SearchResult being benchmarked. Mandatory."""
+    human_decision: bool | None # Allow None if ground truth might be missing, though PRD implies it's present
+    """Ground truth human decision."""
+    final_decision: ScreeningDecisionType
+    """The SRA's overall output decision for this item in this run. Mandatory at creation of result item."""
+    classification: str
+    """Classification (TP, FP, TN, FN). Mandatory at creation of result item."""
+    # Other decision/rationale fields are inherited as Optional from BenchmarkResultItemBase
+    # and should be populated if available from the screening/resolver process.
+```
+
+#### `BenchmarkResultItemRead`
+
+Schema for returning benchmark result item data.
+
+```python
+import uuid
+
+from sr_assistant.core.schemas import BaseSchema # Assuming BaseSchema path
+from sr_assistant.core.types import AwareDatetime, ScreeningDecisionType
+
+class BenchmarkResultItemRead(BenchmarkResultItemBase):
+    id: uuid.UUID
+    """Unique identifier of the benchmark result item."""
+    created_at: AwareDatetime
+    """Timestamp of when the item was created."""
+    updated_at: AwareDatetime
+    """Timestamp of when the item was last updated."""
+    # All fields from BenchmarkResultItemBase are inherited.
+    # Ensure benchmark_run_id and search_result_id are non-optional for read.
+    benchmark_run_id: uuid.UUID
+    search_result_id: uuid.UUID
+    # final_decision (SRA's output for this run item) and classification should ideally be non-optional
+    # for a Read schema if they are always populated when an item is readable.
+    final_decision: ScreeningDecisionType
+    classification: str
 ```
 
 ## Notes on Existing `src/sr_assistant/core/schemas.py`
 
 This section summarizes key discrepancies found or recommendations made while documenting the data models and schemas above, relative to the current state of `src/sr_assistant/core/schemas.py`.
 
-- **`SystematicReviewUpdate` Inheritance/Structure:**
-  - **Issue:** Current `SystematicReviewUpdate` inherits `SystematicReviewBase` and attempts to make non-optional base fields optional, causing linter errors.
-  - **Recommendation:** `SystematicReviewUpdate` should have all its fields explicitly defined as `Optional[<type>] = Field(default=None)`. It may be cleaner for it not to inherit `SystematicReviewBase` if this continues to cause issues, or `SystematicReviewBase` could be refactored such that its fields are `Optional` and `SystematicReviewCreate` enforces non-optionality where needed.
+- **`SystematicReviewUpdate` Inheritance/Structure:** The `SystematicReviewUpdate` in `schemas.py` now correctly redefines fields from `SystematicReviewBase` as optional, resolving previous linter concerns about type overrides.
 
-- **`SearchResultRead.year` Type:**
-  - **Current:** `str | None` (This is correct as per `models.SearchResult.year`).
-  - **Note:** The `SearchService._map_pubmed_to_search_result` method (in `services.py`) had a linter warning implying it might try to pass an `int`. The service/mapping logic must ensure it provides a `str` to align with the model and this schema.
+- **`SearchResultRead.year` Type:** The `year` field is correctly `str | None` in both `models.py` and `schemas.py` (`SearchResultRead`).
 
-- **`t.Mapping` vs. `collections.abc.Mapping`:**
-  - **Issue:** `SearchResultRead` in `schemas.py` uses `t.Mapping` for `raw_data` and `source_metadata`.
-  - **Recommendation:** Replace `typing.Mapping` with `collections.abc.Mapping` as `typing.Mapping` is deprecated since Python 3.9.
+- **Mapping Types:** `schemas.py` utilizes `MutableMapping[str, JsonValue]` (from `collections.abc`) for fields like `raw_data` and `source_metadata` in `SearchResultRead`, which is appropriate.
 
-- **Missing `Update` Schemas:**
-  - `SearchResultUpdate` is not currently defined in `schemas.py` but is required by the `SearchService` API.
-  - `ScreeningResultUpdate` is not currently defined but is good practice for the `ScreeningService` API.
+- **`Update` Schemas:** `SearchResultUpdate` and `ScreeningResultUpdate` are now defined in `schemas.py`.
 
-- **Missing `Create` Schemas (for Service Layer):**
-  - `ScreeningResultCreate` is not currently defined but is the recommended input schema for `ScreeningService.add_screening_decision`.
-  - A `ScreeningResolutionCreate` (or similar) would be beneficial for `ScreeningService.store_resolution_results` to clearly define the data contract for creating a `ScreeningResolution` model, separate from the direct LLM output (`ResolverOutputSchema`).
+- **`Create` Schemas (for Service Layer):** `ScreeningResultCreate` and `ScreeningResolutionCreate` are now defined in `schemas.py`.
 
-- **`ResolverOutputSchema` Fields:**
-  - **Issue:** The current `ResolverOutputSchema` in `schemas.py` includes fields (`review_id`, `search_result_id`, `conservative_result_id`, `comprehensive_result_id`) that are intended to be populated by the calling code (service layer) rather than being output by the LLM itself.
-  - **Recommendation:** For clarity, the schema representing *direct LLM output* for the resolver should ideally only contain `resolver_decision`, `resolver_reasoning`, `resolver_confidence_score` (and potentially the legacy `resolver_include`). The service layer would then combine this with the necessary IDs to construct the `ScreeningResolutionCreate` data for database persistence. This distinction should be made clear if `ResolverOutputSchema` is refactored.
-  - **Naming Convention Note:** As per `docs/naming-conventions.md`, for consistency with `ScreeningResponse`, `ResolverOutputSchema` should ideally be refactored to `ScreeningResolutionResponse` in the future.
+- **`ResolverOutputSchema` Fields:** The `ResolverOutputSchema` in `schemas.py` includes context IDs (`review_id`, etc.) intended for population by the service layer, distinct from pure LLM output. This design and the explanatory note in `data-models.md` remain accurate and relevant.
 
-- **`ScreenAbstractResult` SQLModel `search_result_id`:**
-  - **Requirement:** The `ScreenAbstractResult` SQLModel in `models.py` needs a foreign key to `SearchResult` (e.g., `search_result_id: uuid.UUID = Field(foreign_key="search_results.id")`) to properly link screening decisions to the items they screen. This is essential for the `ScreeningResultCreate` schema to function as intended with the service layer.
+- **Linking `ScreenAbstractResult` to `SearchResult`:** The current design in `models.py` links these by having `conservative_result_id` and `comprehensive_result_id` foreign keys on `SearchResult` pointing to `ScreenAbstractResult.id`. `ScreenAbstractResult` itself does not have a direct `search_result_id` FK. The documentation for `ScreeningResultCreate` accurately describes this service-level linking. This point clarifies the existing mechanism rather than stating a missing FK in `ScreenAbstractResult`.
 
-- **Pydantic Field Documentation:**
-  - **Standard:** Ensure all Pydantic models in `schemas.py` follow the project standard of using field docstrings (`"""Docstring"""`) for documentation and avoid using the `description` parameter in `Field()`, ensuring `BaseSchema` is the parent for all.
+- **Pydantic Field Documentation:** The standard of using field docstrings and avoiding `description` in `Field()` is correctly stated and should continue to be enforced. `schemas.py` shows good adoption of this.
 
-- **Linter Errors in `schemas.py`:** Address the identified linter errors, particularly the type override issues in `SystematicReviewUpdate` and the deprecated `t.Mapping`.
+- **Linter Errors in `schemas.py`:** Previous linter errors noted (e.g., regarding `SystematicReviewUpdate` type overrides and `t.Mapping`) appear to have been addressed in the current `schemas.py`.
 
 | Change          | Date       | Version | Description             | Author          |
 |-----------------|------------|---------|-------------------------|-----------------|
@@ -905,3 +1047,5 @@ This section summarizes key discrepancies found or recommendations made while do
 | ERD Completeness | 2025-05-12 | 0.6.2   | Added more fields to entities in ERD and included LogRecord model. | Architect Agent |
 | Naming Convention Note | 2025-05-12 | 0.7     | Added note regarding future renaming of `ResolverOutputSchema`. | Architect Agent |
 | Schema Rename        | 2025-05-15 | 0.8     | Renamed `ScreeningResolutionSchema` to `ResolverOutputSchema` globally. | AI Assistant |
+| Data Model Updates for Benchmark | 2025-05-16 | 0.8 (DM) | Added SQLModel and Pydantic schema definitions for BenchmarkRun and BenchmarkResultItem. Updated ERD. | Architect Agent |
+| Data Model Refinements | 2025-05-20 | 0.8.1 (DM) | Added Benchmark models/schemas. Corrected `BenchmarkResultItem.final_decision` naming (SRA's output for run) & updated notes on existing schemas. | Architect Agent |

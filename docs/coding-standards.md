@@ -34,8 +34,8 @@ Clear and consistent naming is vital for AI agents to understand and modify code
 - **Exceptions:** Use CapWords and end the name with `Error` (N806, N818 if it's a type variable). Example: `class MyCustomError(Exception): ...`.
 - **Functions and Methods:** Use lowercase with words separated by underscores (snake_case) (N802, N807). Example: `def my_function(): ...`.
 - **Method Arguments:**
-  - `self` for the first argument to instance methods (N804).
-  - `cls` for the first argument to class methods (N805).
+    - `self` for the first argument to instance methods (N804).
+    - `cls` for the first argument to class methods (N805).
 - **Constants:** Use all uppercase with words separated by underscores (UPPER_SNAKE_CASE) (N818). Example: `MAX_OVERFLOW = 100`.
 - **Variables:** Use lowercase with words separated by underscores (snake_case) (N803, N806). Example: `my_variable = 5`.
 - **Function and Method Argument Names:** Use snake_case (N803).
@@ -48,10 +48,10 @@ Comments should be clear, concise, and primarily explain _why_ something is done
 - Use TODO comments (TODO:, HACK:, PERF:, BUG:, WARN:, etc.). Indent following lines so they align with the first line.
 - Do NOT add comments like "# add variable foobar", it is useless noise.
 - **Docstrings:** Write docstrings for all public modules, functions, classes, and methods (D100-D107).
-  - Follow Google docstring style. """Use imperative voice end first line in a period."""
-  - For multi-line docstrings, the summary line should be on the first line, followed by a blank line, then the more detailed description (D210). The closing quotes should be on a line by themselves (D200).
-  - Follow PEP 257 conventions. For example, use imperative mood for the first line: `"""Calculate the sum of two numbers."""` not `"""Calculates the sum..."""` (D400, D401).
-  - Document parameters, return values, and any exceptions raised, especially for complex functions or APIs. Use a consistent format (e.g., Google style, NumPy style - D107 recommends a style, and specific rules like D402 ensure sections like `Args:`, `Returns:` are present if params are documented).
+    - Follow Google docstring style. """Use imperative voice end first line in a period."""
+    - For multi-line docstrings, the summary line should be on the first line, followed by a blank line, then the more detailed description (D210). The closing quotes should be on a line by themselves (D200).
+    - Follow PEP 257 conventions. For example, use imperative mood for the first line: `"""Calculate the sum of two numbers."""` not `"""Calculates the sum..."""` (D400, D401).
+    - Document parameters, return values, and any exceptions raised, especially for complex functions or APIs. Use a consistent format (e.g., Google style, NumPy style - D107 recommends a style, and specific rules like D402 ensure sections like `Args:`, `Returns:` are present if params are documented).
 - **TODO Comments:** Use `# TODO:` for tasks that need to be done. Consider adding a reference to an issue tracker or your name (TD002, TD003, TD004).
 
 ## Modern Python Practices (Mostly `pyupgrade` - UP)
@@ -59,12 +59,12 @@ Comments should be clear, concise, and primarily explain _why_ something is done
 Utilize modern Python features for cleaner and more efficient code. Ruff's `pyupgrade` (UP) rules help enforce this.
 
 - **Type Hinting:**
-  - Use modern type hints (PEP 585, PEP 604). For example, use `list[int]` instead of `typing.List[int]` (UP006), and `int | str` instead of `typing.Union[int, str]` (UP007).
-  - Use `collections.abc` for abstract base classes in type hints, e.g., `collections.abc.Sequence` instead of `typing.Sequence` (UP035).
-  - Prefer `typing.Annotated` for an argument's type hint if it is present on a line by itself (UP040).
+    - Use modern type hints (PEP 585, PEP 604). For example, use `list[int]` instead of `typing.List[int]` (UP006), and `int | str` instead of `typing.Union[int, str]` (UP007).
+    - Use `collections.abc` for abstract base classes in type hints, e.g., `collections.abc.Sequence` instead of `typing.Sequence` (UP035).
+    - Prefer `typing.Annotated` for an argument's type hint if it is present on a line by itself (UP040).
 - **F-strings:** Prefer f-strings for string formatting over `%-formatting`, `str.format()`, or `string.Template` (UP032, FBT003).
-  - Avoid unnecessary f-strings if they don't contain any expressions (UP030, RUF010).
-  - Use `str()` calls inside f-strings for non-string variables where clarity is needed, though often implicit conversion is fine (RUF010).
+    - Avoid unnecessary f-strings if they don't contain any expressions (UP030, RUF010).
+    - Use `str()` calls inside f-strings for non-string variables where clarity is needed, though often implicit conversion is fine (RUF010).
 - **Super Calls:** Use `super()` without arguments in Python 3 (UP008). Example: `super().__init__()`.
 - **Class Definitions:** Do not inherit from `object` explicitly in Python 3 (UP004). Example: `class MyClass: ...` not `class MyClass(object): ...`.
 - **Octal Literals:** Use `0o` prefix for octal literals (UP003). Example: `0o755`.
@@ -82,17 +82,17 @@ Utilize modern Python features for cleaner and more efficient code. Ruff's `pyup
 These rules help prevent common bugs and improve code robustness.
 
 - **Exception Handling:**
-  - Be specific when catching exceptions. Avoid bare `except:` clauses (E722). Catch `Exception` if you need to catch most things, but preferably catch specific errors.
-  - Use `raise ... from ...` to chain exceptions and preserve context (B904).
-  - Avoid using `assert` for runtime checks that should be proper error handling (S101). `assert` is for debugging and can be disabled.
-  - Do not use `logging.exception()` in an `except` block that is silencing or re-raising a different exception (LOG003).
-  - Avoid `try...except...pass` (TRY002) and `try...finally` with `return`/`break`/`continue` in the `finally` block (TRY004, PLC0301).
-  - Avoid raising `NotImplementedError` or `NotImplemented` (PIE794, PIE807). Prefer `raise TypeError` or `return NotImplemented` from binary magic methods.
+    - Be specific when catching exceptions. Avoid bare `except:` clauses (E722). Catch `Exception` if you need to catch most things, but preferably catch specific errors.
+    - Use `raise ... from ...` to chain exceptions and preserve context (B904).
+    - Avoid using `assert` for runtime checks that should be proper error handling (S101). `assert` is for debugging and can be disabled.
+    - Do not use `logging.exception()` in an `except` block that is silencing or re-raising a different exception (LOG003).
+    - Avoid `try...except...pass` (TRY002) and `try...finally` with `return`/`break`/`continue` in the `finally` block (TRY004, PLC0301).
+    - Avoid raising `NotImplementedError` or `NotImplemented` (PIE794, PIE807). Prefer `raise TypeError` or `return NotImplemented` from binary magic methods.
 - **Comparisons:**
-  - Use `is` and `is not` for comparing to singletons like `None`, `True`, and `False` (E711, E712). Example: `if x is None: ...`.
-  - Do not compare types directly, e.g. `type(a) == type(b)` (E721). Use `isinstance()` or `issubclass()`.
-  - Avoid "yoda conditions" (SIM300): `if "value" == variable:` should be `if variable == "value":`.
-  - Do not use `len(sequence) == 0` or `len(sequence) != 0`. Use `if not sequence:` or `if sequence:` (PLC1701, RUF004).
+    - Use `is` and `is not` for comparing to singletons like `None`, `True`, and `False` (E711, E712). Example: `if x is None: ...`.
+    - Do not compare types directly, e.g. `type(a) == type(b)` (E721). Use `isinstance()` or `issubclass()`.
+    - Avoid "yoda conditions" (SIM300): `if "value" == variable:` should be `if variable == "value":`.
+    - Do not use `len(sequence) == 0` or `len(sequence) != 0`. Use `if not sequence:` or `if sequence:` (PLC1701, RUF004).
 - **Mutable Default Arguments:** Do not use mutable default arguments like `[]` or `{}` in function definitions (B006, B008). Initialize them to `None` and create the mutable object inside the function.
   ```python
   def my_func(param=None):
@@ -101,57 +101,57 @@ These rules help prevent common bugs and improve code robustness.
       # ...
   ```
 - **Comprehensions:**
-  - Use comprehensions (list, dict, set) where they are more readable than `map()` or `filter()` or explicit loops.
-  - Avoid unnecessary list comprehensions if a generator would suffice, especially for large datasets.
-  - Be cautious with side effects in comprehensions.
+    - Use comprehensions (list, dict, set) where they are more readable than `map()` or `filter()` or explicit loops.
+    - Avoid unnecessary list comprehensions if a generator would suffice, especially for large datasets.
+    - Be cautious with side effects in comprehensions.
 - **`isort` / Import Order:** Ensure imports are sorted correctly (I001). Ruff can do this.
 - **Unused Code:** Remove unused variables, imports, and functions (F841, F401, etc.). Ruff will report these.
 - **Complexity:**
-  - Keep functions and methods short and focused on a single task.
-  - Avoid overly nested code blocks. Refactor using helper functions or by inverting conditions.
-  - Ruff includes McCabe complexity checking (C901). Aim to keep complexity low.
+    - Keep functions and methods short and focused on a single task.
+    - Avoid overly nested code blocks. Refactor using helper functions or by inverting conditions.
+    - Ruff includes McCabe complexity checking (C901). Aim to keep complexity low.
 - **Boolean Zen (SIM101, SIM103, SIM108, SIM109, SIM110, SIM111, SIM117, SIM118):**
-  - Simplify boolean expressions. For example, `if cond: return True else: return False` should be `return cond`.
-  - `if not a:` is preferred over `if a == False:`.
-  - `if a:` is preferred over `if a == True:`.
-  - Use `a and b` instead of `if a: if b: ...`.
-  - Use `a or b` instead of ternary for default values if simpler: `result = value or default_value`.
+    - Simplify boolean expressions. For example, `if cond: return True else: return False` should be `return cond`.
+    - `if not a:` is preferred over `if a == False:`.
+    - `if a:` is preferred over `if a == True:`.
+    - Use `a and b` instead of `if a: if b: ...`.
+    - Use `a or b` instead of ternary for default values if simpler: `result = value or default_value`.
 - **Context Managers:** Use `with` statement for resources that need to be managed (files, locks, database connections). (PERF401, PERF402 recommend `try...finally` over `with` for `threading.Lock` in specific performance-critical contexts if the lock is already acquired).
 - **flake8-bugbear (B series):** Many `B` rules catch common bugs. Examples:
-  - Do not call `getattr` with a constant string (B009). Use direct attribute access.
-  - Do not call `setattr` with a constant string (B010). Use direct attribute assignment.
-  - Do not use `zip()` without `strict=True` if iterables may have different lengths (B905).
-  - Avoid `try`-`except`-`else` that can be simplified by moving `else` logic outside (B012).
+    - Do not call `getattr` with a constant string (B009). Use direct attribute access.
+    - Do not call `setattr` with a constant string (B010). Use direct attribute assignment.
+    - Do not use `zip()` without `strict=True` if iterables may have different lengths (B905).
+    - Avoid `try`-`except`-`else` that can be simplified by moving `else` logic outside (B012).
 - **flake8-simplify (SIM series):** Many `SIM` rules help simplify code. Examples:
-  - Use `key in dict` instead of `key in dict.keys()` (SIM118).
-  - Use `dict.get(key, default)` instead of `if key in dict: val = dict[key] else: val = default` (SIM106).
-  - Combine `isinstance` calls: `isinstance(obj, (A, B))` instead of `isinstance(obj, A) or isinstance(obj, B)` (SIM102).
+    - Use `key in dict` instead of `key in dict.keys()` (SIM118).
+    - Use `dict.get(key, default)` instead of `if key in dict: val = dict[key] else: val = default` (SIM106).
+    - Combine `isinstance` calls: `isinstance(obj, (A, B))` instead of `isinstance(obj, A) or isinstance(obj, B)` (SIM102).
 - **Performance (PERF series):**
-  - Avoid unnecessary list comprehensions for `sum`, `min`, `max` if a generator expression would work. (PERF401)
-  - When checking for list emptiness, prefer `if not my_list:` over `if len(my_list) == 0:`. (RUF004)
-  - In class `__slots__`, prefer `tuple` over `list` for `__slots__` definition. (PERF101)
-  - Avoid `isinstance` checks in `try-except-else` blocks. (PERF201)
+    - Avoid unnecessary list comprehensions for `sum`, `min`, `max` if a generator expression would work. (PERF401)
+    - When checking for list emptiness, prefer `if not my_list:` over `if len(my_list) == 0:`. (RUF004)
+    - In class `__slots__`, prefer `tuple` over `list` for `__slots__` definition. (PERF101)
+    - Avoid `isinstance` checks in `try-except-else` blocks. (PERF201)
 - **Security (S series - via `flake8-bandit`):**
-  - Avoid `eval()` (S307), `exec()` (S102), `pickle` (S301, S302), `shelve` (S308), `subprocess.run` with `shell=True` without careful sanitization (S602, S603).
-  - Be careful with XML parsing (S310-S320, S400-S413), ensure secure parsers are used if processing untrusted XML.
-  - Do not use weak cryptographic functions (e.g., MD5, SHA1 for hashing if security is critical - S324).
-  - Ensure temporary files are created securely (S306).
+    - Avoid `eval()` (S307), `exec()` (S102), `pickle` (S301, S302), `shelve` (S308), `subprocess.run` with `shell=True` without careful sanitization (S602, S603).
+    - Be careful with XML parsing (S310-S320, S400-S413), ensure secure parsers are used if processing untrusted XML.
+    - Do not use weak cryptographic functions (e.g., MD5, SHA1 for hashing if security is critical - S324).
+    - Ensure temporary files are created securely (S306).
 
 ## Pydantic Best Practices
 
 - Pydantic models are referred to as "schemas" in this project. Database models are referred to as "models".
 - **Use Model.model_validate(obj)**:
-  - **DO NOT** use `Model(**dict)`, it will cause Pyright type validation errors and bypasses proper Pydantic validation.
-  - **ALWAYS** use `Model.model_validate(obj)` instead.
+    - **DO NOT** use `Model(**dict)`, it will cause Pyright type validation errors and bypasses proper Pydantic validation.
+    - **ALWAYS** use `Model.model_validate(obj)` instead.
 - **Schemas should inherit from `sra_assistant.core.schemas.BaseSchema`:**
-  - _Rationale:_ `BaseSchema` configures `model_config` with settings we want to use for all schemas unless there is a special reason not to. It's also fine to define a `FooBase(BaseSchema)` and `Bar(FooBase)`.
+    - _Rationale:_ `BaseSchema` configures `model_config` with settings we want to use for all schemas unless there is a special reason not to. It's also fine to define a `FooBase(BaseSchema)` and `Bar(FooBase)`.
 
 ## AI Agent Specific Best Practices
 
 - **Clarity for LLMs:**
-  - Be explicit. Avoid overly complex "one-liners" if a multi-line version is clearer.
-  - Ensure type hints are comprehensive and correct. This is crucial for LLMs to understand data structures.
-  - Use descriptive variable and function names, even if they are slightly longer.
+    - Be explicit. Avoid overly complex "one-liners" if a multi-line version is clearer.
+    - Ensure type hints are comprehensive and correct. This is crucial for LLMs to understand data structures.
+    - Use descriptive variable and function names, even if they are slightly longer.
 - **Modularity:** Break down complex tasks into smaller, well-defined functions or classes. This makes it easier for an AI agent to understand, modify, or generate specific pieces of functionality.
 - **Idempotency:** Where applicable, design functions to be idempotent (calling them multiple times with the same input produces the same result without unintended side effects).
 - **State Management:** Be explicit about state. Avoid hidden state or reliance on global variables where possible. Pass state explicitly as arguments or manage it within class instances.

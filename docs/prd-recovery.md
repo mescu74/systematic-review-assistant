@@ -84,7 +84,7 @@ The Systematic Review Assistant (MPH SR Prototype) application is currently in a
 - Robust integration tests for the conflict resolver functionality.
 - At least one end-to-end integration test for the primary PubMed search-screen-resolve workflow.
 - Clear documentation and procedures for safe execution of integration tests against a dedicated test database.
-- _(See `docs/SRA_Recovery_Project_Brief.md` Goal 3 for detailed testing specifics and `docs/templates/testing-strategy.md` for general strategy if/when created)._
+- *(See `docs/SRA_Recovery_Project_Brief.md` Goal 3 for detailed testing specifics and `docs/templates/testing-strategy.md` for general strategy if/when created).*
 
 ## Tech Stack
 
@@ -92,7 +92,7 @@ The Systematic Review Assistant (MPH SR Prototype) application is currently in a
 - **Frameworks/Libraries:** Streamlit, SQLModel, SQLAlchemy, LangChain, LangGraph, OpenAI SDK
 - **Database:** PostgreSQL (via Supabase)
 - **Testing:** Pytest
-- _(This reflects the existing stack to be stabilized. Further details may be in `docs/tech-stack.md` if it exists or is created)._
+- *(This reflects the existing stack to be stabilized. Further details may be in `docs/tech-stack.md` if it exists or is created).*
 
 ## Epic Overview (MVP / Current Version)
 
@@ -119,7 +119,7 @@ The Systematic Review Assistant (MPH SR Prototype) application is currently in a
 - Implementation of search functionality for Embase and Scopus.
 - Development of the new Benchmarking Module.
 - Enhancements to XAI and logging/tracing dashboards.
-- _(These are beyond the scope of this recovery PRD and will be addressed in `docs/MPH_SR_Prototype_Main_Project_Brief.md` and subsequent PRDs)._
+- *(These are beyond the scope of this recovery PRD and will be addressed in `docs/MPH_SR_Prototype_Main_Project_Brief.md` and subsequent PRDs).*
 
 ## Change Log
 
@@ -164,4 +164,4 @@ The Systematic Review Assistant (MPH SR Prototype) application is currently in a
 
 - **Data Migration:** Alembic is used for database migrations. Migrations will be generated and run by the user as needed (e.g., for adding the `final_decision` field).
 - **Error Handling:** Robust error handling should be implemented, especially around service calls, database interactions, and LLM API calls.
-- **Logging/Tracing:** While LangSmith is mentioned for the full vision, ensure sufficient logging within the recovery scope to debug issues. 
+- **Logging/Tracing:** While LangSmith is mentioned for the full vision, ensure sufficient logging within the recovery scope to debug issues.

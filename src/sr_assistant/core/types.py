@@ -2841,7 +2841,9 @@ class SearchDatabaseSource(StrEnum):
 
     PUBMED = "PubMed"
     SCOPUS = "Scopus"
-    # Add EMBASE = "Embase" when needed
+    EMBASE = "Embase"
+    OTHER = "Other"
+    BENCHMARK_CSV = "benchmark_csv"
 
 
 type UtcDatetime = t.Annotated[

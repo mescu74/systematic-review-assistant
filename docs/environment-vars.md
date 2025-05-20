@@ -57,13 +57,13 @@ These variables are typically loaded from `.env` files (e.g., `.env`, `.env.loca
 | **Miscellaneous**                    |                                                                                            |          |                                                                   |                                                      |
 | `LOG_LEVEL`                          | Application-wide logging level for Loguru.                                                 | Optional | `INFO` (e.g., DEBUG, INFO, WARNING, ERROR, CRITICAL)              | Logging configuration                                |
 
-## Notes:
+## Notes
 
--   **Security:** API keys and database credentials (passwords, service_role_key) should be treated as secrets and managed appropriately (e.g., using GitHub secrets for CI, Doppler, HashiCorp Vault, or similar tools for deployed environments). They should **never** be hardcoded into the source code or committed to version control (even in `.env` files if the repo is public).
--   **`.env` Files:** For local development, variables are typically placed in `.env` (for common dev vars), `.env.local` (for local overrides, gitignored), and `.env.test` (for testing configurations, also gitignored). Ensure `.env.example` files are kept up-to-date with all non-secret variables.
--   **CI/CD:** In GitHub Actions (see `.github/workflows/pr.yml`), secrets are injected into the environment from GitHub repository secrets.
--   **Defaults:** Some application behavior variables (like LLM model names or `LOG_LEVEL`) might have hardcoded defaults in the application code if the environment variable is not set. This document lists them for awareness and potential override capability.
--   **Specificity:** Where specific values are known for different environments (like `LANGSMITH_PROJECT`), they are explicitly noted.
+- **Security:** API keys and database credentials (passwords, service_role_key) should be treated as secrets and managed appropriately (e.g., using GitHub secrets for CI, Doppler, HashiCorp Vault, or similar tools for deployed environments). They should **never** be hardcoded into the source code or committed to version control (even in `.env` files if the repo is public).
+- **`.env` Files:** For local development, variables are typically placed in `.env` (for common dev vars), `.env.local` (for local overrides, gitignored), and `.env.test` (for testing configurations, also gitignored). Ensure `.env.example` files are kept up-to-date with all non-secret variables.
+- **CI/CD:** In GitHub Actions (see `.github/workflows/pr.yml`), secrets are injected into the environment from GitHub repository secrets.
+- **Defaults:** Some application behavior variables (like LLM model names or `LOG_LEVEL`) might have hardcoded defaults in the application code if the environment variable is not set. This document lists them for awareness and potential override capability.
+- **Specificity:** Where specific values are known for different environments (like `LANGSMITH_PROJECT`), they are explicitly noted.
 
 ## Change Log
 
@@ -71,4 +71,4 @@ These variables are typically loaded from `.env` files (e.g., `.env`, `.env.loca
 |-----------------|------------|---------|-------------------------|-----------------|
 | Initial Draft   | 2025-05-12 | 0.1     | First draft based on initial understanding. | Architect Agent |
 | Major Revision  | 2025-05-12 | 0.2     | Significantly revised and expanded based on user-provided `.env` contents. Added Supabase vars, clarified DB URLs, LangSmith project values, and other missing variables. | Architect Agent |
-| Actual URL Fix  | 2025-05-12 | 0.3     | Updated Supabase connection string examples to reflect actual project structure (all via pooler on port 5432, specific hostnames) based on `.env` inspection. | Architect Agent | 
+| Actual URL Fix  | 2025-05-12 | 0.3     | Updated Supabase connection string examples to reflect actual project structure (all via pooler on port 5432, specific hostnames) based on `.env` inspection. | Architect Agent |

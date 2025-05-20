@@ -5,15 +5,15 @@ from __future__ import annotations
 import uuid  # Needed for test_review_with_criteria
 
 import pytest
-from sqlalchemy.orm import sessionmaker  # Import sessionmaker
-from sqlmodel import Session  # Keep Session from sqlmodel
+from sqlalchemy.orm import sessionmaker
+from sqlmodel import (
+    Session,  # NOTE: This is the SQLModel Session, NEVER use SQLAlchemy Session!
+)
 
 # Imports used by test and fixtures
 from sr_assistant.app import services
 from sr_assistant.core import models, repositories, schemas
 from sr_assistant.core.types import CriteriaFramework
-
-# Local test_db_session fixture is removed, conftest.py provides db_session
 
 
 @pytest.fixture(scope="function")

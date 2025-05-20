@@ -14,11 +14,11 @@
 - **Primary Runtime(s):** {e.g., Node.js 22.x, Python Runtime for Lambda}
 - **Style Guide & Linter:** {e.g., ESLint with Airbnb config, Prettier; Black, Flake8; Go fmt} - _Configuration:_ {Link to config files or describe setup}
 - **Naming Conventions:**
-  - Variables: `{e.g., camelCase}`
-  - Functions: `{e.g., camelCase}`
-  - Classes/Types/Interfaces: `{e.g., PascalCase}`
-  - Constants: `{e.g., UPPER_SNAKE_CASE}`
-  - Files: `{e.g., kebab-case.ts, snake_case.py}`
+    - Variables: `{e.g., camelCase}`
+    - Functions: `{e.g., camelCase}`
+    - Classes/Types/Interfaces: `{e.g., PascalCase}`
+    - Constants: `{e.g., UPPER_SNAKE_CASE}`
+    - Files: `{e.g., kebab-case.ts, snake_case.py}`
 - **File Structure:** Adhere to the layout defined in `docs/project-structure.md`.
 - **Asynchronous Operations:** {e.g., Use `async`/`await` in TypeScript/Python, Goroutines/Channels in Go.}
 - **Type Safety:** {e.g., Leverage TypeScript strict mode, Python type hints, Go static typing.} - _Type Definitions:_ {Location, e.g., `src/common/types.ts`}
@@ -29,14 +29,14 @@
 
 - **General Approach:** {e.g., Use exceptions, return error codes/tuples, specific error types.}
 - **Logging:**
-  - Library/Method: {e.g., `console.log/error`, Python `logging` module, dedicated logging library}
-  - Format: {e.g., JSON, plain text}
-  - Levels: {e.g., DEBUG, INFO, WARN, ERROR}
-  - Context: {What contextual information should be included?}
+    - Library/Method: {e.g., `console.log/error`, Python `logging` module, dedicated logging library}
+    - Format: {e.g., JSON, plain text}
+    - Levels: {e.g., DEBUG, INFO, WARN, ERROR}
+    - Context: {What contextual information should be included?}
 - **Specific Handling Patterns:**
-  - External API Calls: {e.g., Use `try/catch`, check response codes, implement retries with backoff for transient errors?}
-  - Input Validation: {Where and how is input validated?}
-  - Graceful Degradation vs. Critical Failure: {Define criteria for when to continue vs. halt.}
+    - External API Calls: {e.g., Use `try/catch`, check response codes, implement retries with backoff for transient errors?}
+    - Input Validation: {Where and how is input validated?}
+    - Graceful Degradation vs. Critical Failure: {Define criteria for when to continue vs. halt.}
 
 ## Security Best Practices
 

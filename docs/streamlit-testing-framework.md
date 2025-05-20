@@ -48,9 +48,9 @@ A well-organized project structure facilitates maintainability and test discover
 
 - **Naming Conventions:**
 
-  - **Test Files:** `pytest` automatically discovers test files named `test_*.py` or `*_test.py`. The convention `test_your_module_name.py` is common.
-  - **Test Functions:** Test functions within these files should be prefixed with `test_` (e.g., `def test_initial_state():`). `pytest` discovers and executes these functions as individual test cases.
-  - **Test Classes:** If grouping tests within classes, the class name should be prefixed with `Test` (e.g., `class TestLoginPage:`), and methods within the class should be prefixed with `test_`.
+    - **Test Files:** `pytest` automatically discovers test files named `test_*.py` or `*_test.py`. The convention `test_your_module_name.py` is common.
+    - **Test Functions:** Test functions within these files should be prefixed with `test_` (e.g., `def test_initial_state():`). `pytest` discovers and executes these functions as individual test cases.
+    - **Test Classes:** If grouping tests within classes, the class name should be prefixed with `Test` (e.g., `class TestLoginPage:`), and methods within the class should be prefixed with `test_`.
 
 When `pytest` is run from the project root, import paths within test scripts for application modules should be relative to the root. For `AppTest.from_file()`, the path to the Streamlit script file should also be relative to the directory where `pytest` is invoked.
 
@@ -226,15 +226,15 @@ Assertions are used to verify that the application's state and UI elements match
 Key aspects to assert include:
 
 - **Element Existence and Count:** Verify if elements are present or if the correct number of elements exists.
-  - `assert len(at.button) == 2`
-  - `assert at.text_input(key="my_specific_input").exists` (The `.exists` attribute is a common pattern; if not directly on `AppTest` elements, `len(at.text_input(key="...")) == 1` achieves a similar check).
+    - `assert len(at.button) == 2`
+    - `assert at.text_input(key="my_specific_input").exists` (The `.exists` attribute is a common pattern; if not directly on `AppTest` elements, `len(at.text_input(key="...")) == 1` achieves a similar check).
 - **Element Properties:** Each `AppTest` element object has properties reflecting its state.
 
-  - **Table 2: Common `AppTest` Element Properties for Assertions**
+    - **Table 2: Common `AppTest` Element Properties for Assertions**
 
 - **Application Behavior and State:**
-  - Verify changes in `st.session_state`: `assert at.session_state.counter == 5`.
-  - Check for script exceptions: `assert not at.exception` to ensure the app ran without unhandled errors, or `assert isinstance(at.exception, ValueError)` to check for a specific type of expected exception.
+    - Verify changes in `st.session_state`: `assert at.session_state.counter == 5`.
+    - Check for script exceptions: `assert not at.exception` to ensure the app ran without unhandled errors, or `assert isinstance(at.exception, ValueError)` to check for a specific type of expected exception.
 
 ### F. Testing Dynamic UIs and Conditional Rendering
 
@@ -250,15 +250,15 @@ For example, if a `st.text_area` is shown only when a `st.checkbox` is ticked:
 
 - **Test Case 1 (Element Appears):**```
 
-  # In app.py
+# In app.py
 
-  # import streamlit as st
+# import streamlit as st
 
-  # if st.checkbox("Show details", key="details_cb")
+# if st.checkbox("Show details", key="details_cb")
 
-  # st.text_area("Enter details:", key="details_text")
+# st.text_area("Enter details:", key="details_text")
 
-  # In test_app.py
+# In test_app.py
 
   def test_conditional_details_shown():
   at = AppTest.from_file("app.py").run()
@@ -274,7 +274,7 @@ For example, if a `st.text_area` is shown only when a `st.checkbox` is ticked:
 
 - **Test Case 2 (Element Disappears/Remains Hidden):**```
 
-  # In test_app.py
+# In test_app.py
 
   def test_conditional_details_hidden():
   at = AppTest.from_file("app.py").run() # Ensure checkbox is unchecked (initial state or explicitly uncheck if needed)
@@ -302,7 +302,7 @@ Beyond basic widget interactions, robust UI testing often involves more complex 
 
 - **Setting Initial State:** Before the first `at.run()`, or between runs to simulate a specific condition, `at.session_state` can be modified. This is useful for testing parts of an app that depend on a pre-existing state without simulating all the steps to reach that state.```
 
-  # test_app.py
+# test_app.py
 
   def test_user_dashboard_loaded():
   at = AppTest.from_file("dashboard_app.py")
@@ -318,29 +318,29 @@ Beyond basic widget interactions, robust UI testing often involves more complex 
 
 - **Verifying State Changes:** After interactions and subsequent `at.run()` calls, assertions can be made on `at.session_state` to ensure the application logic correctly updated the state. The example from the Streamlit documentation for testing a logout feature demonstrates this well:```
 
-  # In test_app.py [13]
+# In test_app.py [13]
 
-  # def test_log_out()
+# def test_log_out()
 
-  # at = AppTest.from_file("app.py") # Assuming app.py handles login/logout
+# at = AppTest.from_file("app.py") # Assuming app.py handles login/logout
 
-  # at.secrets["password"] = "streamlit_password" # Dummy secret
+# at.secrets["password"] = "streamlit_password" # Dummy secret
 
-  # at.session_state["status"] = "verified" # Jump straight to a logged-in state
+# at.session_state["status"] = "verified" # Jump straight to a logged-in state
 
-  # at.run()
+# at.run()
 
-  #
+#
 
-  # assert at.button(key="logout_button").exists # or check label
+# assert at.button(key="logout_button").exists # or check label
 
-  # at.button(key="logout_button").click().run()
+# at.button(key="logout_button").click().run()
 
-  #
+#
 
-  # assert at.session_state["status"] == "unverified"
+# assert at.session_state["status"] == "unverified"
 
-  # assert len(at.text_input(key="password_input")) == 1 # Password prompt should reappear
+# assert len(at.text_input(key="password_input")) == 1 # Password prompt should reappear
 
   ```
    
@@ -354,38 +354,38 @@ Testing visual elements like plots and charts with `AppTest` has specific limita
 
 - **Workaround for Existence and Basic Proto Inspection:**
 
-  - The existence of a chart element can sometimes be checked using `at.get("chart_type")`, for example, `at.get("plotly_chart")`. However, this often returns an `UnknownElement` object.
-  - For certain libraries like Plotly, it may be possible to access the underlying Protocol Buffer (protobuf) specification of the figure. This allows for assertions on the data or layout aspects defined in the spec, rather than the visual rendering.```
+    - The existence of a chart element can sometimes be checked using `at.get("chart_type")`, for example, `at.get("plotly_chart")`. However, this often returns an `UnknownElement` object.
+    - For certain libraries like Plotly, it may be possible to access the underlying Protocol Buffer (protobuf) specification of the figure. This allows for assertions on the data or layout aspects defined in the spec, rather than the visual rendering.```
 
-    # Example for Plotly, adapted from [22]
+  # Example for Plotly, adapted from [22]
 
-    # import json
+  # import json
 
-    # def test_plotly_chart_spec()
+  # def test_plotly_chart_spec()
 
-    # at = AppTest.from_string(my_app_with_plotly_chart_code).run()
+  # at = AppTest.from_string(my_app_with_plotly_chart_code).run()
 
-    # if len(at.get("plotly_chart")) > 0
+  # if len(at.get("plotly_chart")) > 0
 
-    # # This access path is internal and might change in future Streamlit versions
+  # # This access path is internal and might change in future Streamlit versions
 
-    # chart_element = at.get("plotly_chart")
+  # chart_element = at.get("plotly_chart")
 
-    # if hasattr(chart_element, 'proto') and hasattr(chart_element.proto, 'figure') and hasattr(chart_element.proto.figure, 'spec')
+  # if hasattr(chart_element, 'proto') and hasattr(chart_element.proto, 'figure') and hasattr(chart_element.proto.figure, 'spec')
 
-    # spec = json.loads(chart_element.proto.figure.spec)
+  # spec = json.loads(chart_element.proto.figure.spec)
 
-    # assert spec["data"]["type"] == "bar"
+  # assert spec["data"]["type"] == "bar"
 
-    # assert len(spec["data"]["y"]) == 5 # Example: check number of data points
+  # assert len(spec["data"]["y"]) == 5 # Example: check number of data points
 
-    # else
+  # else
 
-    # assert False, "Plotly chart spec not accessible via expected proto path."
+  # assert False, "Plotly chart spec not accessible via expected proto path."
 
-    # else
+  # else
 
-    # assert False, "Plotly chart not found."
+  # assert False, "Plotly chart not found."
 
     ```python
     This approach is acknowledged as "ugly" but serves as a current workaround.  
@@ -393,13 +393,13 @@ Testing visual elements like plots and charts with `AppTest` has specific limita
 
 - **Matplotlib (`st.pyplot`):** There are no direct methods within `AppTest` to inspect the contents of a rendered Matplotlib figure (e.g., data points, axes labels, titles) from the `AppTest` object.
 
-  - **Strategy:** The most effective way to test Matplotlib charts is to separate the data preparation and figure generation logic into distinct Python functions. These functions can then be unit-tested independently of Streamlit, verifying the correctness of the figure object they produce. Within an `AppTest` script, one would primarily check if the `st.pyplot` element is rendered (e.g., `assert len(at.get("pyplot")) > 0`, assuming `at.pyplot` or a similar accessor exists, or by checking for a generic block element if `st.pyplot` is not directly queryable).
+    - **Strategy:** The most effective way to test Matplotlib charts is to separate the data preparation and figure generation logic into distinct Python functions. These functions can then be unit-tested independently of Streamlit, verifying the correctness of the figure object they produce. Within an `AppTest` script, one would primarily check if the `st.pyplot` element is rendered (e.g., `assert len(at.get("pyplot")) > 0`, assuming `at.pyplot` or a similar accessor exists, or by checking for a generic block element if `st.pyplot` is not directly queryable).
 
 - **Altair (`st.altair_chart`) / Vega-Lite (`st.vega_lite_chart`):** Similar to Plotly, direct interaction with the rendered chart is limited.
 
-  - Altair and Vega-Lite charts are defined by a JSON specification. If this specification is generated dynamically within the Streamlit app, the Python logic responsible for generating this spec should be unit-tested separately.
-  - `AppTest` might allow access to this specification if it's stored as a property of the chart element object, akin to the Plotly `proto.figure.spec` example.
-  - If the chart definition includes `on_select` parameters (for interactive selections), `st.altair_chart` or `st.vega_lite_chart` can return selection data. It is currently unclear if `AppTest` can simulate the chart selection events needed to trigger this data return. If it could, the returned selection data would be assertable.
+    - Altair and Vega-Lite charts are defined by a JSON specification. If this specification is generated dynamically within the Streamlit app, the Python logic responsible for generating this spec should be unit-tested separately.
+    - `AppTest` might allow access to this specification if it's stored as a property of the chart element object, akin to the Plotly `proto.figure.spec` example.
+    - If the chart definition includes `on_select` parameters (for interactive selections), `st.altair_chart` or `st.vega_lite_chart` can return selection data. It is currently unclear if `AppTest` can simulate the chart selection events needed to trigger this data return. If it could, the returned selection data would be assertable.
 
 - **Key Considerations for Chart Testing:** The nature of `AppTest` being headless means it cannot verify visual aspects like colors, exact element positioning, or perform complex visual interactions (e.g., asserting tooltip content on hover). Testing focuses on data integrity and chart configuration. For visual regression testing, tools that capture and compare images or DOM snapshots (like Playwright with visual comparison plugins) would be necessary, operating outside the scope of `AppTest`. Developers should primarily unit test the Python functions that prepare data and generate chart specifications. `AppTest` can then confirm that the chart element is present in the Streamlit app and, where feasible (as with the Plotly spec workaround), that the correct underlying data or configuration is being passed to the frontend.
 
@@ -411,12 +411,12 @@ Streamlit's execution model is primarily synchronous from the perspective of a s
 
 - **Testing Asynchronous Python Code (`async/await`):** Streamlit has evolving support for `async/await`.
 
-  - If an `async def` function is directly `await`ed within the main execution path of the Streamlit script, `AppTest.run()` will effectively wait for that `await` to complete before the `run()` call itself finishes. The state captured by `AppTest` will be after this awaited operation.
-  - If an asynchronous operation is launched as a background task (e.g., using `asyncio.create_task` without awaiting its completion in the main script flow, or by using Python `threading`), `AppTest.run()` will likely complete its execution pass _before_ this background task finishes. The UI state captured by `AppTest` would reflect the state before the background task's completion.
+    - If an `async def` function is directly `await`ed within the main execution path of the Streamlit script, `AppTest.run()` will effectively wait for that `await` to complete before the `run()` call itself finishes. The state captured by `AppTest` will be after this awaited operation.
+    - If an asynchronous operation is launched as a background task (e.g., using `asyncio.create_task` without awaiting its completion in the main script flow, or by using Python `threading`), `AppTest.run()` will likely complete its execution pass _before_ this background task finishes. The UI state captured by `AppTest` would reflect the state before the background task's completion.
 
 - **Testing `st.spinner` and Subsequent UI Updates:** `AppTest` captures discrete states of the application after each `run()` call. It does not continuously monitor the UI for changes that occur due to background processes completing _between_ `run()` calls.
 
-  - If `st.spinner` wraps a synchronous block or a directly `await`ed async block:
+    - If `st.spinner` wraps a synchronous block or a directly `await`ed async block:
 
     1. The test can simulate an action that triggers this block.
     2. Call `at.run()`.
@@ -457,10 +457,10 @@ Streamlit's execution model is primarily synchronous from the perspective of a s
 
     ````
 
-  - **Waiting for Elements Post-Async:** `AppTest` does not have built-in "wait for element" polling mechanisms like those found in browser automation tools (e.g., Selenium's explicit waits).
-    - If an element appears after an async operation that is fully `await`ed within the script's main execution path, `at.run()` will capture this new element.
-    - If an element appears due to a background task (e.g., a thread) completing _after_ an `at.run()` pass, the test would need to simulate another user action that causes a script rerun (if the app is designed to refresh or check for updates), then call `at.run()` again, and finally assert the element's presence.
-  - The primary approach for testing UIs with long-running or complex asynchronous operations is often to mock these operations to return quickly with predefined data. This allows the test to focus on the UI logic that handles the data once it's "loaded," rather than testing the asynchronous operation itself. Testing the spinner _while it is actively spinning for an indeterminate duration_ is not a primary strength of `AppTest`. The focus is on the state of the UI before and after the operation guarded by the spinner.
+    - **Waiting for Elements Post-Async:** `AppTest` does not have built-in "wait for element" polling mechanisms like those found in browser automation tools (e.g., Selenium's explicit waits).
+        - If an element appears after an async operation that is fully `await`ed within the script's main execution path, `at.run()` will capture this new element.
+        - If an element appears due to a background task (e.g., a thread) completing _after_ an `at.run()` pass, the test would need to simulate another user action that causes a script rerun (if the app is designed to refresh or check for updates), then call `at.run()` again, and finally assert the element's presence.
+    - The primary approach for testing UIs with long-running or complex asynchronous operations is often to mock these operations to return quickly with predefined data. This allows the test to focus on the UI logic that handles the data once it's "loaded," rather than testing the asynchronous operation itself. Testing the spinner _while it is actively spinning for an indeterminate duration_ is not a primary strength of `AppTest`. The focus is on the state of the UI before and after the operation guarded by the spinner.
 
 ### D. Testing Multi-Page Applications
 
@@ -468,22 +468,22 @@ Streamlit's execution model is primarily synchronous from the perspective of a s
 
 - **Using the `pages/` Directory Structure:** Streamlit automatically creates pages from Python files placed in a `pages/` subdirectory next to the main app script.
 
-  - **`AppTest.switch_page(page_path)`:** This method is used to simulate navigation to a different page within the MPA.
-  - The `page_path` argument should be the path to the target page's Python file, relative to the main application script (e.g., `"pages/dashboard.py"`).
-  - Crucially, a call to `at.run()` is required _after_ `at.switch_page()` to execute the script of the new page and update the `AppTest` instance with its content.
-  - Example:```
+    - **`AppTest.switch_page(page_path)`:** This method is used to simulate navigation to a different page within the MPA.
+    - The `page_path` argument should be the path to the target page's Python file, relative to the main application script (e.g., `"pages/dashboard.py"`).
+    - Crucially, a call to `at.run()` is required _after_ `at.switch_page()` to execute the script of the new page and update the `AppTest` instance with its content.
+    - Example:```
 
-    # Project structure
+  # Project structure
 
-    # main_app.py
+  # main_app.py
 
-    # tests/test_mpa.py
+  # tests/test_mpa.py
 
-    # pages/
+  # pages/
 
-    # └── user_profile.py (contains st.header("User Profile"))
+  # └── user_profile.py (contains st.header("User Profile"))
 
-    # tests/test_mpa.py
+  # tests/test_mpa.py
 
     def test_navigation_to_user_profile():
     at = AppTest.from_file("main_app.py").run() # Load and run the main page
@@ -503,15 +503,15 @@ Streamlit's execution model is primarily synchronous from the perspective of a s
 
 - **Session State Across Pages:** `st.session_state` is inherently shared across pages in a live Streamlit MPA. When testing with `AppTest`:
 
-  - If testing a page in isolation (e.g., `AppTest.from_file("pages/some_page.py")`), it's often necessary to manually populate `at.session_state` before the `run()` call to simulate data or context that would normally be carried over from other pages.
-  - When using `at.switch_page()`, `at.session_state` should persist its values across the page switch, reflecting the behavior of a real app. The test can verify this persistence or modify `at.session_state` before running the new page if needed.
-  - Example from Streamlit documentation :```
+    - If testing a page in isolation (e.g., `AppTest.from_file("pages/some_page.py")`), it's often necessary to manually populate `at.session_state` before the `run()` call to simulate data or context that would normally be carried over from other pages.
+    - When using `at.switch_page()`, `at.session_state` should persist its values across the page switch, reflecting the behavior of a real app. The test can verify this persistence or modify `at.session_state` before running the new page if needed.
+    - Example from Streamlit documentation :```
 
-    # To test 'second.py', which expects 'magic_word' in session_state
+  # To test 'second.py', which expects 'magic_word' in session_state
 
-    # (presumably set by 'first.py')
+  # (presumably set by 'first.py')
 
-    # tests/test_second_page.py
+  # tests/test_second_page.py
 
     def test_second_page_with_magic_word():
     at = AppTest.from_file("pages/second.py") # Load second.py directly
@@ -572,14 +572,14 @@ Testing how an application handles errors is crucial for robustness.
 
 - **Application Script Exceptions:** If the Streamlit script itself raises an unhandled Python exception during an `at.run()` call, this exception will be captured in the `at.exception` attribute. `at.exception` is a list of exception objects.
 
-  - To assert that no exceptions occurred: `assert not at.exception` or `assert len(at.exception) == 0`.
-  - To assert that a specific type of exception occurred:```
+    - To assert that no exceptions occurred: `assert not at.exception` or `assert len(at.exception) == 0`.
+    - To assert that a specific type of exception occurred:```
 
-    # assert len(at.exception) == 1
+  # assert len(at.exception) == 1
 
-    # assert isinstance(at.exception, ValueError)
+  # assert isinstance(at.exception, ValueError)
 
-    # assert "Specific error message" in str(at.exception)
+  # assert "Specific error message" in str(at.exception)
 
     ```
 
@@ -587,17 +587,17 @@ Testing how an application handles errors is crucial for robustness.
 
 - **UI Error Messages:** Streamlit provides elements like `st.error()`, `st.warning()`, and `st.info()` to display messages to the user. These are rendered as specific element types in `AppTest` and their content can be asserted.
 
-  - Example: If invalid input should trigger `st.warning("Invalid input provided.")`:```
+    - Example: If invalid input should trigger `st.warning("Invalid input provided.")`:```
 
-    # In test_app.py
+  # In test_app.py
 
     #... simulate action leading to warning...
 
-    # at.run()
+  # at.run()
 
-    # assert len(at.warning) == 1
+  # assert len(at.warning) == 1
 
-    # assert at.warning.value == "Invalid input provided."
+  # assert at.warning.value == "Invalid input provided."
 
     ```python
     ( show examples of asserting warning messages).  
@@ -609,37 +609,37 @@ Streamlit's `st.form` allows grouping multiple input widgets whose values are su
 
 - **Forms (`st.form`):**
 
-  - Widgets placed inside an `st.form` block are accessed in `AppTest` just like any other widget, typically by their `key`. The presence of the form does not change how `AppTest` selects or interacts with the individual input elements within it.
-  - The `st.form_submit_button` is treated as a standard button by `AppTest`. It can be selected via `at.button` (usually by its key or index) and interacted with using `.click().run()`.
-  - Example from a community discussion confirms this:```
+    - Widgets placed inside an `st.form` block are accessed in `AppTest` just like any other widget, typically by their `key`. The presence of the form does not change how `AppTest` selects or interacts with the individual input elements within it.
+    - The `st.form_submit_button` is treated as a standard button by `AppTest`. It can be selected via `at.button` (usually by its key or index) and interacted with using `.click().run()`.
+    - Example from a community discussion confirms this:```
 
-    # app.py
+  # app.py
 
-    # import streamlit as st
+  # import streamlit as st
 
-    # with st.form("my_form", key="data_form")
+  # with st.form("my_form", key="data_form")
 
-    # name = st.text_input("Name", key="form_name")
+  # name = st.text_input("Name", key="form_name")
 
-    # age = st.number_input("Age", key="form_age", min_value=0, step=1)
+  # age = st.number_input("Age", key="form_age", min_value=0, step=1)
 
-    # submitted = st.form_submit_button("Register")
+  # submitted = st.form_submit_button("Register")
 
-    #
+  #
 
-    # if submitted
+  # if submitted
 
-    # if age < 18
+  # if age < 18
 
-    # st.error("Applicant must be 18 or older.")
+  # st.error("Applicant must be 18 or older.")
 
-    # else
+  # else
 
-    # st.success(f"Registered {name}, age {age}.")
+  # st.success(f"Registered {name}, age {age}.")
 
-    # st.session_state.last_registration = {"name": name, "age": age}
+  # st.session_state.last_registration = {"name": name, "age": age}
 
-    # tests/test_form_app.py
+  # tests/test_form_app.py
 
     def test_form_valid_submission():
     at = AppTest.from_file("form_app.py").run() # Assuming form_app.py is the filename
@@ -674,87 +674,87 @@ Streamlit's `st.form` allows grouping multiple input widgets whose values are su
 
 - **`st.file_uploader`:** As established (Section III.D), `AppTest` cannot directly simulate a user selecting a file from their local file system because it's a headless framework without browser dialog capabilities.
 
-  - **Primary Strategy: Mocking.** The most effective way to test application logic that depends on `st.file_uploader` is to use Python's `unittest.mock.patch` to replace `st.file_uploader` during the test. The mock can be configured to return an `io.BytesIO` object or a custom mock object that mimics an `UploadedFile` instance.```
+    - **Primary Strategy: Mocking.** The most effective way to test application logic that depends on `st.file_uploader` is to use Python's `unittest.mock.patch` to replace `st.file_uploader` during the test. The mock can be configured to return an `io.BytesIO` object or a custom mock object that mimics an `UploadedFile` instance.```
 
-    # app_with_upload.py
+  # app_with_upload.py
 
-    # import streamlit as st
+  # import streamlit as st
 
-    # import pandas as pd
+  # import pandas as pd
 
-    #
+  #
 
-    # uploaded_file = st.file_uploader("Upload CSV", type="csv", key="csv_uploader")
+  # uploaded_file = st.file_uploader("Upload CSV", type="csv", key="csv_uploader")
 
-    # if uploaded_file is not None
+  # if uploaded_file is not None
 
-    # try
+  # try
 
-    # df = pd.read_csv(uploaded_file)
+  # df = pd.read_csv(uploaded_file)
 
-    # st.dataframe(df)
+  # st.dataframe(df)
 
-    # st.success("File processed successfully!")
+  # st.success("File processed successfully!")
 
-    # except Exception as e
+  # except Exception as e
 
-    # st.error(f"Error processing file: {e}")
+  # st.error(f"Error processing file: {e}")
 
-    # tests/test_upload_app.py
+  # tests/test_upload_app.py
 
-    # from streamlit.testing.v1 import AppTest
+  # from streamlit.testing.v1 import AppTest
 
-    # from unittest.mock import patch, MagicMock
+  # from unittest.mock import patch, MagicMock
 
-    # import io
+  # import io
 
-    # import pandas as pd
+  # import pandas as pd
 
-    #
+  #
 
-    # def test_file_upload_processing_success()
+  # def test_file_upload_processing_success()
 
-    # # Create mock CSV data
+  # # Create mock CSV data
 
-    # csv_data = "col1,col2\nval1,val2\nval3,val4"
+  # csv_data = "col1,col2\nval1,val2\nval3,val4"
 
-    # mock_file = io.BytesIO(csv_data.encode('utf-8'))
+  # mock_file = io.BytesIO(csv_data.encode('utf-8'))
 
-    # mock_file.name = "test.csv" # UploadedFile objects have a 'name' attribute
+  # mock_file.name = "test.csv" # UploadedFile objects have a 'name' attribute
 
-    #
+  #
 
-    # # Patch st.file_uploader to return our mock file
+  # # Patch st.file_uploader to return our mock file
 
-    # with patch("app_with_upload.st.file_uploader", return_value=mock_file) as mock_uploader
+  # with patch("app_with_upload.st.file_uploader", return_value=mock_file) as mock_uploader
 
-    # at = AppTest.from_file("app_with_upload.py").run()
+  # at = AppTest.from_file("app_with_upload.py").run()
 
-    #
+  #
 
-    # mock_uploader.assert_called_once_with("Upload CSV", type="csv", key="csv_uploader")
+  # mock_uploader.assert_called_once_with("Upload CSV", type="csv", key="csv_uploader")
 
-    # assert len(at.dataframe) == 1
+  # assert len(at.dataframe) == 1
 
-    # pd.testing.assert_frame_equal(at.dataframe.value, pd.read_csv(io.StringIO(csv_data)))
+  # pd.testing.assert_frame_equal(at.dataframe.value, pd.read_csv(io.StringIO(csv_data)))
 
-    # assert at.success.value == "File processed successfully!"
+  # assert at.success.value == "File processed successfully!"
 
     ```python
     ( shows a user successfully using mocking for `st.file_uploader`).  
     ```
 
-  - Widget properties like label or disabled state can still be tested: `assert at.file_uploader(key="csv_uploader").label == "Upload CSV"`.
+    - Widget properties like label or disabled state can still be tested: `assert at.file_uploader(key="csv_uploader").label == "Upload CSV"`.
 
 - **`st.download_button`:** The `st.download_button` widget allows users to download data from the app.
 
-  - **Testing Button Interaction:** The button itself can be selected (often as `at.button` if not a distinct `at.download_button` type) and clicked using `at.button_element.click().run()`.
-  - `AppTest` can verify:
-    - The existence, label, and disabled state of the download button.
-    - If clicking the button triggers a Python callback function (if `on_click` is configured with a callable).
-    - If clicking the button sets a value in `st.session_state` (if the callback does so).
-  - **Limitation:** `AppTest` **cannot verify the actual file download process**. It cannot confirm that a file with the correct content and filename is actually transferred to the user's machine, as this is a browser-level event handled outside the Python script's direct execution environment.
-  - **Strategy:**
+    - **Testing Button Interaction:** The button itself can be selected (often as `at.button` if not a distinct `at.download_button` type) and clicked using `at.button_element.click().run()`.
+    - `AppTest` can verify:
+        - The existence, label, and disabled state of the download button.
+        - If clicking the button triggers a Python callback function (if `on_click` is configured with a callable).
+        - If clicking the button sets a value in `st.session_state` (if the callback does so).
+    - **Limitation:** `AppTest` **cannot verify the actual file download process**. It cannot confirm that a file with the correct content and filename is actually transferred to the user's machine, as this is a browser-level event handled outside the Python script's direct execution environment.
+    - **Strategy:**
     1. Test the Python logic that prepares the `data` argument for `st.download_button`. Ensure this data is correct through separate unit tests or by inspecting it in `AppTest` if it's derived from `session_state` or other app elements.
     2. In `AppTest`, verify the button's properties and any Python-side effects of its `on_click` handler.
 
@@ -762,25 +762,25 @@ Streamlit's `st.form` allows grouping multiple input widgets whose values are su
 
 - **`st.stop()`:** When `st.stop()` is encountered in the application script during an `at.run()` call, the execution of that script pass halts immediately at that point. Any Streamlit elements or Python code defined after the `st.stop()` call in the script will not be processed or rendered in that particular `AppTest` run.
 
-  - Example:```
+    - Example:```
 
-    # app_with_stop.py
+  # app_with_stop.py
 
-    # import streamlit as st
+  # import streamlit as st
 
-    # st.title("App with Stop")
+  # st.title("App with Stop")
 
-    # user_name = st.text_input("Enter your name:", key="name_field")
+  # user_name = st.text_input("Enter your name:", key="name_field")
 
-    # if not user_name
+  # if not user_name
 
-    # st.warning("Name is required to proceed.")
+  # st.warning("Name is required to proceed.")
 
-    # st.stop()
+  # st.stop()
 
-    # st.success(f"Welcome, {user_name}!") # This line is only reached if name is provided
+  # st.success(f"Welcome, {user_name}!") # This line is only reached if name is provided
 
-    # tests/test_stop_app.py
+  # tests/test_stop_app.py
 
     def test_stop_halts_script():
     at = AppTest.from_file("app_with_stop.py").run() # No name entered initially
@@ -800,11 +800,11 @@ Streamlit's `st.form` allows grouping multiple input widgets whose values are su
 
 - **`st.rerun()` (formerly `st.experimental_rerun` ):** When `st.rerun()` is called within the Streamlit script, it halts the current script's execution pass and immediately queues the script to be rerun from the top.
 
-  - In the context of `AppTest`, if an `at.run()` call executes a script path that encounters `st.rerun()`, that specific `run()` call will complete its (potentially partial) execution up to the point of `st.rerun()`. The effect of the rerun (i.e., the script executing again from the top) will be observed upon the _next_ interaction that triggers a run (e.g., `another_widget.action().run()`) or the next explicit `at.run()` call.
-  - `st.rerun()` does _not_ cause multiple full script executions within a _single_ `at.run()` invocation. `AppTest` processes one script execution pass per `run()` call.
-  - Testing application logic that involves `st.rerun` requires careful sequencing of interactions, `at.run()` calls, and assertions to check the application's state before the `st.rerun` is triggered and then the state after the subsequent run that processes the rerun request.
-  - Misuse of `st.rerun` can lead to infinite loops in a live app, which in `AppTest` might manifest as a timeout.
-  - Complex interactions involving `st.rerun`, especially with elements like `st.dialog` and callbacks, can introduce subtleties in testing. The key is that `AppTest` reflects the state after each controlled script execution, and `st.rerun()` essentially flags the system for another such execution, which `AppTest` must then initiate via a subsequent `.run()`.
+    - In the context of `AppTest`, if an `at.run()` call executes a script path that encounters `st.rerun()`, that specific `run()` call will complete its (potentially partial) execution up to the point of `st.rerun()`. The effect of the rerun (i.e., the script executing again from the top) will be observed upon the _next_ interaction that triggers a run (e.g., `another_widget.action().run()`) or the next explicit `at.run()` call.
+    - `st.rerun()` does _not_ cause multiple full script executions within a _single_ `at.run()` invocation. `AppTest` processes one script execution pass per `run()` call.
+    - Testing application logic that involves `st.rerun` requires careful sequencing of interactions, `at.run()` calls, and assertions to check the application's state before the `st.rerun` is triggered and then the state after the subsequent run that processes the rerun request.
+    - Misuse of `st.rerun` can lead to infinite loops in a live app, which in `AppTest` might manifest as a timeout.
+    - Complex interactions involving `st.rerun`, especially with elements like `st.dialog` and callbacks, can introduce subtleties in testing. The key is that `AppTest` reflects the state after each controlled script execution, and `st.rerun()` essentially flags the system for another such execution, which `AppTest` must then initiate via a subsequent `.run()`.
 
 ## V. Best Practices, Patterns, and Test Organization
 
@@ -827,18 +827,18 @@ Developing a robust and maintainable suite of `AppTest` tests involves adhering 
 
 - **Page Object Model (POM):** The Page Object Model is a widely adopted design pattern in UI automation that promotes maintainability and reduces code duplication. While not explicitly detailed for `AppTest` in the core Streamlit documentation , its principles are highly applicable and beneficial.
 
-  - **Adaptation for `AppTest`:** POM can be adapted by creating Python classes that represent individual pages or significant, reusable UI sections of the Streamlit application.
-    - Each page object class would typically accept an `AppTest` instance (`at`) during its initialization.
-    - Methods within these classes would encapsulate the logic for interacting with specific UI elements on that page (e.g., a `LoginPage` class might have methods like `enter_username(username_str)`, `click_login_button()`). These methods would use the stored `AppTest` instance to find elements (preferably by key) and call their interaction methods, including the necessary `.run()` calls.
-    - Properties or getter methods in the page object can provide convenient access to the state or content of elements on the page (e.g., `login_page.get_error_message_text()`).
-  - **Benefits in Streamlit Testing:**
-    - **Improved Readability:** Test scripts become cleaner and focus on the test intent rather than low-level interaction details (e.g., `login_page.attempt_login("user", "pass")` vs. multiple lines of `at.text_input(...).input(...).run()`).
-    - **Enhanced Maintainability:** If a widget's `key` or the way to interact with a part of the UI changes, updates are needed only in the corresponding page object class, not in every test that uses that UI section.
-    - **Reduced Duplication:** Common sequences of interactions are defined once in the page object.
-  - The core idea is to create an abstraction layer between the test scripts and the `AppTest` API for UI interactions. Page object methods handle the specifics of finding elements, calling `.input()`, `.click()`, `.select()`, and, critically, the subsequent `.run()` calls, thus encapsulating the interaction patterns of `AppTest`.
-  - **Conceptual Example Structure:**```
+    - **Adaptation for `AppTest`:** POM can be adapted by creating Python classes that represent individual pages or significant, reusable UI sections of the Streamlit application.
+        - Each page object class would typically accept an `AppTest` instance (`at`) during its initialization.
+        - Methods within these classes would encapsulate the logic for interacting with specific UI elements on that page (e.g., a `LoginPage` class might have methods like `enter_username(username_str)`, `click_login_button()`). These methods would use the stored `AppTest` instance to find elements (preferably by key) and call their interaction methods, including the necessary `.run()` calls.
+        - Properties or getter methods in the page object can provide convenient access to the state or content of elements on the page (e.g., `login_page.get_error_message_text()`).
+    - **Benefits in Streamlit Testing:**
+        - **Improved Readability:** Test scripts become cleaner and focus on the test intent rather than low-level interaction details (e.g., `login_page.attempt_login("user", "pass")` vs. multiple lines of `at.text_input(...).input(...).run()`).
+        - **Enhanced Maintainability:** If a widget's `key` or the way to interact with a part of the UI changes, updates are needed only in the corresponding page object class, not in every test that uses that UI section.
+        - **Reduced Duplication:** Common sequences of interactions are defined once in the page object.
+    - The core idea is to create an abstraction layer between the test scripts and the `AppTest` API for UI interactions. Page object methods handle the specifics of finding elements, calling `.input()`, `.click()`, `.select()`, and, critically, the subsequent `.run()` calls, thus encapsulating the interaction patterns of `AppTest`.
+    - **Conceptual Example Structure:**```
 
-    # app_pages/login_page.py (Page Object)
+  # app_pages/login_page.py (Page Object)
 
     from streamlit.testing.v1 import AppTest
 
@@ -867,21 +867,21 @@ Developing a robust and maintainable suite of `AppTest` tests involves adhering 
                 return self.error_message_element.value
             return None
 
-    # tests/test_login_feature.py
+  # tests/test_login_feature.py
 
-    # from streamlit.testing.v1 import AppTest
+  # from streamlit.testing.v1 import AppTest
 
-    # from..app_pages.login_page import LoginPage # Assuming POMs are in app_pages/
+  # from..app_pages.login_page import LoginPage # Assuming POMs are in app_pages/
 
-    # def test_failed_login_shows_error_message()
+  # def test_failed_login_shows_error_message()
 
-    # app_instance = AppTest.from_file("your_streamlit_app.py").run()
+  # app_instance = AppTest.from_file("your_streamlit_app.py").run()
 
-    # login_page = LoginPage(app_instance)
+  # login_page = LoginPage(app_instance)
 
-    # login_page.enter_username("wrong_user").enter_password("badpass").click_login()
+  # login_page.enter_username("wrong_user").enter_password("badpass").click_login()
 
-    # assert "Invalid username or password" in login_page.get_error_message()
+  # assert "Invalid username or password" in login_page.get_error_message()
 
     ```python
     This pattern makes tests more declarative and robust to UI changes.
@@ -912,7 +912,7 @@ Managing data for tests is crucial for creating reliable and varied test scenari
 - **Dummy Secrets:** Use `at.secrets` to inject test-specific or dummy secret values during test initialization, avoiding the use of real production secrets in tests.
 - **`pytest` Fixtures:** `pytest` fixtures (`@pytest.fixture`) are a powerful mechanism for providing data, pre-configured `AppTest` instances, or common setup/teardown logic to test functions.```
 
-  # conftest.py (or directly in a test file)
+# conftest.py (or directly in a test file)
 
   import pytest
   from streamlit.testing.v1 import AppTest
@@ -925,11 +925,11 @@ Managing data for tests is crucial for creating reliable and varied test scenari
   at.run()
   return at
 
-  # tests/test_feature.py
+# tests/test_feature.py
 
-  # def test_something_with_app(initialized_app): # Fixture is injected
+# def test_something_with_app(initialized_app): # Fixture is injected
 
-  # assert initialized_app.title.value == "My App Title"
+# assert initialized_app.title.value == "My App Title"
 
   ```
    
@@ -944,36 +944,36 @@ Managing data for tests is crucial for creating reliable and varied test scenari
 Flaky tests are those that produce inconsistent pass/fail results across identical test runs without any code changes, undermining confidence in the test suite.
 
 - **Common Causes and `AppTest`\-Specific Considerations:**
-  - **Relying on Element Index:** Using `at.button` when the order of buttons might change. **Solution:** Always use unique `key` arguments for widgets in the app and select them by key in tests.
-  - **Forgetting `at.run()`:** Asserting state before the script has re-executed after an interaction. **Solution:** Diligently chain `.run()` or call it explicitly after every simulated interaction that would cause a rerun in a live app.
-  - **State Leakage Between Tests:** Though `AppTest` instances are typically fresh per test, if tests interact with external systems (databases, files) without proper setup/teardown, state can leak. **Solution:** Use fixtures for managing external resources, ensure proper cleanup, and mock external dependencies.
-  - **Timing Issues with True Asynchronous Operations:** If the app uses background threads or `asyncio` tasks that update the UI outside the main Streamlit script flow captured by `at.run()`, the UI state might be inconsistent when `AppTest` samples it. **Solution:** Mock such background operations to make them synchronous or return predictable results quickly. Test the UI logic that handles the _results_ of these operations, not the timing of the operations themselves.
-  - **Overly Strict Assertions:** Asserting exact floating-point numbers (use `pytest.approx`) or highly dynamic text that might have subtle variations (assert substrings or use regular expressions if appropriate).
-  - **External Dependencies Unmocked:** Network failures or changes in external API responses can cause flakiness if these dependencies are not mocked. **Solution:** Mock all external service calls.
+    - **Relying on Element Index:** Using `at.button` when the order of buttons might change. **Solution:** Always use unique `key` arguments for widgets in the app and select them by key in tests.
+    - **Forgetting `at.run()`:** Asserting state before the script has re-executed after an interaction. **Solution:** Diligently chain `.run()` or call it explicitly after every simulated interaction that would cause a rerun in a live app.
+    - **State Leakage Between Tests:** Though `AppTest` instances are typically fresh per test, if tests interact with external systems (databases, files) without proper setup/teardown, state can leak. **Solution:** Use fixtures for managing external resources, ensure proper cleanup, and mock external dependencies.
+    - **Timing Issues with True Asynchronous Operations:** If the app uses background threads or `asyncio` tasks that update the UI outside the main Streamlit script flow captured by `at.run()`, the UI state might be inconsistent when `AppTest` samples it. **Solution:** Mock such background operations to make them synchronous or return predictable results quickly. Test the UI logic that handles the _results_ of these operations, not the timing of the operations themselves.
+    - **Overly Strict Assertions:** Asserting exact floating-point numbers (use `pytest.approx`) or highly dynamic text that might have subtle variations (assert substrings or use regular expressions if appropriate).
+    - **External Dependencies Unmocked:** Network failures or changes in external API responses can cause flakiness if these dependencies are not mocked. **Solution:** Mock all external service calls.
 
 ### G. Balancing Test Coverage and Test Suite Execution Time
 
 - **`AppTest` Efficiency:** `AppTest` is designed to be significantly faster than browser-based E2E tests because it operates headlessly and directly executes the Python script. This allows for a larger volume of tests.
 - **Strategic Coverage:**
-  - **Prioritize Critical Paths:** Focus testing efforts on the most important user flows, core business logic, and features that are critical to the application's function.
-  - **Risk-Based Approach:** Test areas of the application that are complex, have a history of bugs, or are undergoing frequent changes more thoroughly.
-  - **Meaningful Tests over Raw Percentage:** While code coverage tools (like `pytest-cov`) provide a metric, a high percentage doesn't guarantee quality if the tests are trivial or don't verify meaningful behavior. Focus on tests that genuinely validate functionality.
+    - **Prioritize Critical Paths:** Focus testing efforts on the most important user flows, core business logic, and features that are critical to the application's function.
+    - **Risk-Based Approach:** Test areas of the application that are complex, have a history of bugs, or are undergoing frequent changes more thoroughly.
+    - **Meaningful Tests over Raw Percentage:** While code coverage tools (like `pytest-cov`) provide a metric, a high percentage doesn't guarantee quality if the tests are trivial or don't verify meaningful behavior. Focus on tests that genuinely validate functionality.
 - **Test Pyramid Adaptation:**
-  - **Unit Tests:** Form the base with many fast tests for individual functions and non-Streamlit logic.
-  - **`AppTest` (Integration/UI Logic Tests):** A substantial layer testing Streamlit script execution, widget interactions, conditional rendering, and session state management.
-  - **End-to-End (E2E) Browser Tests (Optional):** A smaller number of tests for aspects `AppTest` cannot cover, such as actual file downloads, complex JavaScript interactions in custom components, or visual regressions.
+    - **Unit Tests:** Form the base with many fast tests for individual functions and non-Streamlit logic.
+    - **`AppTest` (Integration/UI Logic Tests):** A substantial layer testing Streamlit script execution, widget interactions, conditional rendering, and session state management.
+    - **End-to-End (E2E) Browser Tests (Optional):** A smaller number of tests for aspects `AppTest` cannot cover, such as actual file downloads, complex JavaScript interactions in custom components, or visual regressions.
 - **Execution Time Management:**
-  - If the `AppTest` suite grows very large, consider parallel execution using `pytest-xdist` to reduce overall runtime.
+    - If the `AppTest` suite grows very large, consider parallel execution using `pytest-xdist` to reduce overall runtime.
 
 ### H. CI/CD Integration
 
 Integrating `AppTest` tests into a Continuous Integration/Continuous Deployment (CI/CD) pipeline automates testing on every code change, catching regressions early.
 
 - **Streamlit App Action (GitHub Actions):** Streamlit provides an official GitHub Action `streamlit/streamlit-app-action` that simplifies CI setup. This action can:
-  - Install Python, `pytest`, and project dependencies from `requirements.txt`.
-  - Execute `pytest` to run all discovered tests, including `AppTest` tests.
-  - Perform built-in "smoke tests" which run each page of the app to check for startup exceptions.
-  - Optionally run linters like Ruff.
+    - Install Python, `pytest`, and project dependencies from `requirements.txt`.
+    - Execute `pytest` to run all discovered tests, including `AppTest` tests.
+    - Perform built-in "smoke tests" which run each page of the app to check for startup exceptions.
+    - Optionally run linters like Ruff.
 - **Example GitHub Actions Workflow:**```
   name: Streamlit App CI
   on:
@@ -984,7 +984,7 @@ Integrating `AppTest` tests into a Continuous Integration/Continuous Deployment 
   permissions:
   contents: read # Required to checkout the repository
 
-  # Add other permissions if needed, e.g., for reporting to third-party services
+# Add other permissions if needed, e.g., for reporting to third-party services
 
   jobs:
   test_streamlit_app:
@@ -1043,15 +1043,15 @@ When `AppTest` tests fail, several tools and techniques can aid in diagnosing th
 
 - **`pytest` Output:** `pytest` provides detailed console output for failing tests, including tracebacks for unhandled exceptions in the test code itself and clear indications of assertion failures with expected vs. actual values.
 - **`at.exception` Attribute:** If the Streamlit application script raises an unhandled Python exception during an `at.run()` call, this exception object (or a list of them if multiple occur, though typically it's one per run) is captured in the `at.exception` attribute of the `AppTest` instance. Inspecting this attribute is crucial for diagnosing app-side errors.
-  - A common assertion in tests is `assert not at.exception` to ensure the app script ran cleanly.
-  - If an exception is expected under certain conditions, you can assert its type and message: `assert isinstance(at.exception, MyExpectedErrorType)`.
+    - A common assertion in tests is `assert not at.exception` to ensure the app script ran cleanly.
+    - If an exception is expected under certain conditions, you can assert its type and message: `assert isinstance(at.exception, MyExpectedErrorType)`.
 - **Print Debugging:** The simplest form of debugging involves adding `print()` statements in the test script (e.g., `print(at.text_input.value)`) or even temporarily within the Streamlit app's code to observe variable states or execution flow. To see this output when running `pytest`, use the `-s` flag: `pytest -s`.
 - **IDE Debuggers (e.g., VSCode):** Most Python IDEs offer powerful debugging capabilities. For VSCode, you can configure a `launch.json` file to run and debug `pytest` tests. This allows setting breakpoints within the test script and stepping through its execution, inspecting variables of the `AppTest` instance and the test logic itself. It may also be possible to step into the Streamlit app code being executed by `AppTest`, depending on the debugger's capabilities.
 - **Common Pitfalls to Check:**
-  - **Missing `at.run()`:** Ensure an `at.run()` call follows every widget interaction that is intended to trigger a script rerun and UI update.
-  - **Incorrect Widget Selection:** Using incorrect keys, or relying on element indices that have changed due to UI modifications.
-  - **Path Issues for `AppTest.from_file()`:** The path to the Streamlit script must be correct relative to the directory from which `pytest` is executed. Running `pytest` from the project root is often the most straightforward.
-  - **Timeouts:** `AppTest` has a default timeout for script runs (3 seconds, configurable via `default_timeout` in initialization or `timeout` in `at.run()`). If a test or the app script it's running is performing a very long operation, it might time out. This could indicate a need to optimize the app/test or, if the duration is legitimate, increase the timeout.
+    - **Missing `at.run()`:** Ensure an `at.run()` call follows every widget interaction that is intended to trigger a script rerun and UI update.
+    - **Incorrect Widget Selection:** Using incorrect keys, or relying on element indices that have changed due to UI modifications.
+    - **Path Issues for `AppTest.from_file()`:** The path to the Streamlit script must be correct relative to the directory from which `pytest` is executed. Running `pytest` from the project root is often the most straightforward.
+    - **Timeouts:** `AppTest` has a default timeout for script runs (3 seconds, configurable via `default_timeout` in initialization or `timeout` in `at.run()`). If a test or the app script it's running is performing a very long operation, it might time out. This could indicate a need to optimize the app/test or, if the duration is legitimate, increase the timeout.
 - **Isolating Failures:** To focus debugging efforts, run individual test files (`pytest tests/test_my_feature.py`) or even specific test functions (`pytest tests/test_my_feature.py::test_particular_scenario`).
 
 ### B. Test Reporting
@@ -1061,10 +1061,10 @@ Clear test reports are vital for understanding test suite status, especially in 
 - **`pytest` Console Output:** By default, `pytest` provides immediate feedback in the console, with characters indicating the status of each test (e.g., `.` for pass, `F` for failure, `E` for error, `S` for skip) and a summary at the end.
 - **JUnit XML Reports:** For integration with CI/CD systems (like Jenkins, GitLab CI, Azure DevOps, or for consumption by tools like BrowserStack Test Management ), `pytest` can generate reports in the JUnit XML format. This is achieved using the command-line option: `pytest --junitxml=report.xml`. These XML files can then be parsed by CI tools to display test results.
 - **HTML Reports (`pytest-html` plugin):** For a more human-readable and shareable report, the `pytest-html` plugin is highly recommended.
-  - **Installation:** `pip install pytest-html`
-  - **Usage:** Run `pytest` with the `--html` flag: `pytest --html=test_report.html`. For a single, self-contained HTML file (embedding CSS and JS), use: `pytest --html=test_report.html --self-contained-html`.
-  - **Features:** The HTML report typically includes environment information (Python version, platform, installed plugins), a summary of test results (pass/fail/skip counts, duration), and a detailed table of all tests with their status, duration, and any failure messages or tracebacks.
-  - **Customization:** `pytest-html` allows for customization of the report's appearance (CSS) and content, such as adding extra metadata or modifying columns in the results table.
+    - **Installation:** `pip install pytest-html`
+    - **Usage:** Run `pytest` with the `--html` flag: `pytest --html=test_report.html`. For a single, self-contained HTML file (embedding CSS and JS), use: `pytest --html=test_report.html --self-contained-html`.
+    - **Features:** The HTML report typically includes environment information (Python version, platform, installed plugins), a summary of test results (pass/fail/skip counts, duration), and a detailed table of all tests with their status, duration, and any failure messages or tracebacks.
+    - **Customization:** `pytest-html` allows for customization of the report's appearance (CSS) and content, such as adding extra metadata or modifying columns in the results table.
 - **Integration with GitHub Actions:** The `streamlit/streamlit-app-action` can be combined with actions like `pmeier/pytest-results-action` to parse JUnit XML files and display a summary of test results directly within the GitHub Actions workflow summary page. This provides quick visibility into test outcomes for pull requests and pushes.
 
 ## VII. Holistic Example: End-to-End Testing a Multi-Feature App
@@ -1077,15 +1077,15 @@ The application will consist of two pages: a data entry form and a data display 
 
 - **Page 1: "Data Entry Form" (`app.py`)**
 
-  - This page uses `st.form` to collect user information:
-    - Name: `st.text_input("Name", key="user_name")`
-    - Age: `st.number_input("Age", key="user_age", min_value=0, step=1)`
-    - Department: `st.selectbox("Department",, key="user_dept")`
-  - A `st.form_submit_button("Submit Record", key="submit_button")` triggers form processing.
-  - **Validation:** Upon submission, the app validates that age is 18 or greater.
-  - **State Management:** If validation passes, the submitted record (a dictionary) is appended to a list stored in `st.session_state.user_data`. A success message is shown using `st.success()`.
-  - If validation fails, an error message is shown using `st.error()`.
-  - A button `st.button("View Records", key="nav_to_display")` is provided to navigate to the "Data Display" page. (Navigation will be simulated via `switch_page` in tests).
+    - This page uses `st.form` to collect user information:
+        - Name: `st.text_input("Name", key="user_name")`
+        - Age: `st.number_input("Age", key="user_age", min_value=0, step=1)`
+        - Department: `st.selectbox("Department",, key="user_dept")`
+    - A `st.form_submit_button("Submit Record", key="submit_button")` triggers form processing.
+    - **Validation:** Upon submission, the app validates that age is 18 or greater.
+    - **State Management:** If validation passes, the submitted record (a dictionary) is appended to a list stored in `st.session_state.user_data`. A success message is shown using `st.success()`.
+    - If validation fails, an error message is shown using `st.error()`.
+    - A button `st.button("View Records", key="nav_to_display")` is provided to navigate to the "Data Display" page. (Navigation will be simulated via `switch_page` in tests).
 
   ```python
   # app.py
@@ -1121,11 +1121,11 @@ The application will consist of two pages: a data entry form and a data display 
 
 - **Page 2: "Data Display" (`pages/display_page.py`)**
 
-  - This page retrieves the list of records from `st.session_state.user_data`.
-  - If data exists, it's displayed in an `st.dataframe()`.
-  - A simple `st.bar_chart()` shows the distribution of ages (using a simplified data structure for the chart for testability).
-  - If no data exists, a message "No records to display." is shown.
-  - A button `st.button("Back to Entry Form", key="nav_to_entry")` is provided for navigation.
+    - This page retrieves the list of records from `st.session_state.user_data`.
+    - If data exists, it's displayed in an `st.dataframe()`.
+    - A simple `st.bar_chart()` shows the distribution of ages (using a simplified data structure for the chart for testability).
+    - If no data exists, a message "No records to display." is shown.
+    - A button `st.button("Back to Entry Form", key="nav_to_entry")` is provided for navigation.
 
   ```python
   # pages/display_page.py

@@ -460,6 +460,7 @@ class ScreenAbstractResult(SQLModelBase, table=True):
         sa_column=sa.Column(
             sa.DateTime(timezone=True),
             server_default=sa.text("TIMEZONE('UTC', CURRENT_TIMESTAMP)"),
+            # TODO: This can leak client timestamps to the DB. Create sa.func.utcnow() (recall seeing this in the wild). Refactor all updated_at fields in models.
             onupdate=sa.func.now(),
             nullable=True,
         ),
@@ -532,7 +533,7 @@ class ScreenAbstractResult(SQLModelBase, table=True):
         ),
     )
     model_name: str = Field(
-        description="The LangChain model name that generated this response.",
+        description="The API model name that generated this response. E.g., 'gemini-2.5-pro-preview-05-06'.",
     )
     response_metadata: Mapping[str, JsonValue] = Field(
         default_factory=dict,

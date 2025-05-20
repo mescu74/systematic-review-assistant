@@ -33,11 +33,11 @@ graph TD
         E2S2_1 --> E2S2_2
         E2S2_1 --> E2S2_5
         E2S2_2 --> E2S2_5
+        E2S2_5 --> E2S2_3
         E2S2_2 --> E2S2_3
         E2S2_1 --> E2S2_3
+        E2S2_3 --> E2S2_4
         E2S2_5 --> E2S2_4
-        E2S2_2 --> E2S2_4
-        E2S2_1 --> E2S2_4
     end
 
     %% Epic 3
@@ -48,8 +48,6 @@ graph TD
         E3S3_4("3.4 Document Safe Integration Test Protocol (Planned)")
         E3S3_5("3.5 Database Integrity & Final Review (Planned)")
 
-        %% Dependencies on Epics for Epic 3 stories
-        %% Conceptual links to show Epic 3 stories depend on prior epics being largely done
         E1S1_4 --> E3S3_1
         E2S2_4 --> E3S3_1
         E1S1_4 --> E3S3_2
@@ -58,6 +56,51 @@ graph TD
         E3S3_4
         E3S3_3 --> E3S3_5
         E3S3_4 --> E3S3_5
+    end
+
+    %% Epic 4
+    subgraph "Epic 4: SRA Benchmarking Module Implementation"
+        E4S4_1["4.1 Seed Benchmark Protocol Data (Done)"]
+        E4S4_2["4.2 Seed Benchmark Dataset (Done)"]
+        E4S4_3("4.3 Define BenchmarkRun Model & Schemas (Planned)")
+        E4S4_4("4.4 Define BenchmarkResultItem Model & Schemas (Planned)")
+        E4S4_5("4.5 Create DB Migration for Benchmark Tables (Planned)")
+        E4S4_6("4.6 Benchmark UI - Load & Display Protocol (Planned)")
+        E4S4_7("4.7 Benchmark UI - Trigger Run & Process Items (Planned)")
+        E4S4_8("4.8 Automated Metrics Calculation & Persistence (Planned)")
+        E4S4_9("4.9 Benchmark UI - Display Summary Metrics (Planned)")
+        E4S4_10("4.10 Benchmark UI - Display AI Confidence Stats (Planned)")
+        E4S4_11("4.11 Benchmark Results Export - Detailed (Planned)")
+        E4S4_12("4.12 Benchmark Results Export - Summary (Planned)")
+        E4S4_13("4.13 Adherence to Logging Standards (Planned)")
+
+        %% Dependencies for Epic 4
+        E2S2_2 --> E4S4_1 
+        E2S2_1 --> E4S4_1
+        E4S4_1 --> E4S4_2 
+        E4S4_1 --> E4S4_6 
+        E4S4_2 --> E4S4_7 
+        
+        E2S2_1 --> E4S4_3 
+        E4S4_2 --> E4S4_3 
+        E4S4_3 --> E4S4_5 
+        
+        E2S2_1 --> E4S4_4 
+        E4S4_2 --> E4S4_4 
+        E4S4_3 --> E4S4_4
+        E4S4_4 --> E4S4_5
+
+        E4S4_7 --> E4S4_8 
+        E4S4_8 --> E4S4_9 
+        E4S4_7 --> E4S4_10 
+        E4S4_7 --> E4S4_11 
+        E4S4_8 --> E4S4_12 
+        
+        E1S1_4 --> E4S4_7 %% Benchmark run needs stable search
+        E2S2_2 --> E4S4_7 %% Benchmark run needs resolver agent
+        E2S2_1 --> E4S4_7 %% Benchmark run needs core schemas
+
+        E2S2_2 --> E4S4_13
     end
 
     %% Styling notes from mermaid-synxtax-always.mdc:

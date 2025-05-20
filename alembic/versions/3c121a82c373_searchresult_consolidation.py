@@ -6,12 +6,16 @@ Create Date: 2025-04-08 03:00:40.172399+00:00
 
 """
 
+from __future__ import annotations
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
 import sqlmodel
 from alembic import op
+from loguru import logger
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.exc import ProgrammingError
 
 # revision identifiers, used by Alembic.
 revision: str = "3c121a82c373"
@@ -105,27 +109,40 @@ def upgrade() -> None:
     )
 
     # --- Move constraint drops BEFORE dropping pubmed_results ---
-    op.drop_constraint(
-        "screen_abstract_results_pubmed_result_id_fkey",
-        "screen_abstract_results",
-        type_="foreignkey",
-    )
-    op.drop_constraint(
-        "screening_resolutions_pubmed_result_id_fkey",
-        "screening_resolutions",
-        type_="foreignkey",
-    )
+    try:
+        op.drop_constraint(
+            "screen_abstract_results_pubmed_result_id_fkey",
+            "screen_abstract_results",
+            type_="foreignkey",
+        )
+    except ProgrammingError as e:
+        logger.warning(
+            f"Constraint screen_abstract_results_pubmed_result_id_fkey not found, skipping drop: {e}"
+        )
+    # op.drop_constraint(
+    #     "screening_resolutions_pubmed_result_id_fkey",
+    #     "screening_resolutions",
+    #     type_="foreignkey",
+    # )
     # --- End moved constraints ---
 
     op.drop_index(
-        "ix_pubmed_results_comprehensive_result_id", table_name="pubmed_results"
+        "ix_pubmed_results_comprehensive_result_id",
+        table_name="pubmed_results",
+        if_exists=True,
     )
     op.drop_index(
-        "ix_pubmed_results_conservative_result_id", table_name="pubmed_results"
+        "ix_pubmed_results_conservative_result_id",
+        table_name="pubmed_results",
+        if_exists=True,
     )
-    op.drop_index("ix_pubmed_results_pmid", table_name="pubmed_results")
-    op.drop_index("ix_pubmed_results_resolution_id", table_name="pubmed_results")
-    op.drop_index("ix_pubmed_results_review_id", table_name="pubmed_results")
+    op.drop_index("ix_pubmed_results_pmid", table_name="pubmed_results", if_exists=True)
+    op.drop_index(
+        "ix_pubmed_results_resolution_id", table_name="pubmed_results", if_exists=True
+    )
+    op.drop_index(
+        "ix_pubmed_results_review_id", table_name="pubmed_results", if_exists=True
+    )
     op.drop_table("pubmed_results")
 
     op.alter_column(
@@ -170,41 +187,41 @@ def upgrade() -> None:
         None, "screen_abstract_results", "search_results", ["search_result_id"], ["id"]
     )
     op.drop_column("screen_abstract_results", "pubmed_result_id")
-    op.add_column(
-        "screening_resolutions",
-        sa.Column("search_result_id", sa.Uuid(), nullable=False),
-    )
-    op.alter_column(
-        "screening_resolutions",
-        "conservative_result_id",
-        existing_type=sa.UUID(),
-        nullable=True,
-    )
-    op.alter_column(
-        "screening_resolutions",
-        "comprehensive_result_id",
-        existing_type=sa.UUID(),
-        nullable=True,
-    )
-    op.drop_index(
-        "ix_screening_resolutions_on_resolver_include_gin",
-        table_name="screening_resolutions",
-        postgresql_using="gin",
-    )
-    op.drop_index(
-        "ix_screening_resolutions_pubmed_result_id", table_name="screening_resolutions"
-    )
-    op.create_index(
-        op.f("ix_screening_resolutions_search_result_id"),
-        "screening_resolutions",
-        ["search_result_id"],
-        unique=False,
-    )
-    op.create_foreign_key(
-        None, "screening_resolutions", "search_results", ["search_result_id"], ["id"]
-    )
-    op.drop_column("screening_resolutions", "pubmed_result_id")
-    op.drop_column("screening_resolutions", "resolver_include")
+    # op.add_column(
+    #     "screening_resolutions",
+    #     sa.Column("search_result_id", sa.Uuid(), nullable=False),
+    # )
+    # op.alter_column(
+    #     "screening_resolutions",
+    #     "conservative_result_id",
+    #     existing_type=sa.UUID(),
+    #     nullable=True,
+    # )
+    # op.alter_column(
+    #     "screening_resolutions",
+    #     "comprehensive_result_id",
+    #     existing_type=sa.UUID(),
+    #     nullable=True,
+    # )
+    # op.drop_index(
+    #     "ix_screening_resolutions_on_resolver_include_gin",
+    #     table_name="screening_resolutions",
+    #     postgresql_using="gin",
+    # )
+    # op.drop_index(
+    #     "ix_screening_resolutions_pubmed_result_id", table_name="screening_resolutions"
+    # )
+    # op.create_index(
+    #     op.f("ix_screening_resolutions_search_result_id"),
+    #     "screening_resolutions",
+    #     ["search_result_id"],
+    #     unique=False,
+    # )
+    # op.create_foreign_key(
+    #     None, "screening_resolutions", "search_results", ["search_result_id"], ["id"]
+    # )
+    # op.drop_column("screening_resolutions", "pubmed_result_id")
+    # op.drop_column("screening_resolutions", "resolver_include")
     op.alter_column(
         "systematic_reviews",
         "inclusion_criteria",
@@ -212,6 +229,36 @@ def upgrade() -> None:
         nullable=True,
     )
     # ### end Alembic commands ###
+
+    # --- Move constraint drops here to avoid issues with index drops on columns that will be dropped ---
+    # op.drop_index(
+    #     "ix_pubmed_results_on_resolver_include_gin",
+    #     table_name="pubmed_results",
+    #     postgresql_using="gin",
+    #     if_exists=True,
+    # )
+    # op.drop_index(
+    #     "ix_pubmed_results_resolution_id", table_name="pubmed_results", if_exists=True
+    # )
+    # op.drop_index(
+    #     "ix_pubmed_results_staging_id", table_name="pubmed_results", if_exists=True
+    # )
+    # op.drop_index(
+    #     "ix_screen_abstract_results_pubmed_result_id",
+    #     table_name="screen_abstract_results",
+    #     if_exists=True,
+    # )
+
+    # try:
+    #     op.drop_constraint(
+    #         "screen_abstract_results_pubmed_result_id_fkey",
+    #         "screen_abstract_results",
+    #         type_="foreignkey",
+    #     )
+    # except ProgrammingError as e:
+    #     logger.warning(
+    #         f"Constraint screen_abstract_results_pubmed_result_id_fkey not found, skipping drop: {e}"
+    #     )
 
 
 def downgrade() -> None:

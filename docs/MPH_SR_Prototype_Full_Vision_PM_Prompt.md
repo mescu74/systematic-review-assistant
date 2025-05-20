@@ -17,10 +17,10 @@ The "MPH SR Prototype" is envisioned as an AI-assisted platform to significantly
 
 Please initiate the creation of a comprehensive PRD for the full "MPH SR Prototype". This PRD should:
 
-1.  Detail all features outlined above.
-2.  Define user stories and functional requirements for each capability.
-3.  Consider the phased approach: building upon the stabilized foundation post-recovery, then tackling new modules like advanced search for Scopus/Embase, the full benchmarking suite with SYNERGY integration, etc.
-4.  Lay the groundwork for the eventual technology stack transition.
-5.  Detail requirements for comprehensive system logging, LangSmith integration for LLM tracing, and the generation of a complete audit trail for all review activities to support explainability and reproducibility.
+1. Detail all features outlined above.
+2. Define user stories and functional requirements for each capability.
+3. Consider the phased approach: building upon the stabilized foundation post-recovery, then tackling new modules like advanced search for Scopus/Embase, the full benchmarking suite with SYNERGY integration, etc.
+4. Lay the groundwork for the eventual technology stack transition.
+5. Detail requirements for comprehensive system logging, LangSmith integration for LLM tracing, and the generation of a complete audit trail for all review activities to support explainability and reproducibility.
 
 The main "Project Brief: MPH SR Prototype" (located at `docs/MPH_SR_Prototype_Main_Project_Brief.md`) provides more detailed context on the overall vision. This effort will guide subsequent architectural design and epic/story creation.

@@ -53,6 +53,7 @@ dependencies = [
   "openpyxl>=3.1.5",
   "langchain-text-splitters==0.3.6",
   "langchain-google-genai>=2.0.11",
+  "scikit-learn>=1.6.1",
 ]
 
 [dependency-groups]
@@ -296,7 +297,7 @@ ignore-overlong-task-comments = true
 
 [tool.pytest.ini_options]
 addopts = "-vvv -ra -q --import-mode=importlib"
-pythonpath = ["src/sr_assistant", "tools/"]
+pythonpath = [".", "src/sr_assistant", "tools"]
 testpaths = ["tests/unit"]
 markers = [
   "integration: marks tests as integration tests (require database connection)",

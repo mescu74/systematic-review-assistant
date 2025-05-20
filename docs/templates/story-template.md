@@ -26,35 +26,35 @@
 
 - **Relevant Files:**
 
-  - Files to Create: {e.g., `src/services/s3-service.ts`, `test/unit/services/s3-service.test.ts`}
-  - Files to Modify: {e.g., `lib/hacker-news-briefing-stack.ts`, `src/common/types.ts`}
+    - Files to Create: {e.g., `src/services/s3-service.ts`, `test/unit/services/s3-service.test.ts`}
+    - Files to Modify: {e.g., `lib/hacker-news-briefing-stack.ts`, `src/common/types.ts`}
 
 - **Key Technologies:**
 
-  - {Include only technologies directly used in this specific story, not the entire tech stack}
-  - {If a UI story, mention specific frontend libraries/framework features needed for this story}
+    - {Include only technologies directly used in this specific story, not the entire tech stack}
+    - {If a UI story, mention specific frontend libraries/framework features needed for this story}
 
 - **API Interactions / SDK Usage:**
 
-  - {Include only the specific API endpoints or services relevant to this story}
-  - {e.g., "Use `@aws-sdk/client-s3`: `S3Client`, `GetObjectCommand`, `PutObjectCommand`"}
+    - {Include only the specific API endpoints or services relevant to this story}
+    - {e.g., "Use `@aws-sdk/client-s3`: `S3Client`, `GetObjectCommand`, `PutObjectCommand`"}
 
 - **UI/UX Notes:** {ONLY IF THIS IS A UI Focused Epic or Story - include only relevant mockups/flows}
 
 - **Data Structures:**
 
-  - {Include only the specific data models/entities used in this story, not all models}
-  - {e.g., "Define/Use `AppState` interface: `{ processedStoryIds: string[] }`"}
+    - {Include only the specific data models/entities used in this story, not all models}
+    - {e.g., "Define/Use `AppState` interface: `{ processedStoryIds: string[] }`"}
 
 - **Environment Variables:**
 
-  - {Include only the specific environment variables needed for this story}
-  - {e.g., `S3_BUCKET_NAME` (Read via `config.ts` or passed to CDK)}
+    - {Include only the specific environment variables needed for this story}
+    - {e.g., `S3_BUCKET_NAME` (Read via `config.ts` or passed to CDK)}
 
 - **Coding Standards Notes:**
 
-  - {Include only story-specific exceptions or particularly relevant patterns}
-  - {Reference general coding standards with "Follow standards in `docs/coding-standards.md`"}
+    - {Include only story-specific exceptions or particularly relevant patterns}
+    - {Reference general coding standards with "Follow standards in `docs/coding-standards.md`"}
 
 ## Testing Requirements
 
@@ -70,7 +70,7 @@
 
 - [ ] Task 1
 - [ ] Task 2
-  - [ ] Subtask 2.1
+    - [ ] Subtask 2.1
 - [ ] Task 3
 
 ## Story Wrap Up (Agent Populates After Execution)
@@ -78,5 +78,5 @@
 - **Agent Model Used:** `<Agent Model Name/Version>`
 - **Completion Notes:** {Any notes about implementation choices, difficulties, or follow-up needed}
 - **Change Log:** {Track changes _within this specific story file_ if iterations occur}
-  - Initial Draft
-  - ...
+    - Initial Draft
+    - ...

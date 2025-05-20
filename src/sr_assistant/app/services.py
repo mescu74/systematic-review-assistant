@@ -1,3 +1,6 @@
+# Copyright 2025 Gareth Morgan
+# SPDX-License-Identifier: MIT
+
 # pyright: reportPrivateUsage=false
 """Application Service Layer - Synchronous Implementation."""
 
@@ -1135,8 +1138,7 @@ class ScreeningService(BaseService):
         - Handles errors from the screening agent.
         """
         logger.info(
-            f"Starting batch abstract screening for review {review_id} "
-            f"and {len(search_result_ids_to_screen)} search results."
+            f"Starting batch abstract screening for review {review_id} and {len(search_result_ids_to_screen)} search results."
         )
         processed_agent_results: list[ScreenAbstractResultTuple] = []
 

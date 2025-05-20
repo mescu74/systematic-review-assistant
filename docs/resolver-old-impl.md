@@ -1,12 +1,14 @@
 
 ## Resolver model
 
-The resolver model is `gemini-2.5-pro-preview-05-06` and implemented using `ChatGoogleGenerativeAI` LangChain class. 
+The resolver model is `gemini-2.5-pro-preview-05-06` and implemented using `ChatGoogleGenerativeAI` LangChain class.
+
 - We'll configure it with a coding tool from Google GenAI in case it needs to create a model to evaluate the situation, or perform calculations.
 
 ### Reasoning mode
 
 Note: "Thinking is on by default in both the API and AI Studio because the 2.5 series models have the ability to automatically decide when and how much to think based on the prompt."
+
 - So the resolver prompt **must** encourage deep thinking and analytical mindset! And MUST reference docs/prompt-engineering-guide.md.
 - Note that we had an old resolver implementation in-progress that was abruptly stopped. It should serve as a reference for implementing the new chain and prompt. See the code below.
 - The `thinking_budget` parameter gives the model guidance on the number of thinking tokens it can use when generating a response. A greater number of tokens is typically associated with more detailed thinking, which is needed for solving more complex tasks. thinkingBudget must be an integer in the range 0 to 24576. Setting the thinking budget to 0 disables thinking.

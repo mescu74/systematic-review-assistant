@@ -6,18 +6,20 @@ Create Date: 2025-04-08 18:35:16.599088+00:00
 
 """
 
-from typing import Sequence, Union
+from __future__ import annotations
 
-from alembic import op
+from collections.abc import Sequence
+
 import sqlalchemy as sa
-import sqlmodel
-
+from alembic import op
+from loguru import logger
+from sqlalchemy.exc import ProgrammingError
 
 # revision identifiers, used by Alembic.
 revision: str = "d122fe7364e6"
-down_revision: Union[str, None] = "3c121a82c373"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "3c121a82c373"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -25,23 +27,49 @@ def upgrade() -> None:
     op.drop_index(
         "ix_screening_resolutions_comprehensive_result_id",
         table_name="screening_resolutions",
+        if_exists=True,
     )
     op.drop_index(
         "ix_screening_resolutions_conservative_result_id",
         table_name="screening_resolutions",
+        if_exists=True,
     )
-    op.drop_constraint(
-        "screening_resolutions_comprehensive_result_id_fkey",
-        "screening_resolutions",
-        type_="foreignkey",
-    )
-    op.drop_constraint(
-        "screening_resolutions_conservative_result_id_fkey",
-        "screening_resolutions",
-        type_="foreignkey",
-    )
-    op.drop_column("screening_resolutions", "conservative_result_id")
-    op.drop_column("screening_resolutions", "comprehensive_result_id")
+    try:
+        op.drop_constraint(
+            "screening_resolutions_comprehensive_result_id_fkey",
+            "screening_resolutions",
+            type_="foreignkey",
+        )
+    except ProgrammingError as e:
+        logger.warning(
+            f"Constraint screening_resolutions_comprehensive_result_id_fkey not found or table missing, skipping drop: {e}"
+        )
+
+    try:
+        op.drop_constraint(
+            "screening_resolutions_conservative_result_id_fkey",
+            "screening_resolutions",
+            type_="foreignkey",
+        )
+    except ProgrammingError as e:
+        logger.warning(
+            f"Constraint screening_resolutions_conservative_result_id_fkey not found or table missing, skipping drop: {e}"
+        )
+
+    try:
+        op.drop_column("screening_resolutions", "conservative_result_id")
+    except ProgrammingError as e:
+        logger.warning(
+            f"Column screening_resolutions.conservative_result_id not found or table missing, skipping drop: {e}"
+        )
+
+    try:
+        op.drop_column("screening_resolutions", "comprehensive_result_id")
+    except ProgrammingError as e:
+        logger.warning(
+            f"Column screening_resolutions.comprehensive_result_id not found or table missing, skipping drop: {e}"
+        )
+
     op.add_column(
         "search_results", sa.Column("conservative_result_id", sa.Uuid(), nullable=True)
     )
@@ -97,42 +125,78 @@ def downgrade() -> None:
     )
     op.drop_column("search_results", "comprehensive_result_id")
     op.drop_column("search_results", "conservative_result_id")
-    op.add_column(
-        "screening_resolutions",
-        sa.Column(
-            "comprehensive_result_id", sa.UUID(), autoincrement=False, nullable=True
-        ),
-    )
-    op.add_column(
-        "screening_resolutions",
-        sa.Column(
-            "conservative_result_id", sa.UUID(), autoincrement=False, nullable=True
-        ),
-    )
-    op.create_foreign_key(
-        "screening_resolutions_conservative_result_id_fkey",
-        "screening_resolutions",
-        "screen_abstract_results",
-        ["conservative_result_id"],
-        ["id"],
-    )
-    op.create_foreign_key(
-        "screening_resolutions_comprehensive_result_id_fkey",
-        "screening_resolutions",
-        "screen_abstract_results",
-        ["comprehensive_result_id"],
-        ["id"],
-    )
-    op.create_index(
-        "ix_screening_resolutions_conservative_result_id",
-        "screening_resolutions",
-        ["conservative_result_id"],
-        unique=False,
-    )
-    op.create_index(
-        "ix_screening_resolutions_comprehensive_result_id",
-        "screening_resolutions",
-        ["comprehensive_result_id"],
-        unique=False,
-    )
+    try:
+        op.add_column(
+            "screening_resolutions",
+            sa.Column(
+                "comprehensive_result_id", sa.UUID(), autoincrement=False, nullable=True
+            ),
+        )
+    except ProgrammingError as e:
+        logger.warning(
+            f"Skipping downgrade add_column comprehensive_result_id for screening_resolutions due to: {e}"
+        )
+
+    try:
+        op.add_column(
+            "screening_resolutions",
+            sa.Column(
+                "conservative_result_id", sa.UUID(), autoincrement=False, nullable=True
+            ),
+        )
+    except ProgrammingError as e:
+        logger.warning(
+            f"Skipping downgrade add_column conservative_result_id for screening_resolutions due to: {e}"
+        )
+
+    try:
+        op.create_foreign_key(
+            "screening_resolutions_conservative_result_id_fkey",
+            "screening_resolutions",
+            "comprehensive_search_results",
+            ["conservative_result_id"],
+            ["id"],
+        )
+    except ProgrammingError as e:
+        logger.warning(
+            f"Skipping downgrade recreate of screening_resolutions_conservative_result_id_fkey due to: {e}"
+        )
+
+    try:
+        op.create_foreign_key(
+            "screening_resolutions_comprehensive_result_id_fkey",
+            "screening_resolutions",
+            "comprehensive_search_results",
+            ["comprehensive_result_id"],
+            ["id"],
+        )
+    except ProgrammingError as e:
+        logger.warning(
+            f"Skipping downgrade recreate of screening_resolutions_comprehensive_result_id_fkey due to: {e}"
+        )
+
+    try:
+        op.create_index(
+            "ix_screening_resolutions_conservative_result_id",
+            "screening_resolutions",
+            ["conservative_result_id"],
+            unique=False,
+        )
+    except ProgrammingError as e:
+        logger.warning(
+            f"Skipping downgrade recreate of ix_screening_resolutions_conservative_result_id due to: {e}"
+        )
+
+    try:
+        op.create_index(
+            "ix_screening_resolutions_comprehensive_result_id",
+            "screening_resolutions",
+            ["comprehensive_result_id"],
+            unique=False,
+        )
+    except ProgrammingError as e:
+        logger.warning(
+            f"Skipping downgrade recreate of ix_screening_resolutions_comprehensive_result_id due to: {e}"
+        )
+
     # ### end Alembic commands ###

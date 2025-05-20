@@ -6,12 +6,11 @@ Create Date: 2025-02-07 03:52:49.765273+00:00
 
 """
 
-from typing import Union
 from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
 import sqlmodel
+from alembic import op
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
@@ -39,8 +38,8 @@ def upgrade() -> None:
     op.drop_table("reviews")
     # sa.Enum(name="screeningdecisiontype").drop(op.get_bind(), checkfirst=True)
     # sa.Enum(name="screeningstrategytype").drop(op.get_bind(), checkfirst=True)
-    op.execute("""DROP TYPE IF EXISTS screeningdecisiontype CASCADE""")
-    op.execute("""DROP TYPE IF EXISTS screeningstrategytype CASCADE""")
+    # op.execute("""DROP TYPE IF EXISTS screeningdecisiontype CASCADE""")
+    # op.execute("""DROP TYPE IF EXISTS screeningstrategytype CASCADE""")
 
     op.create_table(
         "systematic_reviews",
