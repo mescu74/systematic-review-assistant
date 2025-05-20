@@ -1,3 +1,5 @@
+// Copyright 2025 Gareth Morgan <garethm@lifework.health>.
+// SPDX-License-Identifier: MIT
 {
   "ruff.enable": true,
   "ruff.codeAction.fixViolation": {
@@ -15,13 +17,16 @@
     "editor.formatOnSave": true,
     "editor.codeActionsOnSave": {
       "source.organizeImports.ruff": "explicit",
-      "source.fixAll.ruff": "explicit"
+      "source.fixAll.ruff": "explicit",
+      "source.fixAll.pylance": "explicit"
     }
   },
   "[markdown]": {
-    // TODO: markdowncli-cli2 formatting and rules
+    // TODO: finalize .markdownlint-cli2.mjs rules, note that "ul-style" isn't fixable but is set to "dash"
+    //       In general, rules should be aligned with AI token friendly formatting while balancing readability.
     "editor.codeActionsOnSave": {
-      "source.organizeLinkDefinitions": "explicit"
+      "source.organizeLinkDefinitions": "explicit",
+      "source.fixAll.markdownlint": "explicit"
     },
     "editor.formatOnSave": true
   },
@@ -35,5 +40,16 @@
   "files.associations": {
     "*.py.bak": "python",
     "*.md.txt": "markdown"
-  }
+  },
+  "licenser.author": "Gareth Morgan <garethm@lifework.health>",
+  "licenser.license": "MIT",
+  "licenser.projectName": "MPH SR Assistant",
+  "licenser.useSPDXLicenseFormat": true,
+  "licenser.customHeader": "@FILENAME@ - @PROJECT@\\nCopyright @YEAR@ @AUTHOR@\\nSPDX-License-Identifier: MIT",
+  "licenser.customSPDXId": "MIT",
+  "licenser.excludeFileExtensions": [
+    "*.md",
+    "*.rst",
+    "*.txt"
+  ]
 }
