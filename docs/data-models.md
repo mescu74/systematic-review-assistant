@@ -11,6 +11,7 @@ This document details the key SQLModel database models and Pydantic schemas used
     - [Search Result Schemas](#search-result-schemas)
     - [Screening Schemas (LLM and Service Layer)](#screening-schemas-llm-and-service-layer)
     - [Benchmark Schemas](#benchmark-schemas)
+    - [Benchmark Result Item Schemas](#benchmark-result-item-schemas)
     - [Suggestion Agent Schemas](#suggestion-agent-schemas)
 - [Notes on Existing `src/sr_assistant/core/schemas.py`](#notes-on-existing-srcsr_assistantcoreschemaspy)
 
@@ -45,6 +46,7 @@ The source of truth for database table structures is defined using SQLModel in `
 - `ScreeningResolution`: Stores the outcome of the conflict resolution process for a `SearchResult`.
 - `LogRecord`: For application logging (details not covered in this document).
 - `BenchmarkRun`: Stores the configuration and summary results of a benchmark execution.
+- `BenchmarkResultItem`: Stores the detailed screening outcome for each item within a benchmark run.
 
 Below is an Entity Relationship Diagram illustrating the primary relationships between these core models.
 
@@ -156,6 +158,26 @@ erDiagram
         AwareDatetime updated_at "Nullable"
     }
 
+    BenchmarkResultItem {
+        UUID id PK
+        UUID benchmark_run_id FK
+        UUID search_result_id FK
+        Boolean human_decision "Nullable"
+        ScreeningDecisionType conservative_decision "Nullable"
+        Float conservative_confidence "Nullable"
+        TEXT conservative_rationale "Nullable"
+        ScreeningDecisionType comprehensive_decision "Nullable"
+        Float comprehensive_confidence "Nullable"
+        TEXT comprehensive_rationale "Nullable"
+        ScreeningDecisionType resolver_decision "Nullable"
+        Float resolver_confidence "Nullable"
+        TEXT resolver_reasoning "Nullable"
+        ScreeningDecisionType final_decision
+        TEXT classification
+        AwareDatetime created_at "Nullable"
+        AwareDatetime updated_at "Nullable"
+    }
+
     SystematicReview ||--o{ SearchResult : "has"
     SystematicReview ||--o{ ScreenAbstractResult : "receives_screening_for"
     SystematicReview ||--o{ ScreeningResolution : "receives_resolution_for"
@@ -170,6 +192,9 @@ erDiagram
     ScreeningResolution ||--|| SystematicReview : "belongs_to_review"
     ScreeningResolution ||--|| SearchResult : "resolves_search_result"
     LogRecord }o--|| SystematicReview : "related_to_review (optional)"
+
+    BenchmarkRun ||--o{ BenchmarkResultItem : "details_in"
+    SearchResult ||--o{ BenchmarkResultItem : "benchmarked_as"
 
     %% Notes:
     %% - String_Array represents list[str] stored as ARRAY(TEXT) in PostgreSQL.
@@ -1080,81 +1105,86 @@ from sr_assistant.core.schemas import BaseSchema
 from sr_assistant.core.types import ScreeningDecisionType, AwareDatetime
 
 class BenchmarkResultItemBase(BaseSchema):
-    benchmark_run_id: uuid.UUID | None = None
-    """ID of the BenchmarkRun this item belongs to."""
-    search_result_id: uuid.UUID | None = None
-    """ID of the SearchResult being benchmarked."""
-    human_decision: bool | None = None
-    """Ground truth human decision (True for include, False for exclude)."""
-    conservative_decision: ScreeningDecisionType | None = None
-    """Decision from the SRA's conservative reviewer."""
-    conservative_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
-    """Confidence score from the conservative reviewer."""
-    conservative_rationale: str | None = None
-    """Rationale from the conservative reviewer."""
-    comprehensive_decision: ScreeningDecisionType | None = None
-    """Decision from the SRA's comprehensive reviewer."""
-    comprehensive_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
-    """Confidence score from the comprehensive reviewer."""
-    comprehensive_rationale: str | None = None
-    """Rationale from the comprehensive reviewer."""
-    final_decision: ScreeningDecisionType | None = None
-    """The SRA's overall output decision for this item in this specific benchmark run."""
-    classification: str | None = None
-    """Classification of the SRA's decision against human ground truth (e.g., TP, FP, TN, FN)."""
+    benchmark_run_id: uuid.UUID
+    """Identifier of the BenchmarkRun this item belongs to."""
+
+    search_result_id: uuid.UUID
+    """Identifier of the SearchResult (the specific paper/abstract) this item refers to."""
+
+    human_decision: bool | None = Field(default=None)
+    """The ground truth decision made by a human screener (True for include, False for exclude). Null if not available."""
+
+    conservative_decision: ScreeningDecisionType | None = Field(default=None)
+    """Decision from the conservative screening agent."""
+    conservative_confidence: float | None = Field(default=None)
+    """Confidence score from the conservative screening agent (0.0 to 1.0)."""
+    conservative_rationale: str | None = Field(default=None)
+    """Rationale from the conservative screening agent."""
+
+    comprehensive_decision: ScreeningDecisionType | None = Field(default=None)
+    """Decision from the comprehensive screening agent."""
+    comprehensive_confidence: float | None = Field(default=None)
+    """Confidence score from the comprehensive screening agent (0.0 to 1.0)."""
+    comprehensive_rationale: str | None = Field(default=None)
+    """Rationale from the comprehensive screening agent."""
+
+    resolver_decision: ScreeningDecisionType | None = Field(default=None)
+    """Decision from the resolver agent, if a conflict occurred and it was invoked."""
+    resolver_confidence: float | None = Field(default=None)
+    """Confidence score from the resolver agent (0.0 to 1.0)."""
+    resolver_reasoning: str | None = Field(default=None)
+    """Reasoning provided by the resolver agent."""
+
+    final_decision: ScreeningDecisionType
+    """The SRA's final decision for this item after all relevant agents have processed it."""
+
+    classification: str
+    """Classification of the SRA's final_decision against the human_decision (e.g., 'TP', 'FP', 'TN', 'FN')."""
 ```
 
 #### `BenchmarkResultItemCreate`
 
-Schema for creating a new benchmark result item.
+Schema for creating new benchmark result items. Timestamps are database-generated.
 
 ```python
 import uuid
-
-from sr_assistant.core.schemas import BaseSchema # Assuming BaseSchema path
-from sr_assistant.core.types import ScreeningDecisionType
+from sr_assistant.core.schemas import BaseSchema # Already imported effectively
 
 class BenchmarkResultItemCreate(BenchmarkResultItemBase):
-    benchmark_run_id: uuid.UUID
-    """ID of the BenchmarkRun this item belongs to. Mandatory."""
-    search_result_id: uuid.UUID
-    """ID of the SearchResult being benchmarked. Mandatory."""
-    human_decision: bool | None # Allow None if ground truth might be missing, though PRD implies it's present
-    """Ground truth human decision."""
-    final_decision: ScreeningDecisionType
-    """The SRA's overall output decision for this item in this run. Mandatory at creation of result item."""
-    classification: str
-    """Classification (TP, FP, TN, FN). Mandatory at creation of result item."""
-    # Other decision/rationale fields are inherited as Optional from BenchmarkResultItemBase
-    # and should be populated if available from the screening/resolver process.
+    """Schema for creating a new benchmark result item.
+
+    `benchmark_run_id`, `search_result_id`, `final_decision`, and `classification` are mandatory
+    (as defined in `BenchmarkResultItemBase`). Other AI decision fields are optional.
+    `created_at` and `updated_at` are database-generated and not client-settable.
+    """
+    pass
 ```
 
 #### `BenchmarkResultItemRead`
 
-Schema for returning benchmark result item data.
+Schema for returning benchmark result item data, including database-generated `id`, `created_at`, and `updated_at`.
 
 ```python
 import uuid
-
-from sr_assistant.core.schemas import BaseSchema # Assuming BaseSchema path
-from sr_assistant.core.types import AwareDatetime, ScreeningDecisionType
+from sr_assistant.core.schemas import BaseSchema # Already imported effectively
+from sr_assistant.core.types import AwareDatetime # Already imported effectively
 
 class BenchmarkResultItemRead(BenchmarkResultItemBase):
+    """Schema for returning benchmark result item data, including database-generated fields."""
+
     id: uuid.UUID
-    """Unique identifier of the benchmark result item."""
-    created_at: AwareDatetime
-    """Timestamp of when the item was created (database-generated)."""
-    updated_at: AwareDatetime
-    """Timestamp of when the item was last updated (database-generated)."""
-    # All fields from BenchmarkResultItemBase are inherited.
-    # Ensure benchmark_run_id and search_result_id are non-optional for read.
-    benchmark_run_id: uuid.UUID
-    search_result_id: uuid.UUID
-    # final_decision (SRA's output for this run item) and classification should ideally be non-optional
-    # for a Read schema if they are always populated when an item is readable.
-    final_decision: ScreeningDecisionType
-    classification: str
+    """Unique identifier for this benchmark result item."""
+
+    created_at: AwareDatetime | None = None
+    """Timestamp of when the benchmark result item was created (database-generated, UTC)."""
+
+    updated_at: AwareDatetime | None = None
+    """Timestamp of when the benchmark result item was last updated (database-generated, UTC)."""
 ```
+
+### Suggestion Agent Schemas
+
+These schemas are, or should be, defined in `src/sr_assistant/core/schemas.py`.
 
 ## Notes on Existing `src/sr_assistant/core/schemas.py`
 

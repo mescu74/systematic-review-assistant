@@ -855,3 +855,76 @@ class BenchmarkRunRead(BenchmarkRunBase):
     """ID of the SystematicReview (protocol) used for this run."""
     # Other fields (config_details, run_notes, all metrics) are inherited from BenchmarkRunBase.
     # They remain Optional as they might not be populated if a run is in progress or failed.
+
+
+# --- BenchmarkResultItem Schemas (Story 4.4) ---
+
+
+class BenchmarkResultItemBase(BaseSchema):
+    """Base schema for individual benchmark result items, containing common fields."""
+
+    benchmark_run_id: uuid.UUID | None = None
+    """Identifier of the BenchmarkRun this item belongs to."""
+
+    search_result_id: uuid.UUID | None = None
+    """Identifier of the SearchResult (the specific paper/abstract) this item refers to."""
+
+    human_decision: bool | None = Field(default=None)
+    """The ground truth decision made by a human screener (True for include, False for exclude). Null if not available."""
+
+    # SRA's conservative agent decisions
+    conservative_decision: ScreeningDecisionType | None = Field(default=None)
+    """Decision from the conservative screening agent."""
+    conservative_confidence: float | None = Field(default=None)
+    """Confidence score from the conservative screening agent (0.0 to 1.0)."""
+    conservative_rationale: str | None = Field(default=None)
+    """Rationale provided by the conservative screening agent."""
+
+    # SRA's comprehensive agent decisions
+    comprehensive_decision: ScreeningDecisionType | None = Field(default=None)
+    """Decision from the comprehensive screening agent."""
+    comprehensive_confidence: float | None = Field(default=None)
+    """Confidence score from the comprehensive screening agent (0.0 to 1.0)."""
+    comprehensive_rationale: str | None = Field(default=None)
+    """Rationale provided by the comprehensive screening agent."""
+
+    # SRA's resolver agent decisions (if invoked)
+    resolver_decision: ScreeningDecisionType | None = Field(default=None)
+    """Decision from the resolver agent, if a conflict occurred and it was invoked."""
+    resolver_confidence: float | None = Field(default=None)
+    """Confidence score from the resolver agent (0.0 to 1.0)."""
+    resolver_reasoning: str | None = Field(default=None)
+    """Reasoning provided by the resolver agent."""
+
+    # SRA's final output for this item in this benchmark run
+    final_decision: ScreeningDecisionType | None = None
+    """The SRA's final decision for this item after all relevant agents have processed it."""
+
+    classification: str | None = None
+    """Classification of the SRA's decision against human ground truth (e.g., TP, FP, TN, FN)."""
+
+
+class BenchmarkResultItemCreate(BenchmarkResultItemBase):
+    """Schema for creating a new benchmark result item.
+
+    `benchmark_run_id`, `search_result_id`, `final_decision`, and `classification` are mandatory.
+    Other AI decision fields (conservative, comprehensive, resolver) are optional as they depend
+    on the AI's output process. `created_at` and `updated_at` are database-generated and not client-settable.
+    """
+
+    # All fields inherited from BenchmarkResultItemBase have their optionality/mandatoriness defined there.
+    # benchmark_run_id, search_result_id, final_decision, classification are already mandatory in Base.
+
+
+class BenchmarkResultItemRead(BenchmarkResultItemBase):
+    """Schema for returning benchmark result item data, including database-generated fields."""
+
+    id: uuid.UUID
+    """Unique identifier for this benchmark result item."""
+
+    created_at: AwareDatetime | None = None
+    """Timestamp of when the benchmark result item was created (database-generated, UTC)."""
+
+    updated_at: AwareDatetime | None = None
+    """Timestamp of when the benchmark result item was last updated (database-generated, UTC)."""
+    # All other fields are inherited from BenchmarkResultItemBase.

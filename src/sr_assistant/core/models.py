@@ -650,6 +650,144 @@ class BenchmarkRun(SQLModelBase, table=True):
     # to SystematicReview if we want a bidirectional relationship. For now, unidirectional via review_id is sufficient.
 
 
+class BenchmarkResultItem(SQLModelBase, table=True):
+    """Stores the detailed screening outcome for each item within a benchmark run.
+
+    Each record links a specific SearchResult item to a BenchmarkRun and captures
+    the human ground truth decision alongside the AI's various screening decisions
+    (conservative, comprehensive, resolver) and the final SRA output decision
+    and classification (e.g., TP, FP).
+    """
+
+    _tablename: t.ClassVar[t.Literal["benchmark_result_items"]] = (
+        "benchmark_result_items"
+    )
+    __tablename__ = _tablename  # pyright: ignore # type: ignore
+
+    # No specific __table_args__ like GIN indexes mentioned for now, add if needed later.
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    """Unique identifier for this benchmark result item."""
+
+    created_at: datetime | None = Field(
+        default=None,
+        sa_column=sa.Column(
+            sa.DateTime(timezone=True),
+            server_default=sa.text("TIMEZONE('UTC', CURRENT_TIMESTAMP)"),
+            nullable=True,
+        ),
+    )
+    """Database generated UTC timestamp when this benchmark result item was created."""
+
+    updated_at: datetime | None = Field(
+        default=None,
+        sa_column=sa.Column(
+            sa.DateTime(timezone=True),
+            server_default=sa.text("TIMEZONE('UTC', CURRENT_TIMESTAMP)"),
+            onupdate=sa.func.now(),
+            nullable=True,
+        ),
+    )
+    """Database generated UTC timestamp when this benchmark result item was last updated."""
+
+    benchmark_run_id: uuid.UUID = Field(foreign_key="benchmark_runs.id", index=True)
+    """Identifier of the BenchmarkRun this item belongs to."""
+
+    search_result_id: uuid.UUID = Field(foreign_key="search_results.id", index=True)
+    """Identifier of the SearchResult (the specific paper/abstract) this item refers to."""
+
+    human_decision: bool | None = Field(default=None, nullable=True)
+    """The ground truth decision made by a human screener (True for include, False for exclude). Null if not available."""
+
+    # SRA's conservative agent decisions
+    conservative_decision: ScreeningDecisionType | None = Field(
+        default=None,
+        sa_column=sa.Column(
+            type_=sa_pg.ENUM(
+                ScreeningDecisionType,
+                name="screeningdecisiontype",  # Assumes 'screeningdecisiontype' enum is globally defined
+                values_callable=enum_values,
+                create_type=False,
+            ),
+            nullable=True,
+            index=True,
+        ),
+    )
+    """Decision from the conservative screening agent."""
+    conservative_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    """Confidence score from the conservative screening agent (0.0 to 1.0)."""
+    conservative_rationale: str | None = Field(
+        default=None, sa_column=sa.Column(sa.Text())
+    )
+    """Rationale provided by the conservative screening agent."""
+
+    # SRA's comprehensive agent decisions
+    comprehensive_decision: ScreeningDecisionType | None = Field(
+        default=None,
+        sa_column=sa.Column(
+            type_=sa_pg.ENUM(
+                ScreeningDecisionType,
+                name="screeningdecisiontype",
+                values_callable=enum_values,
+                create_type=False,
+            ),
+            nullable=True,
+            index=True,
+        ),
+    )
+    """Decision from the comprehensive screening agent."""
+    comprehensive_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    """Confidence score from the comprehensive screening agent (0.0 to 1.0)."""
+    comprehensive_rationale: str | None = Field(
+        default=None, sa_column=sa.Column(sa.Text())
+    )
+    """Rationale provided by the comprehensive screening agent."""
+
+    # SRA's resolver agent decisions (if invoked)
+    resolver_decision: ScreeningDecisionType | None = Field(
+        default=None,
+        sa_column=sa.Column(
+            type_=sa_pg.ENUM(
+                ScreeningDecisionType,
+                name="screeningdecisiontype",
+                values_callable=enum_values,
+                create_type=False,
+            ),
+            nullable=True,
+            index=True,
+        ),
+    )
+    """Decision from the resolver agent, if a conflict occurred and it was invoked."""
+    resolver_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    """Confidence score from the resolver agent (0.0 to 1.0)."""
+    resolver_reasoning: str | None = Field(default=None, sa_column=sa.Column(sa.Text()))
+    """Reasoning provided by the resolver agent."""
+
+    # SRA's final output for this item in this benchmark run
+    final_decision: ScreeningDecisionType = Field(
+        sa_column=sa.Column(
+            type_=sa_pg.ENUM(
+                ScreeningDecisionType,
+                name="screeningdecisiontype",
+                values_callable=enum_values,
+                create_type=False,
+            ),
+            nullable=False,  # Non-nullable as per story
+            index=True,
+        )
+    )
+    """The SRA's final decision for this item after all relevant agents (conservative, comprehensive, resolver) have processed it."""
+
+    classification: str = Field(
+        sa_column=sa.Column(sa.Text(), nullable=False)  # Non-nullable as per story
+    )
+    """Classification of the SRA's final_decision against the human_decision (e.g., 'TP', 'FP', 'TN', 'FN')."""
+
+    # Relationships (optional, define if needed for direct object access, requires back_populates on other models)
+    # benchmark_run: "BenchmarkRun" = Relationship(back_populates="result_items")
+    # search_result: "SearchResult" = Relationship(back_populates="benchmark_items")
+
+
 class LogRecord(SQLModelBase, table=True):
     """Model for storing app log records."""
 
