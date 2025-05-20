@@ -80,6 +80,7 @@ graph TD
         E4S4_1 --> E4S4_2 
         E4S4_1 --> E4S4_6 
         E4S4_2 --> E4S4_7 
+        E4S4_6 --> E4S4_7 %% Added: Trigger run UI depends on display protocol UI
         
         E2S2_1 --> E4S4_3 
         E4S4_2 --> E4S4_3 
@@ -93,14 +94,18 @@ graph TD
         E4S4_7 --> E4S4_8 
         E4S4_8 --> E4S4_9 
         E4S4_7 --> E4S4_10 
+        E4S4_9 --> E4S4_10 %% Added: Confidence stats display builds upon summary metrics display page
         E4S4_7 --> E4S4_11 
+        E4S4_9 --> E4S4_11 %% Added: Detailed export UI is part of the results display page
         E4S4_8 --> E4S4_12 
+        E4S4_9 --> E4S4_12 %% Added: Summary export UI is part of the results display page
         
         E1S1_4 --> E4S4_7 %% Benchmark run needs stable search
         E2S2_2 --> E4S4_7 %% Benchmark run needs resolver agent
         E2S2_1 --> E4S4_7 %% Benchmark run needs core schemas
 
         E2S2_2 --> E4S4_13
+        E4S4_12 --> E4S4_13 %% Logging standards apply to all preceding Epic 4 stories implementations
     end
 
     %% Styling notes from mermaid-synxtax-always.mdc:
