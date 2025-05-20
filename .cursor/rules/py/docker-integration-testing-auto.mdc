@@ -1,0 +1,81 @@
+---
+description: 
+globs: tests/**/*.py
+alwaysApply: false
+---
+# Python Dockerized Integration Testing with PostgreSQL & Connection Poolers
+
+This rule captures lessons learned from debugging PostgreSQL integration tests that run within a Docker environment, particularly when using Supabase (which employs PgBouncer) and SQLAlchemy/SQLModel. It focuses on issues that might cause tests to pass in isolation but fail when run as part of a larger suite.
+
+## Critical Rules & Lessons Learned
+
+1.  **Running Specific Integration Tests in Docker:**
+    *   To run a specific integration test file within the Docker environment provided by the `Makefile`, use the `TEST_FILE` environment variable with the `make test.integration` target:
+        ```bash
+        make -e TEST_FILE=tests/integration/your_test_file.py test.integration
+        ```
+    *   To run a specific test function or class within that file, use the standard `pytest` node ID syntax:
+        ```bash
+        make -e TEST_FILE=tests/integration/your_test_file.py::TestClassName::test_function_name test.integration
+        ```
+    *   This is useful for isolating problematic tests identified during a full suite run.
+
+2.  **Error: `(psycopg.errors.FeatureNotSupported) cached plan must not change result type`**
+    *   **Context:** This error was observed when a test involving `db_session.get(Model, primary_key)` passed in isolation but failed when run after other integration tests, even with schema cleaning between tests.
+    *   **Likely Cause:** Interaction with PostgreSQL's query plan caching, possibly exacerbated by PgBouncer (used by Supabase) connection pooling. A previous test might subtly alter the session or connection state in a way that a reused connection (from the pool) leads to an invalid cached plan for a subsequent, similar query structure.
+    *   **Solution/Workaround:** In the affected test (`tests/integration/tools/test_seed_benchmark_data_integration.py`), replacing the ORM's direct primary key lookup (e.g., `db_session.get(MyModel, pk_value)`) with an explicit query using `select()` (e.g., `db_session.exec(select(MyModel).where(MyModel.id == pk_value)).one_or_none()`) resolved the issue. This suggests that constructing the query explicitly might bypass the specific problematic cached plan or lead to a fresh plan.
+    *   **Broader Implication:** Be mindful of how ORM convenience methods translate to SQL and how these might interact with connection poolers and statement caching, especially in complex test suites.
+
+3.  **Error: `(psycopg.errors.ActiveSqlTransaction) DISCARD ALL cannot run inside a transaction block`**
+    *   **Context:** This error occurred when attempting to add `DISCARD ALL;` to the `clean_db` pytest fixture to more aggressively reset PostgreSQL session state.
+    *   **Cause:** `DISCARD ALL` cannot be executed within an active transaction. SQLAlchemy connections obtained via `engine.connect()` often start transactions implicitly.
+    *   **Solution:** If `DISCARD ALL` is deemed necessary, it must be run on a connection configured for autocommit for that specific command:
+        ```python
+        with db_engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
+            conn.execute(sa.text("DISCARD ALL;"))
+        ```
+    *   **Note:** While `DISCARD ALL` can resolve some state issues, it also invalidates all prepared statements on that connection. If SQLAlchemy attempts to reuse a prepared statement name on that same connection subsequently, it can lead to `(psycopg.errors.InvalidSqlStatementName) prepared statement "_pg3_X" does not exist`. This was observed to break many other tests, indicating `DISCARD ALL` might be too aggressive if connections are reused without re-preparing statements. The decision was made to remove `DISCARD ALL;` for this reason.
+
+4.  **Test Database Schema Management (`tests/conftest.py::clean_db`):**
+    *   The current `clean_db` fixture uses `DROP SCHEMA public CASCADE; CREATE SCHEMA public;` followed by `models.SQLModel.metadata.create_all(db_engine)`.
+    *   **Lesson:** While `SQLModel.metadata.create_all()` is convenient for setting up tables based on Python models, it might not perfectly replicate a schema created and maintained by Alembic migrations, especially concerning custom enum types or other complex constraints defined only in migrations. This was a source of `InvalidTextRepresentation` errors for enums until the models and `create_all` were aligned or migrations fixed/bypassed for test setup.
+    *   **Ideal (Future):** Test database schemas should ideally be managed by the same Alembic migrations as the development/production databases to ensure consistency. This was attempted but reverted due to issues with historical migrations for the test environment setup.
+
+5.  **Idempotency of Seeding Scripts:**
+    *   When testing scripts that seed data (e.g., `tools/seed_benchmark_data.py`), ensure the script itself is idempotent or that test cleanup is thorough. The seeding script was refactored to delete existing data for the specific benchmark review before adding new data, which is a robust approach for idempotency.
+
+6.  **Pytest Fixture Scopes:**
+    *   `db_engine` is `scope="session"`: Good for performance, but means all tests share the same engine and connection pool. This can contribute to inter-test interference if connection state isn't perfectly managed by lower-scoped fixtures.
+    *   `clean_db` and `db_session` are `scope="function"`: Correct for ensuring each test function gets a clean schema and its own transactional session.
+
+## Examples
+
+<example>
+# Running a specific integration test file via Makefile
+# This correctly sets up the Docker environment and passes the TEST_FILE variable.
+make -e TEST_FILE=tests/integration/tools/test_seed_benchmark_data_integration.py test.integration
+
+# Example of replacing .get() to avoid "cached plan" issues, from
+# tests/integration/tools/test_seed_benchmark_data_integration.py
+
+# Original problematic line in a test:
+# review_in_db = db_session.get(models.SystematicReview, BENCHMARK_REVIEW_ID)
+
+# Corrected version using explicit select:
+stmt_review = select(models.SystematicReview).where(models.SystematicReview.id == BENCHMARK_REVIEW_ID)
+review_in_db = db_session.exec(stmt_review).one_or_none()
+assert review_in_db is not None
+</example>
+
+<example type="invalid">
+# Attempting to run DISCARD ALL within an implicit transaction (before AUTOCOMMIT fix)
+# This code, if placed directly in a test using a standard db_session or simple conn.execute(), would likely fail.
+# with db_engine.connect() as conn: # This connection might start a transaction
+#     conn.execute(sa.text("DISCARD ALL;")) # Fails if already in a transaction
+#     conn.commit()
+
+# Relying on SQLModel.metadata.create_all() to perfectly reflect all Alembic migration details
+# (especially for custom enum types or complex constraints) in the test DB if migrations are the true source of schema definition.
+# This can lead to discrepancies if Alembic is the source of truth for the prototype DB schema and `create_all` doesn't match it perfectly.
+# While used as a workaround in tests/conftest.py, it's a point of potential divergence from production schema state if not carefully managed.
+</example>
