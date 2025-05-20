@@ -4,6 +4,7 @@ globs:
 alwaysApply: true
 ---
 # Rules for running tests
+- **Always use `uv run`** to run `pytest`. Flags are already configured in [pyproject.toml](mdc:pyproject.toml)
 - Story unit test tasks/sub-tasks can only be marked as completed once all `make test.unit` tests are passing.
 
 ## Unit testing rules
