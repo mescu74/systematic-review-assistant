@@ -44,6 +44,7 @@ The source of truth for database table structures is defined using SQLModel in `
 - `ScreenAbstractResult`: Stores the outcome of an LLM screening decision (conservative or comprehensive) for a `SearchResult`.
 - `ScreeningResolution`: Stores the outcome of the conflict resolution process for a `SearchResult`.
 - `LogRecord`: For application logging (details not covered in this document).
+- `BenchmarkRun`: Stores the configuration and summary results of a benchmark execution.
 
 Below is an Entity Relationship Diagram illustrating the primary relationships between these core models.
 
@@ -131,10 +132,35 @@ erDiagram
         JSONB exception "Nullable"
     }
 
+    BenchmarkRun {
+        UUID id PK
+        UUID review_id FK
+        JSONB config_details "Nullable"
+        TEXT run_notes "Nullable"
+        Integer tp "Nullable"
+        Integer fp "Nullable"
+        Integer fn "Nullable"
+        Integer tn "Nullable"
+        Float sensitivity "Nullable"
+        Float specificity "Nullable"
+        Float accuracy "Nullable"
+        Float ppv "Nullable"
+        Float npv "Nullable"
+        Float f1_score "Nullable"
+        Float mcc "Nullable"
+        Float cohen_kappa "Nullable"
+        Float pabak "Nullable"
+        Float lr_plus "Nullable"
+        Float lr_minus "Nullable"
+        AwareDatetime created_at "Nullable"
+        AwareDatetime updated_at "Nullable"
+    }
+
     SystematicReview ||--o{ SearchResult : "has"
     SystematicReview ||--o{ ScreenAbstractResult : "receives_screening_for"
     SystematicReview ||--o{ ScreeningResolution : "receives_resolution_for"
     SystematicReview ||--o{ LogRecord : "has_events"
+    SystematicReview ||--o{ BenchmarkRun : "has_benchmark_runs"
     
     SearchResult }o--|| ScreeningResolution : "is_resolved_by (optional)"
     SearchResult }o..|| ScreenAbstractResult : "conservative_review (via conservative_result_id)"
@@ -818,22 +844,125 @@ These schemas are used for creating, reading, and updating `BenchmarkRun` and `B
 
 The `BenchmarkRun` SQLModel itself (defined in `src/sr_assistant/core/models.py`) will have database-generated `created_at` and `updated_at` fields, similar to `SystematicReview`. The `review_id` field serves as a foreign key to `SystematicReview.id`.
 
+First, here's the SQLModel definition for `BenchmarkRun` from `src/sr_assistant/core/models.py`:
+
+```python
+import uuid
+import typing as t # Assuming 't' is standard alias for typing in models.py context
+from datetime import datetime
+
+from sqlmodel import Field, SQLModel # Assuming base imports
+import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import JSONB
+# from .base import SQLModelBase, add_gin_index # Context specific imports
+
+# class SQLModelBase(SQLModel): ... # Simplified for brevity
+# def add_gin_index(...): ... # Simplified for brevity
+
+class BenchmarkRun(SQLModelBase, table=True):
+    """Stores the configuration and summary results of a benchmark execution.
+
+    Each run is tied to a specific SystematicReview protocol and captures the
+    performance metrics achieved during that run.
+    """
+
+    _tablename: t.ClassVar[t.Literal["benchmark_runs"]] = "benchmark_runs"
+    __tablename__ = _tablename # pyright: ignore # type: ignore
+
+    # Assuming add_gin_index is available
+    # __table_args__ = (add_gin_index(_tablename, "config_details"),) 
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    """Unique identifier for the benchmark run."""
+
+    created_at: datetime | None = Field(
+        default=None,
+        sa_column=sa.Column(
+            sa.DateTime(timezone=True),
+            server_default=sa.text("TIMEZONE('UTC', CURRENT_TIMESTAMP)"),
+            nullable=True,
+        ),
+    )
+    """Database generated UTC timestamp when this benchmark run was created."""
+
+    updated_at: datetime | None = Field(
+        default=None,
+        sa_column=sa.Column(
+            sa.DateTime(timezone=True),
+            server_default=sa.text("TIMEZONE('UTC', CURRENT_TIMESTAMP)"),
+            onupdate=sa.func.now(),
+            nullable=True,
+        ),
+    )
+    """Database generated UTC timestamp when this benchmark run was last updated."""
+
+    review_id: uuid.UUID = Field(foreign_key="systematic_reviews.id", index=True)
+    """Identifier of the SystematicReview (protocol) used for this benchmark run."""
+
+    config_details: t.Dict[str, t.Any] = Field(
+        default_factory=dict,
+        sa_column=sa.Column(JSONB, nullable=True),
+    )
+    """Configuration settings for the benchmark run (e.g., LLM models, prompt versions)."""
+
+    run_notes: str | None = Field(
+        default=None,
+        sa_column=sa.Column(sa.Text(), nullable=True),
+    )
+    """User-provided notes or comments about this specific benchmark run."""
+
+    # Performance Metrics
+    tp: int | None = Field(default=None)
+    """True Positives: Number of correctly identified relevant studies."""
+    fp: int | None = Field(default=None)
+    """False Positives: Number of incorrectly identified relevant studies (Type I error)."""
+    fn: int | None = Field(default=None)
+    """False Negatives: Number of incorrectly missed relevant studies (Type II error)."""
+    tn: int | None = Field(default=None)
+    """True Negatives: Number of correctly identified irrelevant studies."""
+
+    sensitivity: float | None = Field(default=None)
+    """Sensitivity (Recall or True Positive Rate): TP / (TP + FN)."""
+    specificity: float | None = Field(default=None)
+    """Specificity (True Negative Rate): TN / (TN + FP)."""
+    accuracy: float | None = Field(default=None)
+    """Accuracy: (TP + TN) / (TP + FP + FN + TN)."""
+    ppv: float | None = Field(default=None)
+    """Positive Predictive Value (Precision): TP / (TP + FP)."""
+    npv: float | None = Field(default=None)
+    """Negative Predictive Value: TN / (TN + FN)."""
+    f1_score: float | None = Field(default=None)
+    """F1 Score: 2 * (Precision * Recall) / (Precision + Recall)."""
+    mcc: float | None = Field(default=None)
+    """Matthews Correlation Coefficient: A measure of the quality of binary classifications."""
+    cohen_kappa: float | None = Field(default=None)
+    """Cohen's Kappa: A statistic that measures inter-rater agreement for qualitative (categorical) items."""
+    pabak: float | None = Field(default=None)
+    """Prevalence and Bias Adjusted Kappa: Adjusts Cohen's Kappa for prevalence and bias."""
+    lr_plus: float | None = Field(default=None)
+    """Positive Likelihood Ratio: sensitivity / (1 - specificity)."""
+    lr_minus: float | None = Field(default=None)
+    """Negative Likelihood Ratio: (1 - sensitivity) / specificity."""
+```
+
 #### `BenchmarkRunBase`
 
 Base schema for benchmark runs, containing common fields. All fields are optional to facilitate inheritance by `BenchmarkRunUpdate` and to allow `BenchmarkRunCreate` to specify only necessary fields for initial creation.
 
 ```python
 import uuid
-from typing import Dict, Any
-from pydantic import Field, JsonValue # Assuming JsonValue is appropriate for config_details
+from typing import Dict, Any # Python 3.9+ can use dict instead of Dict
+from pydantic import Field # Assuming JsonValue is appropriate for config_details
 
 from sr_assistant.core.schemas import BaseSchema
 from sr_assistant.core.types import AwareDatetime # Assuming AwareDatetime is defined
 
 class BenchmarkRunBase(BaseSchema):
+    """Base schema for benchmark runs, containing common fields for creation and updates."""
+
     review_id: uuid.UUID | None = None
-    """ID of the SystematicReview used as the protocol for this benchmark run."""
-    config_details: Dict[str, Any] | None = None # Using Dict[str, Any] for flexibility, maps to JSONB
+    """ID of the SystematicReview (protocol) used for this benchmark run."""
+    config_details: Dict[str, Any] | None = Field(default_factory=dict)
     """Flexible JSONB field to store configuration details used for this run (e.g., LLM models, prompt versions)."""
     run_notes: str | None = None
     """Optional user-provided notes about the benchmark run."""
@@ -857,7 +986,7 @@ class BenchmarkRunBase(BaseSchema):
     """Negative Predictive Value."""
     f1_score: float | None = None
     """F1 Score."""
-    mcc_score: float | None = None
+    mcc: float | None = None
     """Matthews Correlation Coefficient."""
     cohen_kappa: float | None = None
     """Cohen's Kappa for inter-rater reliability (AI vs Human)."""
@@ -881,9 +1010,14 @@ from pydantic import Field
 from sr_assistant.core.schemas import BaseSchema # Assuming BaseSchema path
 
 class BenchmarkRunCreate(BenchmarkRunBase):
+    """Schema for creating a new benchmark run.
+    Metrics are typically calculated and populated later via an update.
+    `created_at` and `updated_at` are database-generated and not client-settable.
+    """
+
     review_id: uuid.UUID
     """ID of the SystematicReview (protocol) for this run. This is mandatory for creation."""
-    config_details: Dict[str, Any] = Field(default_factory=dict)
+    config_details: Dict[str, Any] = Field(default_factory=dict) # Ensures it's non-optional dict for create
     """Configuration details for the run, defaults to an empty dict."""
     # Metrics are not set on creation, they are calculated and updated later.
     # run_notes can be set on creation if desired, or later.
@@ -897,6 +1031,11 @@ Schema for updating an existing benchmark run, primarily used to populate calcul
 from sr_assistant.core.schemas import BaseSchema # Assuming BaseSchema path
 
 class BenchmarkRunUpdate(BenchmarkRunBase):
+    """Schema for updating an existing benchmark run.
+    Primarily used to populate calculated metrics and potentially add/update notes.
+    All fields are optional to allow partial updates.
+    `review_id`, `created_at`, and `updated_at` are not client-updatable through this schema.
+    """
     # All fields are inherited as Optional from BenchmarkRunBase, allowing partial updates.
     pass
 ```
@@ -913,15 +1052,17 @@ from sr_assistant.core.schemas import BaseSchema
 from sr_assistant.core.types import AwareDatetime
 
 class BenchmarkRunRead(BenchmarkRunBase):
+    """Schema for returning benchmark run data, including database-generated fields and all metrics."""
+
     id: uuid.UUID
     """Unique identifier of the benchmark run."""
-    created_at: AwareDatetime
-    """Timestamp of when the benchmark run was created (database-generated)."""
-    updated_at: AwareDatetime
-    """Timestamp of when the benchmark run was last updated (database-generated)."""
+    created_at: AwareDatetime | None # Align with model where DB can set to None initially
+    """Timestamp of when the benchmark run was created (database-generated, UTC)."""
+    updated_at: AwareDatetime | None # Align with model
+    """Timestamp of when the benchmark run was last updated (database-generated, UTC)."""
     review_id: uuid.UUID # Should be non-optional after creation
     """ID of the SystematicReview (protocol) used for this run."""
-    config_details: Dict[str, Any] # Should be non-optional if always present
+    config_details: Dict[str, Any] # Should be non-optional if always present after creation
     """Configuration details used for the run."""
     # Metric fields inherited from BenchmarkRunBase remain Optional[float/int], 
     # as they might not be populated if a run is in progress or failed before calculation.
@@ -1052,3 +1193,4 @@ This section summarizes key discrepancies found or recommendations made while do
 | Data Model Updates for Benchmark | 2025-05-16 | 0.8 (DM) | Added SQLModel and Pydantic schema definitions for BenchmarkRun and BenchmarkResultItem. Updated ERD. | Architect Agent |
 | Data Model Refinements | 2025-05-20 | 0.8.1 (DM) | Added Benchmark models/schemas. Corrected `BenchmarkResultItem.final_decision` naming (SRA's output for run) & updated notes on existing schemas. | Architect Agent |
 | BenchmarkRun FK & Timestamps | 2025-05-20 | 0.8.2 (DM) | Corrected `BenchmarkRun.review_id` (was `benchmark_review_id`) and clarified database-generated timestamps. Updated ERD. | AI Assistant |
+| BenchmarkRun Model & Schemas | 2025-05-21 | 0.9 (DM) | Added full `BenchmarkRun` SQLModel and Pydantic schemas (`Base`, `Create`, `Update`, `Read`). Updated ERD. | AI Assistant |

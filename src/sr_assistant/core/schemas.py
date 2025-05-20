@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import MutableMapping  # noqa: TC003  # needed for tests
-from typing import TypedDict
+from typing import Any, TypedDict
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator
 from pydantic.types import AwareDatetime, PositiveInt  # noqa: TC002
@@ -761,3 +761,97 @@ class ScreeningResolutionRead(BaseSchema):
 
     trace_id: uuid.UUID | None
     """LangSmith trace_id for the resolver invocation."""
+
+
+# Benchmark Schemas
+# Added in Story 4.3
+
+
+class BenchmarkRunBase(BaseSchema):
+    """Base schema for benchmark runs, containing common fields for creation and updates."""
+
+    review_id: uuid.UUID | None = None
+    """ID of the SystematicReview (protocol) used for this benchmark run."""
+    config_details: dict[str, Any] | None = Field(default_factory=dict)
+    """Flexible JSONB field to store configuration details used for this run (e.g., LLM models, prompt versions)."""
+    run_notes: str | None = None
+    """Optional user-provided notes about the benchmark run."""
+
+    # Metric fields - all optional as they might not be set initially or during updates.
+    tp: int | None = None
+    """True Positives count."""
+    fp: int | None = None
+    """False Positives count."""
+    fn: int | None = None
+    """False Negatives count."""
+    tn: int | None = None
+    """True Negatives count."""
+    sensitivity: float | None = None
+    """Sensitivity score (Recall)."""
+    specificity: float | None = None
+    """Specificity score."""
+    accuracy: float | None = None
+    """Overall accuracy score."""
+    ppv: float | None = None
+    """Positive Predictive Value (Precision)."""
+    npv: float | None = None
+    """Negative Predictive Value."""
+    f1_score: float | None = None
+    """F1 Score."""
+    mcc: float | None = None  # field name from model
+    """Matthews Correlation Coefficient."""
+    cohen_kappa: float | None = None
+    """Cohen's Kappa for inter-rater reliability (AI vs Human)."""
+    pabak: float | None = None
+    """Prevalence and Bias Adjusted Kappa."""
+    lr_plus: float | None = None  # field name from model
+    """Positive Likelihood Ratio."""
+    lr_minus: float | None = None  # field name from model
+    """Negative Likelihood Ratio."""
+
+
+class BenchmarkRunCreate(BenchmarkRunBase):
+    """Schema for creating a new benchmark run.
+
+    Metrics are typically calculated and populated later via an update.
+    `created_at` and `updated_at` are database-generated and not client-settable.
+    """
+
+    review_id: uuid.UUID
+    """ID of the SystematicReview (protocol) for this run. This is mandatory for creation."""
+    # config_details is inherited from BenchmarkRunBase, defaults to empty dict if not provided.
+    # run_notes is inherited from BenchmarkRunBase, optional.
+    # Metric fields are inherited as Optional[None] and are not set on creation.
+
+
+class BenchmarkRunUpdate(BenchmarkRunBase):
+    """Schema for updating an existing benchmark run.
+
+    Primarily used to populate calculated metrics and potentially add/update notes.
+    All fields are optional to allow partial updates.
+    `review_id`, `created_at`, and `updated_at` are not client-updatable through this schema.
+    """
+
+    # All fields are inherited as Optional from BenchmarkRunBase.
+    # review_id is Optional in Base, so it *could* be updated, but story says it should not be.
+    # To prevent review_id update, it would need to be excluded or handled in service layer.
+    # For now, aligning with "All fields should be optional" from story.
+    # If strict non-updatability of review_id is needed, it should be omitted here.
+
+
+class BenchmarkRunRead(BenchmarkRunBase):
+    """Schema for returning benchmark run data, including database-generated fields and all metrics."""
+
+    id: uuid.UUID
+    """Unique identifier of the benchmark run."""
+    created_at: AwareDatetime | None = (
+        None  # Align with model, DB can set this to None initially
+    )
+    """Timestamp of when the benchmark run was created (database-generated, UTC)."""
+    updated_at: AwareDatetime | None = None  # Align with model
+    """Timestamp of when the benchmark run was last updated (database-generated, UTC)."""
+
+    review_id: uuid.UUID  # Should be non-optional after creation
+    """ID of the SystematicReview (protocol) used for this run."""
+    # Other fields (config_details, run_notes, all metrics) are inherited from BenchmarkRunBase.
+    # They remain Optional as they might not be populated if a run is in progress or failed.

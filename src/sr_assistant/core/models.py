@@ -18,6 +18,7 @@ import sqlalchemy as sa
 import sqlalchemy.dialects.postgresql as sa_pg
 from pydantic import ConfigDict, JsonValue
 from pydantic.types import PositiveInt
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import Mapped
 from sqlmodel import Field, Relationship, SQLModel  # type: ignore
@@ -551,6 +552,102 @@ class ScreenAbstractResult(SQLModelBase, table=True):
     #        "post_update": True,
     #    },
     # )
+
+
+class BenchmarkRun(SQLModelBase, table=True):
+    """Stores the configuration and summary results of a benchmark execution.
+
+    Each run is tied to a specific SystematicReview protocol and captures the
+    performance metrics achieved during that run.
+    """
+
+    _tablename: t.ClassVar[t.Literal["benchmark_runs"]] = "benchmark_runs"
+    __tablename__ = _tablename  # pyright: ignore # type: ignore
+
+    __table_args__ = (add_gin_index(_tablename, "config_details"),)
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    """Unique identifier for the benchmark run."""
+
+    created_at: datetime | None = Field(
+        default=None,
+        sa_column=sa.Column(
+            sa.DateTime(timezone=True),
+            server_default=sa.text("TIMEZONE('UTC', CURRENT_TIMESTAMP)"),
+            nullable=True,
+        ),
+    )
+    """Database generated UTC timestamp when this benchmark run was created."""
+
+    updated_at: datetime | None = Field(
+        default=None,
+        sa_column=sa.Column(
+            sa.DateTime(timezone=True),
+            server_default=sa.text("TIMEZONE('UTC', CURRENT_TIMESTAMP)"),
+            onupdate=sa.func.now(),
+            nullable=True,
+        ),
+    )
+    """Database generated UTC timestamp when this benchmark run was last updated."""
+
+    review_id: uuid.UUID = Field(foreign_key="systematic_reviews.id", index=True)
+    """Identifier of the SystematicReview (protocol) used for this benchmark run."""
+
+    config_details: dict[str, t.Any] = Field(  # As per story: dict[str, Any]
+        default_factory=dict,
+        sa_column=sa.Column(JSONB, nullable=True),  # Story says nullable=True
+    )
+    """Configuration settings for the benchmark run (e.g., LLM models, prompt versions)."""
+
+    run_notes: str | None = Field(
+        default=None,
+        sa_column=sa.Column(sa.Text(), nullable=True),
+    )
+    """User-provided notes or comments about this specific benchmark run."""
+
+    # Performance Metrics
+    tp: int | None = Field(default=None)
+    """True Positives: Number of correctly identified relevant studies."""
+    fp: int | None = Field(default=None)
+    """False Positives: Number of incorrectly identified relevant studies (Type I error)."""
+    fn: int | None = Field(default=None)
+    """False Negatives: Number of incorrectly missed relevant studies (Type II error)."""
+    tn: int | None = Field(default=None)
+    """True Negatives: Number of correctly identified irrelevant studies."""
+
+    sensitivity: float | None = Field(default=None)
+    """Sensitivity (Recall or True Positive Rate): TP / (TP + FN)."""
+    specificity: float | None = Field(default=None)
+    """Specificity (True Negative Rate): TN / (TN + FP)."""
+    accuracy: float | None = Field(default=None)
+    """Accuracy: (TP + TN) / (TP + FP + FN + TN)."""
+    ppv: float | None = Field(default=None)
+    """Positive Predictive Value (Precision): TP / (TP + FP)."""
+    npv: float | None = Field(default=None)
+    """Negative Predictive Value: TN / (TN + FN)."""
+    f1_score: float | None = Field(default=None)
+    """F1 Score: 2 * (Precision * Recall) / (Precision + Recall)."""
+    mcc: float | None = Field(
+        default=None
+    )  # Story uses MCC, field name reflects that. Docstring has full name.
+    """Matthews Correlation Coefficient: A measure of the quality of binary classifications."""
+    cohen_kappa: float | None = Field(default=None)
+    """Cohen's Kappa: A statistic that measures inter-rater agreement for qualitative (categorical) items."""
+    pabak: float | None = Field(default=None)
+    """Prevalence and Bias Adjusted Kappa: Adjusts Cohen's Kappa for prevalence and bias."""
+    lr_plus: float | None = Field(
+        default=None
+    )  # Story uses LR+, field name reflects that.
+    """Positive Likelihood Ratio: sensitivity / (1 - specificity)."""
+    lr_minus: float | None = Field(
+        default=None
+    )  # Story uses LR-, field name reflects that.
+    """Negative Likelihood Ratio: (1 - sensitivity) / specificity."""
+
+    # Relationship to SystematicReview (Optional, if needed for direct access from BenchmarkRun)
+    # review: "SystematicReview" = Relationship(back_populates="benchmark_runs")
+    # Need to add "benchmark_runs: Mapped[list["BenchmarkRun"]] = Relationship(back_populates="review")"
+    # to SystematicReview if we want a bidirectional relationship. For now, unidirectional via review_id is sufficient.
 
 
 class LogRecord(SQLModelBase, table=True):

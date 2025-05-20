@@ -62,7 +62,7 @@ graph TD
     subgraph "Epic 4: SRA Benchmarking Module Implementation"
         E4S4_1["4.1 Seed Benchmark Protocol Data (Done)"]
         E4S4_2["4.2 Seed Benchmark Dataset (Done)"]
-        E4S4_3("4.3 Define BenchmarkRun Model & Schemas (Planned)")
+        E4S4_3["4.3 Define BenchmarkRun Model & Schemas (Done)"]
         E4S4_4("4.4 Define BenchmarkResultItem Model & Schemas (Planned)")
         E4S4_5("4.5 Create DB Migration for Benchmark Tables (Planned)")
         E4S4_6("4.6 Benchmark UI - Load & Display Protocol (Planned)")
