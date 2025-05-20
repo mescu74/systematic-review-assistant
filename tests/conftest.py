@@ -95,6 +95,12 @@ def clean_db(db_engine: sa.Engine, request: pytest.FixtureRequest):
     models.SQLModel.metadata.create_all(db_engine)
     print("Test database schema setup via SQLModel.metadata.create_all() complete.")
 
+    # Attempt to reset connection state
+    # with db_engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
+    #     conn.execute(sa.text("DISCARD ALL;"))
+    #     # No conn.commit() needed due to autocommit
+    # print("PostgreSQL session state discarded using DISCARD ALL.")
+
     yield  # Test runs here
     print("DB cleanup fixture finished.")
 

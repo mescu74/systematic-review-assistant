@@ -5,9 +5,9 @@ import os
 import html
 
 import pytest
-from pytest_mock import MockerFixture
+# from pytest_mock import MockerFixture # Not used in this file directly anymore
 from sqlmodel import Session, select
-from sqlalchemy import delete as sqlalchemy_delete, text # Import text for raw SQL
+from sqlalchemy import text # Removed sqlalchemy_delete as _cleanup_db is removed
 from loguru import logger
 
 from sr_assistant.core import models
@@ -19,6 +19,7 @@ from tools.seed_benchmark_data import (
 
 # Note: The db_session fixture is expected to be provided by tests/conftest.py
 # and handle test DB connection and cleanup.
+# The global clean_db fixture from conftest.py will handle setup/teardown.
 
 @pytest.mark.integration
 class TestSeedBenchmarkDataIntegration:
@@ -39,52 +40,8 @@ class TestSeedBenchmarkDataIntegration:
             print("stderr from script:", result.stderr)
         return result
 
-    def _cleanup_db(self, db_session: Session):
-        """Cleans up records created by the seeding script using bulk delete."""
-        try:
-            logger.info(f"Starting cleanup for review ID: {BENCHMARK_REVIEW_ID}")
-            
-            # Bulk delete SearchResults associated with the benchmark review
-            # Using getattr to ensure the type checker understands the column attribute
-            delete_search_results_stmt = sqlalchemy_delete(models.SearchResult).where(
-                getattr(models.SearchResult, "review_id") == BENCHMARK_REVIEW_ID
-            )
-            # Use session.execute for core SQLAlchemy statements like a raw Delete
-            result_proxy = db_session.execute(delete_search_results_stmt) # pyright: ignore[reportDeprecated]
-            deleted_search_results_count = result_proxy.rowcount # pyright: ignore[reportAttributeAccessIssue] 
-            db_session.commit() # Commit after deleting search results
-            logger.info(f"Bulk deleted and committed {deleted_search_results_count} SearchResult records.")
-
-            # Delete the SystematicReview using a bulk delete statement
-            logger.info(f"Attempting to delete SystematicReview with ID: {BENCHMARK_REVIEW_ID} via bulk operation.")
-            delete_review_stmt = sqlalchemy_delete(models.SystematicReview).where(
-                models.SystematicReview.id == BENCHMARK_REVIEW_ID # pyright: ignore
-            )
-            review_delete_result = db_session.execute(delete_review_stmt) # pyright: ignore[reportDeprecated, reportUnknownMemberType]
-            db_session.commit()
-            if review_delete_result.rowcount > 0: # pyright: ignore[reportAttributeAccessIssue]
-                logger.info(f"SystematicReview with ID: {BENCHMARK_REVIEW_ID} deleted and committed via bulk op.")
-            else:
-                logger.info(f"SystematicReview with ID: {BENCHMARK_REVIEW_ID} not found for deletion via bulk op.")
-            
-            logger.info(f"Cleanup completed for review ID: {BENCHMARK_REVIEW_ID}")
-
-        except Exception as e:
-            logger.error(f"Error during DB cleanup for review ID {BENCHMARK_REVIEW_ID}: {e!r}")
-            try:
-                db_session.rollback()
-                logger.info("Cleanup rolled back.")
-            except Exception as re:
-                logger.error(f"Error during rollback attempt in cleanup: {re!r}")
-            raise
-
-    @pytest.fixture(autouse=True)
-    def auto_cleanup_db(self, db_session: Session):
-        """Ensures DB cleanup before and after each test in this class."""
-        self._cleanup_db(db_session) # Pre-cleanup
-        yield
-        self._cleanup_db(db_session) # Post-cleanup
-
+    # Removed local _cleanup_db and auto_cleanup_db fixture
+    # Relying on global clean_db from conftest.py
 
     def test_seeding_script_creates_and_populates_data_correctly(self, db_session: Session):
         """
@@ -108,8 +65,9 @@ class TestSeedBenchmarkDataIntegration:
         assert script_result.returncode == 0, f"Script failed: {script_result.stderr}"
 
         # 2. Verify SystematicReview
-        # Fetch the review created by the script
-        review_in_db = db_session.get(models.SystematicReview, BENCHMARK_REVIEW_ID)
+        # Fetch the review created by the script using explicit select
+        stmt_review = select(models.SystematicReview).where(models.SystematicReview.id == BENCHMARK_REVIEW_ID)
+        review_in_db = db_session.exec(stmt_review).one_or_none()
         assert review_in_db is not None, f"SystematicReview with ID {BENCHMARK_REVIEW_ID} not found in DB."
 
         # Define expected PICO and exclusion criteria values directly
@@ -270,8 +228,9 @@ Full-Text Screening Specific Exclusions:
         script_result2 = self._run_seed_script()
         assert script_result2.returncode == 0, f"Script failed on second run: {script_result2.stderr}"
 
-        # Verify SystematicReview still exists and is correct (basic check)
-        review_in_db_run2 = db_session.get(models.SystematicReview, BENCHMARK_REVIEW_ID)
+        # Verify SystematicReview still exists and is correct (basic check) using explicit select
+        stmt_review_run2 = select(models.SystematicReview).where(models.SystematicReview.id == BENCHMARK_REVIEW_ID)
+        review_in_db_run2 = db_session.exec(stmt_review_run2).one_or_none()
         assert review_in_db_run2 is not None
         
         # Verify SearchResults count is still the same
@@ -296,7 +255,7 @@ Full-Text Screening Specific Exclusions:
         assert sample_result_run2.source_metadata["benchmark_human_decision"] is False # From CSV
 
 
-    def test_seeding_script_handles_missing_csv_gracefully(self, db_session: Session, mocker: MockerFixture):
+    def test_seeding_script_handles_missing_csv_gracefully(self, db_session: Session):
         """
         Tests that if the benchmark CSV is missing, the script reports an error
         and doesn't seed SearchResults (and potentially cleans up or doesn't create the Review).
@@ -330,8 +289,9 @@ Full-Text Screening Specific Exclusions:
             
             assert script_result.returncode == 0 # Script completes even if CSV parsing fails
 
-            # Verify review might exist (or was touched)
-            review_in_db = db_session.get(models.SystematicReview, BENCHMARK_REVIEW_ID)
+            # Verify review might exist (or was touched) using explicit select
+            stmt_review_missing_csv = select(models.SystematicReview).where(models.SystematicReview.id == BENCHMARK_REVIEW_ID)
+            review_in_db = db_session.exec(stmt_review_missing_csv).one_or_none()
             assert review_in_db is not None # Review protocol is independent of CSV
 
             # Verify no SearchResults were created for this review
