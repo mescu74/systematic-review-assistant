@@ -58,6 +58,8 @@ from sqlmodel.sql.expression import SelectOfScalar
 
 from sr_assistant.core.models import (
     Base,
+    BenchmarkResultItem,
+    BenchmarkRun,
     LogRecord,
     ScreenAbstractResult,
     ScreeningResolution,
@@ -722,34 +724,73 @@ class ScreeningResolutionRepository(BaseRepository[ScreeningResolution]):
     def get_by_search_result_id(
         self, session: Session, search_result_id: uuid.UUID
     ) -> ScreeningResolution | None:
-        """Get resolution by SearchResult ID."""
+        """Get a ScreeningResolution by SearchResult ID."""
         try:
-            query = (
-                select(self.model_cls).where(
-                    self.model_cls.search_result_id == search_result_id
-                )
-                # .options(selectinload(self.model_cls.search_result))
+            stmt = select(self.model_cls).where(
+                self.model_cls.search_result_id == search_result_id
             )
-            return session.exec(query).first()
+            return session.exec(stmt).first()
         except SQLAlchemyError as exc:
-            msg = f"Database error in get_by_search_result_id for {search_result_id}: {exc}"
+            msg = f"Failed to fetch ScreeningResolution for search result {search_result_id}"
             logger.exception(msg)
             raise RepositoryError(msg) from exc
 
     def get_by_review_id(
         self, session: Session, review_id: uuid.UUID
     ) -> Sequence[ScreeningResolution]:
-        """Get all resolutions for a specific review."""
+        """Get all ScreeningResolutions for a specific review."""
         try:
-            query = (
-                select(self.model_cls).where(self.model_cls.review_id == review_id)
-                # .options(
-                #     selectinload(self.model_cls.review),
-                #     selectinload(self.model_cls.search_result),
-                # )
-            )
-            return session.exec(query).all()
+            stmt = select(self.model_cls).where(self.model_cls.review_id == review_id)
+            return session.exec(stmt).all()
         except SQLAlchemyError as exc:
-            msg = f"Failed to fetch screening resolutions for review {review_id}: {exc}"
+            msg = f"Failed to fetch ScreeningResolutions for review {review_id}: {exc}"
+            logger.exception(msg)
+            raise RepositoryError(msg) from exc
+
+
+class BenchmarkRunRepository(BaseRepository["BenchmarkRun"]):  # type: ignore[name-defined]
+    """Repository for BenchmarkRun model operations."""
+
+    def get_by_review_id(
+        self, session: Session, review_id: uuid.UUID
+    ) -> Sequence[BenchmarkRun]:  # type: ignore[name-defined]
+        """Get all BenchmarkRuns for a specific review."""
+        try:
+            stmt = select(self.model_cls).where(self.model_cls.review_id == review_id)
+            return session.exec(stmt).all()
+        except SQLAlchemyError as exc:
+            msg = f"Failed to fetch BenchmarkRuns for review {review_id}: {exc}"
+            logger.exception(msg)
+            raise RepositoryError(msg) from exc
+
+
+class BenchmarkResultItemRepository(BaseRepository["BenchmarkResultItem"]):  # type: ignore[name-defined]
+    """Repository for BenchmarkResultItem model operations."""
+
+    def get_by_benchmark_run_id(
+        self, session: Session, benchmark_run_id: uuid.UUID
+    ) -> Sequence[BenchmarkResultItem]:  # type: ignore[name-defined]
+        """Get all BenchmarkResultItems for a specific benchmark run."""
+        try:
+            stmt = select(self.model_cls).where(
+                self.model_cls.benchmark_run_id == benchmark_run_id
+            )
+            return session.exec(stmt).all()
+        except SQLAlchemyError as exc:
+            msg = f"Failed to fetch BenchmarkResultItems for benchmark run {benchmark_run_id}: {exc}"
+            logger.exception(msg)
+            raise RepositoryError(msg) from exc
+
+    def get_by_search_result_id(
+        self, session: Session, search_result_id: uuid.UUID
+    ) -> Sequence[BenchmarkResultItem]:  # type: ignore[name-defined]
+        """Get all BenchmarkResultItems for a specific search result."""
+        try:
+            stmt = select(self.model_cls).where(
+                self.model_cls.search_result_id == search_result_id
+            )
+            return session.exec(stmt).all()
+        except SQLAlchemyError as exc:
+            msg = f"Failed to fetch BenchmarkResultItems for search result {search_result_id}: {exc}"
             logger.exception(msg)
             raise RepositoryError(msg) from exc
