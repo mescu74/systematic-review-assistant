@@ -64,7 +64,7 @@ graph TD
         E4S4_2["4.2 Seed Benchmark Dataset (Done)"]
         E4S4_3["4.3 Define BenchmarkRun Model & Schemas (Done)"]
         E4S4_4["4.4 Define BenchmarkResultItem Model & Schemas (Done)"]
-        E4S4_5("4.5 Create DB Migration for Benchmark Tables (Planned)")
+        E4S4_5["4.5 Create DB Migration for Benchmark Tables (Done)"]
         E4S4_6("4.6 Benchmark UI - Load & Display Protocol (Planned)")
         E4S4_7("4.7 Benchmark UI - Trigger Run & Process Items (Planned)")
         E4S4_8("4.8 Automated Metrics Calculation & Persistence (Planned)")
