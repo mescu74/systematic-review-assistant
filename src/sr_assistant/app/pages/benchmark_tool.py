@@ -205,7 +205,8 @@ def calculate_metrics(
     return metrics
 
 
-st.set_page_config(layout="wide", page_title="SRA Benchmark Tool")
+# WARN: This can be only invoked once (in main.py): `st.set_page_config(layout="wide", page_title="SRA Benchmark Tool")`
+
 st.title("SR Assistant - Benchmark Tool")
 
 if "benchmark_review" not in st.session_state:

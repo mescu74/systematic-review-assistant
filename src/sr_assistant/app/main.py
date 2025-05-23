@@ -65,6 +65,18 @@ def main() -> None:  # noqa: C901
         icon=":material/preview:",
     )
 
+    # Benchmark pages
+    human_benchmark_page = st.Page(
+        "pages/human_benchmark_page.py",
+        title="Protocol Review",
+        icon=":material/description:",
+    )
+    benchmark_tool_page = st.Page(
+        "pages/benchmark_tool.py",
+        title="Run Benchmark",
+        icon=":material/analytics:",
+    )
+
     if st.session_state.logged_in:
         pg = st.navigation(
             {
@@ -72,6 +84,7 @@ def main() -> None:  # noqa: C901
                 "Protocol": [protocol_page],
                 "Search Strategy": [search_page],
                 "Screening": [abstracts_page, fulltext_screening_page],
+                "Benchmark": [human_benchmark_page, benchmark_tool_page],
             }
         )
         if "config" not in st.session_state:
