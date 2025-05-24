@@ -505,7 +505,7 @@ if st.session_state.get("benchmark_running", False):
                 # Store search results and calculate batches
                 st.session_state.benchmark_search_results = list(search_results)
                 total_items = len(search_results)
-                batch_size = 10
+                batch_size = 10  # Consistent batch size
                 st.session_state.benchmark_total_batches = (
                     total_items + batch_size - 1
                 ) // batch_size
@@ -528,28 +528,29 @@ if st.session_state.get("benchmark_running", False):
         st.rerun()
 
     elif phase == "processing_batches":
-        # Phase 2: Process items incrementally (1-2 items at a time for frequent updates)
+        # Phase 2: Process items incrementally in batches of BATCH_SIZE_CONFIG
+        BATCH_SIZE_CONFIG = 10  # Use a consistent batch size config
 
         # Check if we have items left to process
         total_items = len(st.session_state.benchmark_search_results)
         processed_items = st.session_state.benchmark_stats["total_processed"]
 
         if processed_items < total_items:
-            # Process next 1-2 items for frequent updates
-            items_per_cycle = (
-                2  # Process 2 items per UI cycle for better responsiveness
-            )
+            # Process next batch
             start_idx = processed_items
-            end_idx = min(start_idx + items_per_cycle, total_items)
+            end_idx = min(start_idx + BATCH_SIZE_CONFIG, total_items)
 
             current_batch_items = st.session_state.benchmark_search_results[
                 start_idx:end_idx
             ]
 
             # Update status
-            batch_num = (processed_items // 10) + 1
-            item_in_batch = (processed_items % 10) + 1
-            st.session_state.benchmark_status = f"Processing items {start_idx + 1}-{end_idx} (batch {batch_num}, items {item_in_batch}-{item_in_batch + len(current_batch_items) - 1})..."
+            current_display_batch = (processed_items // BATCH_SIZE_CONFIG) + 1
+            total_display_batches = (
+                total_items + BATCH_SIZE_CONFIG - 1
+            ) // BATCH_SIZE_CONFIG
+
+            st.session_state.benchmark_status = f"Processing batch {current_display_batch}/{total_display_batches} (items {start_idx + 1}-{end_idx} of {total_items})..."
 
             # Process these items
             with st.spinner(f"Processing items {start_idx + 1}-{end_idx}..."):
@@ -563,12 +564,12 @@ if st.session_state.get("benchmark_running", False):
                             st.session_state.benchmark_running = False
                             st.rerun()
 
-                        # Use batch index based on the first item
-                        batch_idx = start_idx // 10
+                        # Use batch index based on the first item for screen_abstracts_batch
+                        batch_idx_for_agent = start_idx // BATCH_SIZE_CONFIG
 
                         batch_output = screen_abstracts_batch(
                             batch=list(current_batch_items),
-                            batch_idx=batch_idx,
+                            batch_idx=batch_idx_for_agent,  # Agent uses 0-indexed batch numbers
                             review=st.session_state.benchmark_review,
                         )
 
