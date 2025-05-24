@@ -11,7 +11,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-from alembic import op  # pyright: ignore[reportUnknownMemberType]
+from alembic import op  # pyright: ignore[reportAttributeAccessIssue]
 from loguru import logger
 from sqlalchemy.exc import ProgrammingError
 

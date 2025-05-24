@@ -1245,3 +1245,151 @@ def invoke_resolver_chain(
 # class ResolverChainBatchInputDict(t.TypedDict):
 #     \"\"\"ressolve_screening_result_batch.batch(**this_input_dict).
 # No more 'existing code' after this point, ensure the file ends cleanly.
+
+
+class ResolverBatchOutput(t.NamedTuple):
+    """Output tuple of invoke_resolver_batch().
+
+    Attributes:
+        results (list[tuple[models.SearchResult, ResolverOutputSchema | Exception]]): list of resolver results
+        cb (OpenAICallbackHandler): callback handler for the batch
+    """
+
+    results: list[tuple[models.SearchResult, ResolverOutputSchema | Exception]]
+    cb: OpenAICallbackHandler
+
+
+def make_resolver_batch_input(
+    conflicts: list[
+        tuple[models.SearchResult, schemas.ScreeningResult, schemas.ScreeningResult]
+    ],
+    review: models.SystematicReview,
+) -> dict[str, t.Any]:
+    """Create input for a batch of resolver chain invocations.
+
+    Args:
+        conflicts: List of (search_result, conservative_result, comprehensive_result) tuples
+        review: The systematic review protocol
+
+    Returns:
+        Dict with inputs and configs for batch invocation
+    """
+    logger.info(f"Creating batch input for {len(conflicts)} resolver conflicts")
+
+    inputs = []
+    configs = []
+
+    for i, (search_result, conservative_result, comprehensive_result) in enumerate(
+        conflicts
+    ):
+        # Prepare the resolver inputs
+        chain_input_model = prepare_resolver_inputs_for_prompt(
+            search_result=search_result,
+            review=review,
+            conservative_result=conservative_result,
+            comprehensive_result=comprehensive_result,
+        )
+
+        inputs.append(chain_input_model.model_dump())
+
+        configs.append(
+            RunnableConfig(
+                run_name="resolver_chain",
+                metadata={
+                    "review_id": str(review.id),
+                    "search_result_id": str(search_result.id),
+                    "batch_index": i,
+                },
+                tags=[
+                    "sra:prototype",
+                    "sra:benchmark",
+                    "sra:resolver",
+                    f"sra:review_id:{review.id}",
+                    f"sra:search_result_id:{search_result.id}",
+                    f"sra:resolver_batch:i:{i}",
+                ],
+            )
+        )
+
+    return {"inputs": inputs, "config": configs}
+
+
+@logger.catch(
+    onerror=lambda exc: (
+        st.error(f"Resolver Batch Error: {exc!r}") if ut.in_streamlit() else None,
+        None,
+    )[-1]
+)  # pyright: ignore [reportArgumentType]
+def invoke_resolver_batch(
+    conflicts: list[
+        tuple[models.SearchResult, schemas.ScreeningResult, schemas.ScreeningResult]
+    ],
+    review: models.SystematicReview,
+) -> ResolverBatchOutput | None:
+    """Invoke resolver chain on a batch of conflicts.
+
+    Args:
+        conflicts: List of (search_result, conservative_result, comprehensive_result) tuples
+        review: The systematic review protocol
+
+    Returns:
+        ResolverBatchOutput with results and callback info, None if error occurred
+    """
+    if not conflicts:
+        logger.warning("No conflicts provided to resolver batch")
+        # Create an empty callback handler
+        with get_openai_callback() as empty_cb:
+            pass
+        return ResolverBatchOutput(results=[], cb=deepcopy(empty_cb))
+
+    batch_logger = logger.bind(batch_size=len(conflicts))
+    batch_input = make_resolver_batch_input(conflicts, review)
+
+    with get_openai_callback() as cb_openai:
+        try:
+            batch_logger.info(
+                f"Invoking resolver chain batch with {len(conflicts)} conflicts"
+            )
+
+            # Use the resolver chain's batch method
+            batch_results = resolver_chain.batch(**batch_input)
+
+            # Pair results with their corresponding search results
+            results: list[
+                tuple[models.SearchResult, ResolverOutputSchema | Exception]
+            ] = []
+            for i, result in enumerate(batch_results):
+                search_result = conflicts[i][
+                    0
+                ]  # Get the SearchResult from the conflict tuple
+
+                if isinstance(result, ResolverOutputSchema):
+                    results.append((search_result, result))
+                    batch_logger.info(
+                        f"Resolver successful for SearchResult {search_result.id}"
+                    )
+                else:
+                    # Treat as an error
+                    error = Exception(
+                        f"Unexpected resolver result type: {type(result)}"
+                    )
+                    results.append((search_result, error))
+                    batch_logger.error(
+                        f"Resolver error for SearchResult {search_result.id}: {error}"
+                    )
+
+            return ResolverBatchOutput(
+                results=results,
+                cb=deepcopy(cb_openai),
+            )
+
+        except Exception as exc:
+            batch_logger.exception(f"Exception occurred during resolver batch: {exc}")
+            # Return empty results with the current search results and exceptions
+            error_results: list[
+                tuple[models.SearchResult, ResolverOutputSchema | Exception]
+            ] = [(conflict[0], exc) for conflict in conflicts]
+            return ResolverBatchOutput(
+                results=error_results,
+                cb=deepcopy(cb_openai),
+            )

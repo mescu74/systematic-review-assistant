@@ -67,12 +67,12 @@ def main() -> None:  # noqa: C901
 
     # Benchmark pages
     human_benchmark_page = st.Page(
-        "pages/human_benchmark_page.py",
+        "pages/benchmark_prep_page.py",
         title="Protocol Review",
         icon=":material/description:",
     )
     benchmark_tool_page = st.Page(
-        "pages/benchmark_tool.py",
+        "pages/benchmark_run_page.py",
         title="Run Benchmark",
         icon=":material/analytics:",
     )

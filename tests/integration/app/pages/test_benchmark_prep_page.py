@@ -63,7 +63,7 @@ def test_successful_protocol_display(
 
     # Set up AppTest
     at = AppTest.from_file(
-        "src/sr_assistant/app/pages/human_benchmark_page.py", default_timeout=30
+        "src/sr_assistant/app/pages/benchmark_prep_page.py", default_timeout=30
     )
 
     # Run the page
@@ -72,9 +72,10 @@ def test_successful_protocol_display(
     # Verify no exceptions
     assert not at.exception, f"AppTest raised an exception: {at.exception}"
 
-    # Verify title is displayed
-    assert len(at.title) == 1
-    assert "Benchmark Protocol" in at.title[0].value
+    # Verify title is displayed (be more flexible about count since we added new functionality)
+    assert len(at.title) >= 1
+    title_texts = [title.value for title in at.title]
+    assert any("Benchmark Protocol" in title for title in title_texts)
 
     # Verify main sections are displayed with new layout
     headers = [h.value for h in at.header]
@@ -107,13 +108,13 @@ def test_protocol_not_found_error_handling(
     """Test Case 2: Error handling when benchmark protocol is not found (AC6)."""
     # Mock ReviewService.get_review to return None (protocol not found)
     mock_review_service = mocker.patch(
-        "sr_assistant.app.pages.human_benchmark_page.ReviewService"
+        "sr_assistant.app.pages.benchmark_prep_page.ReviewService"
     )
     mock_review_service.return_value.get_review.return_value = None
 
     # Set up AppTest
     at = AppTest.from_file(
-        "src/sr_assistant/app/pages/human_benchmark_page.py", default_timeout=30
+        "src/sr_assistant/app/pages/benchmark_prep_page.py", default_timeout=30
     )
 
     # Run the page
@@ -160,7 +161,7 @@ def test_protocol_display_with_missing_optional_fields(
 
     # Set up AppTest
     at = AppTest.from_file(
-        "src/sr_assistant/app/pages/human_benchmark_page.py", default_timeout=30
+        "src/sr_assistant/app/pages/benchmark_prep_page.py", default_timeout=30
     )
 
     # Run the page
@@ -213,7 +214,7 @@ def test_pico_elements_display_with_empty_values(
 
     # Set up AppTest
     at = AppTest.from_file(
-        "src/sr_assistant/app/pages/human_benchmark_page.py", default_timeout=30
+        "src/sr_assistant/app/pages/benchmark_prep_page.py", default_timeout=30
     )
 
     # Run the page

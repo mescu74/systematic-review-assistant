@@ -1,11 +1,14 @@
 # Copyright 2025 Gareth Morgan
 # SPDX-License-Identifier: MIT
 
-import collections.abc
+"""Benchmark Tool Page - Execute AI screening benchmarks with advanced batching and metrics."""
+
+from __future__ import annotations
+
 import io
 import typing as t
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from statistics import mean, median, stdev
 
 import pandas as pd
@@ -23,19 +26,27 @@ from sklearn.metrics import (
 
 from sr_assistant.app.agents.screening_agents import (
     ScreeningError,
-    ScreeningResult,
     screen_abstracts_batch,
 )
 from sr_assistant.app.database import session_factory
-from sr_assistant.core import models
+from sr_assistant.core import models, schemas
 from sr_assistant.core.repositories import (
     SearchResultRepository,
     SystematicReviewRepository,
 )
-from sr_assistant.core.schemas import ScreeningDecisionType
+from sr_assistant.core.types import ScreeningDecisionType
 
-# Fixed UUID for the benchmark review (must match the one in seed_benchmark_data.py)
-BENCHMARK_REVIEW_ID = uuid.UUID("00000000-1111-2222-3333-444444444444")
+if t.TYPE_CHECKING:
+    import collections.abc
+
+# Import the benchmark review ID from the seeding tool
+try:
+    from tools.seed_benchmark_data import BENCHMARK_REVIEW_ID
+except ImportError:
+    # Fallback if tools module not available in deployment
+    _benchmark_review_id = uuid.UUID("00000000-1111-2222-3333-444444444444")
+    BENCHMARK_REVIEW_ID = _benchmark_review_id  # pyright: ignore[reportConstantRedefinition]
+    # Fallback if not available - we'll implement a simplified version
 
 
 def calculate_metrics(
@@ -146,17 +157,19 @@ def calculate_metrics(
 
     try:
         metrics["Sensitivity (Recall)"] = recall_score(
-            y_true_filtered, y_pred_bool, zero_division=0
+            y_true_filtered, y_pred_bool, zero_division="warn"
         )
         metrics["Specificity"] = float(tn / (tn + fp)) if (tn + fp) > 0 else 0.0
         metrics["Precision (PPV)"] = precision_score(
-            y_true_filtered, y_pred_bool, zero_division=0
+            y_true_filtered, y_pred_bool, zero_division="warn"
         )
         metrics["Negative Predictive Value (NPV)"] = (
             float(tn / (tn + fn)) if (tn + fn) > 0 else 0.0
         )
         metrics["Accuracy"] = accuracy_score(y_true_filtered, y_pred_bool)
-        metrics["F1 Score"] = f1_score(y_true_filtered, y_pred_bool, zero_division=0)
+        metrics["F1 Score"] = f1_score(
+            y_true_filtered, y_pred_bool, zero_division="warn"
+        )
 
         if (tp + fp) * (tp + fn) * (tn + fp) * (tn + fn) == 0:
             metrics["Matthews Correlation Coefficient (MCC)"] = 0.0
@@ -309,11 +322,11 @@ if st.session_state.benchmark_review and st.session_state.benchmark_search_resul
                 ai_confidence: float | None = None
                 ai_rationale = "N/A"
 
-                if isinstance(conservative_result, ScreeningResult):
+                if isinstance(conservative_result, schemas.ScreeningResult):
                     ai_decision = conservative_result.decision
                     ai_confidence = conservative_result.confidence_score
                     ai_rationale = conservative_result.rationale
-                elif type(conservative_result) is ScreeningError:
+                elif isinstance(conservative_result, ScreeningError):
                     logger.warning(
                         f"ScreeningError for {search_result_model.source_id}: {conservative_result.error}"
                     )
@@ -427,13 +440,13 @@ if st.session_state.benchmark_comparison_data:
     def classify_row(row: pd.Series[t.Any]) -> str:
         ai = row["ai_decision"]
         human = row["human_decision"]
-        if ai == "INCLUDE" and human == "INCLUDE":
+        if ai == ScreeningDecisionType.INCLUDE.value and human == "INCLUDE":
             return "TP"
-        if ai == "EXCLUDE" and human == "EXCLUDE":
+        if ai == ScreeningDecisionType.EXCLUDE.value and human == "EXCLUDE":
             return "TN"
-        if ai == "INCLUDE" and human == "EXCLUDE":
+        if ai == ScreeningDecisionType.INCLUDE.value and human == "EXCLUDE":
             return "FP"
-        if ai == "EXCLUDE" and human == "INCLUDE":
+        if ai == ScreeningDecisionType.EXCLUDE.value and human == "INCLUDE":
             return "FN"
         return "UNCERTAIN/ERROR"
 
@@ -448,7 +461,7 @@ if st.session_state.benchmark_comparison_data:
     st.download_button(
         label="Download Comparison Data as CSV",
         data=csv_export_bytes,
-        file_name=f"benchmark_comparison_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+        file_name=f"benchmark_comparison_results_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv",
         mime="text/csv",
         key="download_comparison_csv",
     )
@@ -470,7 +483,7 @@ if st.session_state.benchmark_comparison_data:
         st.download_button(
             label="Download Summary Metrics as CSV",
             data=metrics_export_bytes,
-            file_name=f"benchmark_summary_metrics_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+            file_name=f"benchmark_summary_metrics_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv",
             mime="text/csv",
             key="download_metrics_csv",
         )
