@@ -71,7 +71,7 @@ run.prototype: docker.build ## Run the development server using Docker (prototyp
 		-v $(shell pwd)/.pytest_cache:/app/.pytest_cache \
 		-v $(shell pwd)/.ruff_cache:/app/.ruff_cache \
 		-v $(shell pwd)/htmlcov:/app/htmlcov \
-		-v $(shell pwd)/tools:/app/tools
+		-v $(shell pwd)/tools:/app/tools \
 		-v $(shell pwd)/app.log:/app/app.log \
 		$(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_TAG_LATEST)
 

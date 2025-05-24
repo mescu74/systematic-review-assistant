@@ -26,11 +26,14 @@ from sklearn.metrics import (
 
 from sr_assistant.app.agents.screening_agents import (
     ScreeningError,
+    invoke_resolver_chain,
     screen_abstracts_batch,
 )
 from sr_assistant.app.database import session_factory
 from sr_assistant.core import models, schemas
 from sr_assistant.core.repositories import (
+    BenchmarkResultItemRepository,
+    BenchmarkRunRepository,
     SearchResultRepository,
     SystematicReviewRepository,
 )
@@ -47,6 +50,80 @@ except ImportError:
     _benchmark_review_id = uuid.UUID("00000000-1111-2222-3333-444444444444")
     BENCHMARK_REVIEW_ID = _benchmark_review_id  # pyright: ignore[reportConstantRedefinition]
     # Fallback if not available - we'll implement a simplified version
+
+
+def _needs_resolver(
+    conservative_result: schemas.ScreeningResult,
+    comprehensive_result: schemas.ScreeningResult,
+) -> bool:
+    """Determine if resolver is needed based on conservative and comprehensive results."""
+    # Check for disagreement between conservative and comprehensive
+    if conservative_result.decision != comprehensive_result.decision:
+        return True
+
+    # Check if both are uncertain
+    if (
+        conservative_result.decision == ScreeningDecisionType.UNCERTAIN
+        and comprehensive_result.decision == ScreeningDecisionType.UNCERTAIN
+    ):
+        return True
+
+    # Check for low confidence even with agreement
+    min_confidence = min(
+        conservative_result.confidence_score, comprehensive_result.confidence_score
+    )
+    if min_confidence < 0.7:
+        return True
+
+    return False
+
+
+def _determine_final_decision(
+    conservative_result: schemas.ScreeningResult,
+    comprehensive_result: schemas.ScreeningResult,
+    resolver_result: schemas.ScreeningResult | None,
+) -> ScreeningDecisionType:
+    """Determine final decision based on all screening results."""
+    # If resolver was invoked and gave a definitive decision, use it
+    if resolver_result and resolver_result.decision != ScreeningDecisionType.UNCERTAIN:
+        return resolver_result.decision
+
+    # If resolver was invoked but still uncertain, return uncertain
+    if resolver_result and resolver_result.decision == ScreeningDecisionType.UNCERTAIN:
+        return ScreeningDecisionType.UNCERTAIN
+
+    # If no resolver, check for agreement
+    if conservative_result.decision == comprehensive_result.decision:
+        return conservative_result.decision
+
+    # Disagreement without resolver - should not happen with proper _needs_resolver logic
+    logger.warning(
+        f"No resolver result but decisions disagree: conservative={conservative_result.decision}, comprehensive={comprehensive_result.decision}"
+    )
+    return ScreeningDecisionType.UNCERTAIN
+
+
+def _calculate_classification(
+    final_decision: ScreeningDecisionType,
+    human_decision: bool | None,
+) -> str:
+    """Calculate the classification (TP, FP, TN, FN) based on final decision vs human decision."""
+    if human_decision is None:
+        return "UNKNOWN"
+
+    # Convert final_decision to boolean for comparison
+    ai_include = final_decision == ScreeningDecisionType.INCLUDE
+    human_include = human_decision
+
+    if ai_include and human_include:
+        return "TP"  # True Positive
+    if not ai_include and not human_include:
+        return "TN"  # True Negative
+    if ai_include and not human_include:
+        return "FP"  # False Positive
+    if not ai_include and human_include:
+        return "FN"  # False Negative
+    return "UNKNOWN"
 
 
 def calculate_metrics(
@@ -281,127 +358,478 @@ if st.session_state.benchmark_review and st.session_state.benchmark_search_resul
     )
 
     if st.button("Run AI Screening on Benchmark", type="primary"):
-        with st.spinner("Running AI screening on benchmark dataset..."):
-            benchmark_review_model: models.SystematicReview = (
-                st.session_state.benchmark_review
-            )
-            search_results_to_process: list[models.SearchResult] = list(
-                st.session_state.benchmark_search_results
+        # Initialize benchmark execution in session state
+        st.session_state.benchmark_running = True
+        st.session_state.benchmark_progress = 0.0
+        st.session_state.benchmark_status = "Initializing benchmark run..."
+        st.session_state.benchmark_batch_num = 0
+        st.session_state.benchmark_total_batches = 0
+        st.session_state.benchmark_run_id = None
+        st.session_state.benchmark_search_results = []
+        st.session_state.benchmark_stats = {
+            "total_processed": 0,
+            "conflicts_detected": 0,
+            "resolver_invoked": 0,
+            "screening_errors": 0,
+            "accumulated_results": [],  # Store results for real-time metrics
+        }
+        st.session_state.benchmark_current_metrics = {}  # Clear previous metrics
+        st.session_state.benchmark_phase = "creating_run"
+        st.rerun()
+
+# Handle benchmark execution phases
+if st.session_state.get("benchmark_running", False):
+    # Display current progress
+    st.subheader("🔄 Benchmark Execution in Progress")
+
+    # Progress bar
+    progress_value = st.session_state.get("benchmark_progress", 0.0)
+    st.progress(progress_value)
+
+    # Status display
+    status_text = st.session_state.get("benchmark_status", "Processing...")
+    st.info(f"**Status:** {status_text}")
+
+    # Stats display
+    stats = st.session_state.get("benchmark_stats", {})
+    if stats.get("total_processed", 0) > 0:
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Items Processed", stats["total_processed"])
+        with col2:
+            st.metric("Conflicts Detected", stats["conflicts_detected"])
+        with col3:
+            st.metric("Resolver Invoked", stats["resolver_invoked"])
+        with col4:
+            st.metric("Screening Errors", stats["screening_errors"])
+
+        # Display real-time performance metrics
+        current_metrics = st.session_state.get("benchmark_current_metrics", {})
+        if current_metrics and "error" not in current_metrics:
+            st.subheader("📊 Live Performance Metrics")
+
+            # Key metrics in columns
+            metric_col1, metric_col2, metric_col3, metric_col4 = st.columns(4)
+
+            with metric_col1:
+                accuracy = current_metrics.get("Accuracy", 0.0)
+                st.metric("Accuracy", f"{accuracy:.3f}" if accuracy else "0.000")
+
+                precision = current_metrics.get("Precision (PPV)", 0.0)
+                st.metric("Precision", f"{precision:.3f}" if precision else "0.000")
+
+            with metric_col2:
+                sensitivity = current_metrics.get("Sensitivity (Recall)", 0.0)
+                st.metric(
+                    "Recall/Sensitivity",
+                    f"{sensitivity:.3f}" if sensitivity else "0.000",
+                )
+
+                specificity = current_metrics.get("Specificity", 0.0)
+                st.metric(
+                    "Specificity", f"{specificity:.3f}" if specificity else "0.000"
+                )
+
+            with metric_col3:
+                f1_score = current_metrics.get("F1 Score", 0.0)
+                st.metric("F1 Score", f"{f1_score:.3f}" if f1_score else "0.000")
+
+                mcc = current_metrics.get("Matthews Correlation Coefficient (MCC)", 0.0)
+                st.metric("MCC", f"{mcc:.3f}" if mcc else "0.000")
+
+            with metric_col4:
+                tp = current_metrics.get("True Positives (TP)", 0)
+                fp = current_metrics.get("False Positives (FP)", 0)
+                fn = current_metrics.get("False Negatives (FN)", 0)
+                tn = current_metrics.get("True Negatives (TN)", 0)
+
+                st.metric("True Positives", tp)
+                st.metric("False Positives", fp)
+
+            # Confusion matrix summary
+            total_compared = current_metrics.get("Total Compared", 0)
+            if total_compared > 0:
+                st.info(
+                    f"📈 **Current Analysis**: {total_compared} items with ground truth | TP: {tp} | TN: {tn} | FP: {fp} | FN: {fn}"
+                )
+
+        elif current_metrics and "error" in current_metrics:
+            st.warning(f"⚠️ Metrics calculation: {current_metrics['error']}")
+
+        elif stats.get("total_processed", 0) >= 5:  # Show message after a few items
+            st.info(
+                "🔄 **Real-time metrics will appear once sufficient data with ground truth is available**"
             )
 
-            logger.info(
-                f"Starting benchmark screening for review ID: {benchmark_review_model.id} with {len(search_results_to_process)} abstracts."
-            )
+    # Phase-based execution
+    phase = st.session_state.get("benchmark_phase", "creating_run")
+
+    if phase == "creating_run":
+        # Phase 1: Create benchmark run
+        st.session_state.benchmark_status = "Creating benchmark run in database..."
+
+        with session_factory() as session:
             try:
-                batch_output = screen_abstracts_batch(
-                    batch=search_results_to_process,
-                    batch_idx=0,
-                    review=benchmark_review_model,
-                )
-            except Exception:
-                st.error("An error occurred while calling screen_abstracts_batch.")
-                logger.exception("Error during screen_abstracts_batch")
-                st.stop()
+                benchmark_run_repo = BenchmarkRunRepository()
 
-            if not batch_output or not batch_output.results:
-                st.error("AI screening did not return any output or results.")
-                logger.error(
-                    "screen_abstracts_batch returned None, empty, or no results list."
-                )
-                st.stop()
+                config_details = {
+                    "conservative_model": "gpt-4o",
+                    "comprehensive_model": "gpt-4o",
+                    "resolver_model": "gpt-4o",
+                    "batch_size": 10,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                }
 
-            ai_decisions = []
-            comparison_data = []
-            num_ai_errors = 0
-
-            for i, result_tuple in enumerate(batch_output.results):
-                search_result_model = result_tuple.search_result
-                conservative_result = result_tuple.conservative_result
-
-                ai_decision: ScreeningDecisionType | None = None
-                ai_confidence: float | None = None
-                ai_rationale = "N/A"
-
-                if isinstance(conservative_result, schemas.ScreeningResult):
-                    ai_decision = conservative_result.decision
-                    ai_confidence = conservative_result.confidence_score
-                    ai_rationale = conservative_result.rationale
-                elif isinstance(conservative_result, ScreeningError):
-                    logger.warning(
-                        f"ScreeningError for {search_result_model.source_id}: {conservative_result.error}"
-                    )
-                    ai_decision = ScreeningDecisionType.UNCERTAIN
-                    ai_rationale = f"Screening Error: {conservative_result.error}"
-                    num_ai_errors += 1
-                else:
-                    logger.error(
-                        f"Unexpected result type for {search_result_model.source_id}: {type(conservative_result)}"
-                    )
-                    ai_decision = ScreeningDecisionType.UNCERTAIN
-                    ai_rationale = "Unexpected AI result type"
-                    num_ai_errors += 1
-
-                ai_decisions.append(
-                    {
-                        "search_result_id": search_result_model.id,
-                        "ai_decision": ai_decision,
-                        "ai_confidence": ai_confidence,
-                        "ai_rationale": ai_rationale,
-                    }
+                benchmark_run = models.BenchmarkRun(
+                    review_id=BENCHMARK_REVIEW_ID, config_details=config_details
                 )
 
-                human_decision_raw = search_result_model.source_metadata.get(
-                    "benchmark_human_decision"
-                )
-                human_decision_bool: bool | None = None
-                if isinstance(human_decision_raw, bool):
-                    human_decision_bool = human_decision_raw
-                elif human_decision_raw is not None:
-                    logger.warning(
-                        f"Human decision for {search_result_model.source_id} is not bool or None: {human_decision_raw}. Treating as UNKNOWN/None."
-                    )
+                benchmark_run = benchmark_run_repo.add(session, benchmark_run)
+                session.flush()
+                session.commit()
 
-                comparison_data.append(
-                    {
-                        "search_result_source_id": search_result_model.source_id,
-                        "title": search_result_model.title,
-                        "ai_decision": ai_decision.value if ai_decision else "ERROR",
-                        "human_decision": "INCLUDE"
-                        if human_decision_bool is True
-                        else ("EXCLUDE" if human_decision_bool is False else "UNKNOWN"),
-                        "classification": "N/A",
-                    }
+                # Store run ID
+                st.session_state.benchmark_run_id = benchmark_run.id
+
+                # Get search results
+                search_repo = SearchResultRepository()
+                search_results = search_repo.get_by_review_id(
+                    session, BENCHMARK_REVIEW_ID
                 )
 
-            st.session_state.benchmark_ai_decisions = ai_decisions
-            st.session_state.benchmark_comparison_data = comparison_data
-            logger.info(
-                f"AI screening complete. {len(ai_decisions)} decisions processed. {num_ai_errors} AI errors."
+                if not search_results:
+                    st.error("No search results found for benchmark.")
+                    st.session_state.benchmark_running = False
+                    st.rerun()
+
+                # Store search results and calculate batches
+                st.session_state.benchmark_search_results = list(search_results)
+                total_items = len(search_results)
+                batch_size = 10
+                st.session_state.benchmark_total_batches = (
+                    total_items + batch_size - 1
+                ) // batch_size
+
+                # Move to next phase
+                st.session_state.benchmark_phase = "processing_batches"
+                st.session_state.benchmark_status = f"Created run {benchmark_run.id}. Ready to process {total_items} items in {st.session_state.benchmark_total_batches} batches."
+
+                logger.info(
+                    f"Created BenchmarkRun {benchmark_run.id} with {total_items} items"
+                )
+
+            except Exception as e:
+                logger.exception("Failed to create benchmark run")
+                st.error(f"Failed to create benchmark run: {e}")
+                st.session_state.benchmark_running = False
+                st.rerun()
+
+        # Force UI update to next phase
+        st.rerun()
+
+    elif phase == "processing_batches":
+        # Phase 2: Process items incrementally (1-2 items at a time for frequent updates)
+
+        # Check if we have items left to process
+        total_items = len(st.session_state.benchmark_search_results)
+        processed_items = st.session_state.benchmark_stats["total_processed"]
+
+        if processed_items < total_items:
+            # Process next 1-2 items for frequent updates
+            items_per_cycle = (
+                2  # Process 2 items per UI cycle for better responsiveness
             )
-            st.success(f"AI Screening complete. {num_ai_errors} AI errors encountered.")
+            start_idx = processed_items
+            end_idx = min(start_idx + items_per_cycle, total_items)
 
-            y_true_for_metrics: list[bool | None] = []
-            for sr_model_item in search_results_to_process:
-                human_decision_val = sr_model_item.source_metadata.get(
-                    "benchmark_human_decision"
-                )
-                if isinstance(human_decision_val, bool):
-                    y_true_for_metrics.append(human_decision_val)
-                else:
-                    y_true_for_metrics.append(None)
-
-            y_pred_decision_for_metrics: list[ScreeningDecisionType | None] = [
-                decision_info["ai_decision"] for decision_info in ai_decisions
-            ]
-            y_pred_confidence_for_metrics: list[float | None] = [
-                decision_info["ai_confidence"] for decision_info in ai_decisions
+            current_batch_items = st.session_state.benchmark_search_results[
+                start_idx:end_idx
             ]
 
-            st.session_state.benchmark_metrics = calculate_metrics(
-                y_true_for_metrics,
-                y_pred_decision_for_metrics,
-                y_pred_confidence_for_metrics,
-            )
+            # Update status
+            batch_num = (processed_items // 10) + 1
+            item_in_batch = (processed_items % 10) + 1
+            st.session_state.benchmark_status = f"Processing items {start_idx + 1}-{end_idx} (batch {batch_num}, items {item_in_batch}-{item_in_batch + len(current_batch_items) - 1})..."
+
+            # Process these items
+            with st.spinner(f"Processing items {start_idx + 1}-{end_idx}..."):
+                with session_factory() as session:
+                    try:
+                        benchmark_result_item_repo = BenchmarkResultItemRepository()
+
+                        # Call screen_abstracts_batch for this small chunk
+                        if not st.session_state.benchmark_review:
+                            st.error("Benchmark review not found in session state.")
+                            st.session_state.benchmark_running = False
+                            st.rerun()
+
+                        # Use batch index based on the first item
+                        batch_idx = start_idx // 10
+
+                        batch_output = screen_abstracts_batch(
+                            batch=list(current_batch_items),
+                            batch_idx=batch_idx,
+                            review=st.session_state.benchmark_review,
+                        )
+
+                        if not batch_output or not batch_output.results:
+                            logger.error(
+                                f"No screening results for items {start_idx + 1}-{end_idx}"
+                            )
+                            st.session_state.benchmark_stats["screening_errors"] += len(
+                                current_batch_items
+                            )
+                            # Skip to next items
+                            st.session_state.benchmark_stats["total_processed"] += len(
+                                current_batch_items
+                            )
+                            st.rerun()
+
+                        # Process each result in this small chunk
+                        for result_tuple in batch_output.results:
+                            search_result = result_tuple.search_result
+                            conservative_result = result_tuple.conservative_result
+                            comprehensive_result = result_tuple.comprehensive_result
+
+                            # Check if we have valid results
+                            if isinstance(
+                                conservative_result, ScreeningError
+                            ) or isinstance(comprehensive_result, ScreeningError):
+                                logger.warning(
+                                    f"Screening error for {search_result.source_id}"
+                                )
+                                st.session_state.benchmark_stats[
+                                    "screening_errors"
+                                ] += 1
+                                st.session_state.benchmark_stats["total_processed"] += 1
+                                continue
+
+                            # Check for conflicts that need resolver
+                            needs_resolver = _needs_resolver(
+                                conservative_result, comprehensive_result
+                            )
+                            resolver_result = None
+
+                            if needs_resolver:
+                                st.session_state.benchmark_stats[
+                                    "conflicts_detected"
+                                ] += 1
+
+                                # Invoke resolver immediately for this item
+                                st.session_state.benchmark_status = f"Resolving conflict for item {st.session_state.benchmark_stats['total_processed'] + 1}..."
+                                logger.info(
+                                    f"Invoking resolver for search result {search_result.id}"
+                                )
+
+                                try:
+                                    if not st.session_state.benchmark_review:
+                                        st.error(
+                                            "Benchmark review not found in session state."
+                                        )
+                                        logger.error(
+                                            "Benchmark review not found in session state"
+                                        )
+                                        break
+
+                                    resolver_output = invoke_resolver_chain(
+                                        search_result=search_result,
+                                        conservative_result=conservative_result,
+                                        comprehensive_result=comprehensive_result,
+                                        review=st.session_state.benchmark_review,
+                                    )
+
+                                    logger.info(
+                                        f"Resolver output type: {type(resolver_output)}, value: {resolver_output}"
+                                    )
+
+                                    if resolver_output and isinstance(
+                                        resolver_output, schemas.ResolverOutputSchema
+                                    ):  # pyright: ignore[reportUnnecessaryIsInstance]
+                                        # Create a mock ScreeningResult from ResolverOutputSchema for consistency
+                                        resolver_result = schemas.ScreeningResult(
+                                            id=uuid.uuid4(),
+                                            review_id=st.session_state.benchmark_review.id,
+                                            search_result_id=search_result.id,
+                                            trace_id=uuid.uuid4(),
+                                            model_name="resolver",
+                                            screening_strategy=schemas.ScreeningStrategyType.COMPREHENSIVE,
+                                            start_time=datetime.now(timezone.utc),
+                                            end_time=datetime.now(timezone.utc),
+                                            decision=resolver_output.resolver_decision,
+                                            confidence_score=resolver_output.resolver_confidence_score,
+                                            rationale=resolver_output.resolver_reasoning,
+                                        )
+
+                                        st.session_state.benchmark_stats[
+                                            "resolver_invoked"
+                                        ] += 1
+                                        logger.info(
+                                            f"Resolver successfully invoked. Total invocations: {st.session_state.benchmark_stats['resolver_invoked']}"
+                                        )
+                                    else:
+                                        logger.warning(
+                                            f"Resolver returned invalid result: {resolver_output}"
+                                        )
+                                except Exception as e:
+                                    logger.error(
+                                        f"Resolver failed for {search_result.source_id}: {e}"
+                                    )
+
+                            # Determine final decision
+                            final_decision = _determine_final_decision(
+                                conservative_result,
+                                comprehensive_result,
+                                resolver_result,
+                            )
+
+                            # Get human decision from source_metadata
+                            human_decision_raw = search_result.source_metadata.get(
+                                "benchmark_human_decision"
+                            )
+                            human_decision: bool | None = None
+                            if isinstance(human_decision_raw, bool):
+                                human_decision = human_decision_raw
+
+                            # Calculate classification
+                            classification = _calculate_classification(
+                                final_decision, human_decision
+                            )
+
+                            # Create BenchmarkResultItem
+                            benchmark_result_item = models.BenchmarkResultItem(
+                                benchmark_run_id=st.session_state.benchmark_run_id,
+                                search_result_id=search_result.id,
+                                human_decision=human_decision,
+                                conservative_decision=conservative_result.decision,
+                                conservative_confidence=conservative_result.confidence_score,
+                                conservative_rationale=conservative_result.rationale,
+                                comprehensive_decision=comprehensive_result.decision,
+                                comprehensive_confidence=comprehensive_result.confidence_score,
+                                comprehensive_rationale=comprehensive_result.rationale,
+                                resolver_decision=resolver_result.decision
+                                if resolver_result
+                                else None,
+                                resolver_confidence=resolver_result.confidence_score
+                                if resolver_result
+                                else None,
+                                resolver_reasoning=resolver_result.rationale
+                                if resolver_result
+                                else None,
+                                final_decision=final_decision,
+                                classification=classification,
+                            )
+
+                            benchmark_result_item_repo.add(
+                                session, benchmark_result_item
+                            )
+                            st.session_state.benchmark_stats["total_processed"] += 1
+
+                            # Store result for real-time metrics calculation
+                            result_data = {
+                                "human_decision": human_decision,
+                                "final_decision": final_decision,
+                                "conservative_confidence": conservative_result.confidence_score,
+                                "comprehensive_confidence": comprehensive_result.confidence_score,
+                                "resolver_confidence": resolver_result.confidence_score
+                                if resolver_result
+                                else None,
+                            }
+                            st.session_state.benchmark_stats[
+                                "accumulated_results"
+                            ].append(result_data)
+
+                        # Commit this chunk
+                        session.commit()
+
+                        # Calculate and update real-time metrics
+                        accumulated_results = st.session_state.benchmark_stats[
+                            "accumulated_results"
+                        ]
+                        if accumulated_results:
+                            # Prepare data for metrics calculation
+                            y_true = []
+                            y_pred_decision = []
+                            y_pred_confidence = []
+
+                            for result in accumulated_results:
+                                y_true.append(result["human_decision"])
+                                y_pred_decision.append(result["final_decision"])
+
+                                # Use the highest confidence score available
+                                confidence = result["conservative_confidence"]
+                                if result["comprehensive_confidence"] is not None:
+                                    confidence = max(
+                                        confidence, result["comprehensive_confidence"]
+                                    )
+                                if result["resolver_confidence"] is not None:
+                                    confidence = result["resolver_confidence"]
+                                y_pred_confidence.append(confidence)
+
+                            # Calculate current metrics
+                            current_metrics = calculate_metrics(
+                                y_true, y_pred_decision, y_pred_confidence
+                            )
+                            st.session_state.benchmark_current_metrics = current_metrics
+
+                        # Update progress
+                        st.session_state.benchmark_progress = end_idx / total_items
+
+                        logger.info(
+                            f"Completed processing items {start_idx + 1}-{end_idx}"
+                        )
+
+                    except Exception as e:
+                        session.rollback()
+                        logger.exception(f"Items {start_idx + 1}-{end_idx} failed")
+                        st.error(f"Items {start_idx + 1}-{end_idx} failed: {e}")
+                        st.session_state.benchmark_running = False
+                        st.rerun()
+
+            # Force UI update for next items (more frequent updates)
+            st.rerun()
+
+        else:
+            # All items completed - move to completion phase
+            st.session_state.benchmark_phase = "completed"
+            st.rerun()
+
+    elif phase == "completed":
+        # Phase 3: Benchmark completed
+        st.session_state.benchmark_running = False
+        st.session_state.benchmark_status = "✅ Benchmark run completed successfully!"
+        st.session_state.benchmark_progress = 1.0
+
+        st.success(f"""
+        🎉 **Benchmark Run Complete!**
+        
+        **Run ID:** `{st.session_state.benchmark_run_id}`
+        - **Total Items Processed:** {st.session_state.benchmark_stats["total_processed"]}
+        - **Conflicts Detected:** {st.session_state.benchmark_stats["conflicts_detected"]}
+        - **Resolver Invocations:** {st.session_state.benchmark_stats["resolver_invoked"]}
+        - **Screening Errors:** {st.session_state.benchmark_stats["screening_errors"]}
+        
+        All results have been saved to the database.
+        """)
+
+        # Store run ID for potential metrics calculation
+        st.session_state.current_benchmark_run_id = st.session_state.benchmark_run_id
+
+        # Clean up session state
+        for key in [
+            "benchmark_running",
+            "benchmark_progress",
+            "benchmark_status",
+            "benchmark_batch_num",
+            "benchmark_total_batches",
+            "benchmark_run_id",
+            "benchmark_stats",
+            "benchmark_search_results",
+            "benchmark_phase",
+            "benchmark_current_metrics",
+        ]:
+            if key in st.session_state:
+                del st.session_state[key]
+
 
 if st.session_state.benchmark_metrics:
     st.header("Benchmark Results")
