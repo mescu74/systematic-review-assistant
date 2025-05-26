@@ -461,6 +461,107 @@ if st.session_state.get("benchmark_running", False):
                 "🔄 **Real-time metrics will appear once sufficient data with ground truth is available**"
             )
 
+    # Display accumulated results for drill-down
+    if st.session_state.benchmark_stats["total_processed"] > 0:
+        st.subheader("🔎 Processed Items (Live)")
+
+        # Create a selectable list of processed items
+        processed_item_details = []
+        for idx, result_data in enumerate(
+            st.session_state.benchmark_stats["accumulated_results"]
+        ):
+            # Find the original SearchResult for title (assuming it's stored or accessible)
+            # For now, we'll just use the index or a placeholder
+            try:
+                search_result_for_title = st.session_state.benchmark_search_results[idx]
+                title_display = f"{search_result_for_title.title[:70]}... (ID: {search_result_for_title.source_id})"
+            except (IndexError, AttributeError):
+                title_display = f"Item {idx + 1} (Details pending)"
+
+            processed_item_details.append(
+                {
+                    "display": title_display,
+                    "data": result_data,  # This is the dict we stored
+                    "original_search_result": st.session_state.benchmark_search_results[
+                        idx
+                    ]
+                    if idx < len(st.session_state.benchmark_search_results)
+                    else None,
+                }
+            )
+
+        selected_item_display = st.selectbox(
+            "Select an item to view details:",
+            options=[item["display"] for item in processed_item_details],
+            index=None,  # Default to no selection
+            key="live_benchmark_item_select",
+        )
+
+        if selected_item_display:
+            selected_item_data = next(
+                (
+                    item
+                    for item in processed_item_details
+                    if item["display"] == selected_item_display
+                ),
+                None,
+            )
+            if selected_item_data and selected_item_data["original_search_result"]:
+                original_sr = selected_item_data["original_search_result"]
+                ai_data = selected_item_data["data"]
+
+                st.markdown(f"#### Details for: {original_sr.title}")
+                st.markdown(f"**Source ID:** {original_sr.source_id}")
+
+                # Display like search.py or screen_abstracts.py
+                with st.expander("Original Abstract & Details", expanded=False):
+                    st.json(original_sr.model_dump(mode="json"))
+
+                st.markdown("---")
+                st.markdown("##### 🤖 AI Screening Decisions")
+
+                # Conservative Decision
+                st.markdown("**Conservative Agent:**")
+                st.markdown(
+                    f"- Decision: `{ai_data.get('conservative_decision', 'N/A')}`"
+                )
+                st.markdown(
+                    f"- Confidence: `{ai_data.get('conservative_confidence', 'N/A'):.3f}`"
+                )
+                st.markdown(
+                    f"- Rationale: *{ai_data.get('conservative_rationale', 'N/A')}*"
+                )
+
+                # Comprehensive Decision
+                st.markdown("**Comprehensive Agent:**")
+                st.markdown(
+                    f"- Decision: `{ai_data.get('comprehensive_decision', 'N/A')}`"
+                )
+                st.markdown(
+                    f"- Confidence: `{ai_data.get('comprehensive_confidence', 'N/A'):.3f}`"
+                )
+                st.markdown(
+                    f"- Rationale: *{ai_data.get('comprehensive_rationale', 'N/A')}*"
+                )
+
+                # Resolver Decision
+                if ai_data.get("resolver_decision"):
+                    st.markdown("**Resolver Agent:**")
+                    st.markdown(f"- Decision: `{ai_data['resolver_decision']}`")
+                    st.markdown(f"- Confidence: `{ai_data['resolver_confidence']:.3f}`")
+                    st.markdown(
+                        f"- Rationale: *{ai_data.get('resolver_rationale', 'N/A')}*"
+                    )
+
+                st.markdown("--- ")
+                st.markdown(
+                    f"**Human Decision:** `{ai_data.get('human_decision', 'N/A')}`"
+                )
+                st.markdown(f"**SRA Final Decision:** `{ai_data['final_decision']}`")
+                st.markdown(
+                    f"**Classification:** `{ai_data.get('classification', 'N/A')}`"
+                )
+
     # Phase-based execution
     phase = st.session_state.get("benchmark_phase", "creating_run")
 
@@ -553,7 +654,9 @@ if st.session_state.get("benchmark_running", False):
             st.session_state.benchmark_status = f"Processing batch {current_display_batch}/{total_display_batches} (items {start_idx + 1}-{end_idx} of {total_items})..."
 
             # Process these items
-            with st.spinner(f"Processing items {start_idx + 1}-{end_idx}..."):
+            with st.spinner(
+                f"Processing items {start_idx + 1}-{end_idx} of {total_items}..."
+            ):
                 with session_factory() as session:
                     try:
                         benchmark_result_item_repo = BenchmarkResultItemRepository()
@@ -729,9 +832,20 @@ if st.session_state.get("benchmark_running", False):
                             result_data = {
                                 "human_decision": human_decision,
                                 "final_decision": final_decision,
+                                "classification": classification,
+                                "conservative_decision": conservative_result.decision,
                                 "conservative_confidence": conservative_result.confidence_score,
+                                "conservative_rationale": conservative_result.rationale,
+                                "comprehensive_decision": comprehensive_result.decision,
                                 "comprehensive_confidence": comprehensive_result.confidence_score,
+                                "comprehensive_rationale": comprehensive_result.rationale,
+                                "resolver_decision": resolver_result.decision
+                                if resolver_result
+                                else None,
                                 "resolver_confidence": resolver_result.confidence_score
+                                if resolver_result
+                                else None,
+                                "resolver_rationale": resolver_result.rationale
                                 if resolver_result
                                 else None,
                             }
