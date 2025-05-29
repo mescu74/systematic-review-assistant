@@ -30,6 +30,9 @@ from sr_assistant.app.agents.screening_agents import (
     screen_abstracts_batch,
 )
 from sr_assistant.app.database import session_factory
+from sr_assistant.benchmark.logic.metrics_calculator import (
+    calculate_and_update_benchmark_metrics,
+)
 from sr_assistant.core import models, schemas
 from sr_assistant.core.repositories import (
     BenchmarkResultItemRepository,
@@ -72,10 +75,7 @@ def _needs_resolver(
     min_confidence = min(
         conservative_result.confidence_score, comprehensive_result.confidence_score
     )
-    if min_confidence < 0.7:
-        return True
-
-    return False
+    return min_confidence < 0.7
 
 
 def _determine_final_decision(
@@ -774,9 +774,9 @@ if st.session_state.get("benchmark_running", False):
                                         logger.warning(
                                             f"Resolver returned invalid result: {resolver_output}"
                                         )
-                                except Exception as e:
-                                    logger.error(
-                                        f"Resolver failed for {search_result.source_id}: {e}"
+                                except Exception:
+                                    logger.exception(
+                                        f"Resolver failed for {search_result.source_id}"
                                     )
 
                             # Determine final decision
@@ -916,18 +916,43 @@ if st.session_state.get("benchmark_running", False):
 
         st.success(f"""
         🎉 **Benchmark Run Complete!**
-        
+
         **Run ID:** `{st.session_state.benchmark_run_id}`
         - **Total Items Processed:** {st.session_state.benchmark_stats["total_processed"]}
         - **Conflicts Detected:** {st.session_state.benchmark_stats["conflicts_detected"]}
         - **Resolver Invocations:** {st.session_state.benchmark_stats["resolver_invoked"]}
         - **Screening Errors:** {st.session_state.benchmark_stats["screening_errors"]}
-        
+
         All results have been saved to the database.
         """)
 
         # Store run ID for potential metrics calculation
         st.session_state.current_benchmark_run_id = st.session_state.benchmark_run_id
+
+        # Calculate and persist final metrics to database
+        with st.spinner("Calculating and persisting final performance metrics..."):
+            try:
+                with session_factory() as session:
+                    benchmark_run_repo = BenchmarkRunRepository()
+                    benchmark_result_item_repo = BenchmarkResultItemRepository()
+
+                    updated_run = calculate_and_update_benchmark_metrics(
+                        session=session,
+                        benchmark_run_id=st.session_state.benchmark_run_id,
+                        benchmark_run_repo=benchmark_run_repo,
+                        benchmark_result_item_repo=benchmark_result_item_repo,
+                    )
+
+                    logger.info(
+                        f"Successfully calculated and persisted metrics for benchmark run {updated_run.id}"
+                    )
+                    st.success(
+                        "✅ Final performance metrics calculated and saved to database!"
+                    )
+
+            except Exception as e:
+                logger.exception("Failed to calculate and persist final metrics")
+                st.error(f"Failed to calculate final metrics: {e}")
 
         # Clean up session state
         for key in [

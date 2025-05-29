@@ -66,8 +66,8 @@ graph TD
         E4S4_4["4.4 Define BenchmarkResultItem Model & Schemas (Done)"]
         E4S4_5["4.5 Create DB Migration for Benchmark Tables (Done)"]
         E4S4_6["4.6 Benchmark UI - Load & Display Protocol (Done)"]
-        E4S4_7("4.7 Benchmark UI - Trigger Run & Process Items (Review)")
-        E4S4_8("4.8 Automated Metrics Calculation & Persistence (Planned)")
+        E4S4_7["4.7 Benchmark UI - Trigger Run & Process Items (Done)"]
+        E4S4_8["4.8 Automated Metrics Calculation & Persistence (Done)"]
         E4S4_9("4.9 Benchmark UI - Display Summary Metrics (Planned)")
         E4S4_10("4.10 Benchmark UI - Display AI Confidence Stats (Planned)")
         E4S4_11("4.11 Benchmark Results Export - Detailed (Planned)")
