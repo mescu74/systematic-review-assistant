@@ -4,6 +4,7 @@ import html
 # Remove unittest.mock imports
 # from unittest.mock import MagicMock, patch, mock_open 
 import typing as t # Added for t.cast
+import pandas as pd  # Add pandas import for test data
 
 import pytest
 from pytest_mock import MockerFixture # Only import MockerFixture
@@ -115,7 +116,7 @@ Full-Text Screening Specific Exclusions:
             "exclusion_criteria": expected_exclusion_criteria_str,
             "review_metadata": {
                 "benchmark_source_protocol_version": "Story 4.1 - Pre-defined PICO and Exclusion Criteria",
-                "benchmark_data_source_csv": str(seed_benchmark_data.BENCHMARK_CSV_PATH)
+                "benchmark_data_source_csv": str(seed_benchmark_data.BENCHMARK_EXCEL_PATH)
             },
         }
         mock_review_from_db.sqlmodel_update.assert_called_once()
@@ -143,22 +144,33 @@ class TestInferSourceDb:
 
 class TestParseCsvAndCreateSearchResults:
     @pytest.fixture
-    def mock_csv_reader(self, mocker: MockerFixture) -> t.Any: # Return t.Any for the patched object
-        return mocker.patch("csv.DictReader")
+    def mock_excel_reader(self, mocker: MockerFixture) -> t.Any:
+        """Mock pandas read_excel function."""
+        return mocker.patch("pandas.read_excel")
 
-    def test_successful_csv_parsing(self, mock_csv_reader: t.Any, mocker: MockerFixture):
-        sample_csv_data = [
-            {"key": "pmid_1", "title": "Title 1", "authors": "Auth A; Auth B", "keywords": "kw1; kw2", "year": "2020", "abstract": "Abstract 1", "doi": "doi1", "journal": "Journal1", "included_round1": "Y", "included_round2": "", "exclusion_stage_round1": ""},
-            {"key": "rayyan-2", "title": "Title 2", "authors": "Auth C", "keywords": "kw3", "year": "2021", "abstract": "Abstract 2", "doi": "doi2", "journal": "Journal2", "included_round1": "N", "included_round2": "N", "exclusion_stage_round1": "Wrong population"},
-            {"key": "3", "title": "Title 3", "authors": "", "keywords": "", "year": "", "abstract": "", "doi": "", "journal": "", "included_round1": "Maybe", "included_round2": "Y", "exclusion_stage_round1": ""},
-            {"key": "4", "title": "Title 4", "authors": "", "keywords": "", "year": "", "abstract": "", "doi": "", "journal": "", "included_round1": "U", "included_round2": "N", "exclusion_stage_round1": ""},
-            {"key": "5", "title": "Title 5", "authors": "", "keywords": "", "year": "", "abstract": "", "doi": "", "journal": "", "included_round1": "M", "included_round2": "X", "exclusion_stage_round1": ""},
-        ]
-        mock_csv_reader.return_value = sample_csv_data
-        mocker.patch("builtins.open", mocker.mock_open(read_data="fake csv content"))
+    def test_successful_excel_parsing(self, mock_excel_reader: t.Any, mocker: MockerFixture):
+        # Create sample data as pandas DataFrame
+        sample_data = pd.DataFrame([
+            {"key": "pmid_1", "title": "Title 1", "authors": "Auth A; Auth B", "keywords": "kw1; kw2", 
+             "year": "2020", "abstract": "Abstract 1", "doi": "doi1", "journal": "Journal1", 
+             "exclusion_stage_round1": ""},
+            {"key": "rayyan-2", "title": "Title 2", "authors": "Auth C", "keywords": "kw3", 
+             "year": "2021", "abstract": "Abstract 2", "doi": "doi2", "journal": "Journal2", 
+             "exclusion_stage_round1": "Title/Abstract"},
+            {"key": "3", "title": "Title 3", "authors": "", "keywords": "", 
+             "year": "", "abstract": "", "doi": "", "journal": "", 
+             "exclusion_stage_round1": ""},
+            {"key": "4", "title": "Title 4", "authors": "", "keywords": "", 
+             "year": "", "abstract": "", "doi": "", "journal": "", 
+             "exclusion_stage_round1": "Title/Abstract"},
+            {"key": "5", "title": "Title 5", "authors": "", "keywords": "", 
+             "year": "", "abstract": "", "doi": "", "journal": "", 
+             "exclusion_stage_round1": "Full text screen"},
+        ])
+        mock_excel_reader.return_value = sample_data
 
         review_id = uuid.uuid4()
-        results = seed_benchmark_data.parse_csv_and_create_search_results(review_id)
+        results = seed_benchmark_data.parse_excel_and_create_search_results(review_id)
 
         assert len(results) == 5
         assert results[0].review_id == review_id
@@ -168,52 +180,50 @@ class TestParseCsvAndCreateSearchResults:
         assert results[0].authors == ["Auth A", "Auth B"]
         assert results[0].keywords == ["kw1", "kw2"]
         assert results[0].year == "2020"
-        assert results[0].source_metadata["benchmark_human_decision"] is True
+        assert results[0].source_metadata["benchmark_human_decision"] is True  # No "Title/Abstract" in exclusion
 
         assert results[1].source_db == SearchDatabaseSource.OTHER
         assert results[1].source_id == "rayyan-2"
         assert results[1].title == "Title 2"
-        assert results[1].source_metadata["benchmark_human_decision"] is False
-        assert results[1].source_metadata["exclusion_stage_round1"] == "Wrong population"
+        assert results[1].source_metadata["benchmark_human_decision"] is False  # Has "Title/Abstract" in exclusion
+        assert results[1].source_metadata["exclusion_stage_round1"] == "Title/Abstract"
 
         assert results[2].source_db == SearchDatabaseSource.PUBMED
         assert results[2].source_id == "3"
-        assert results[2].source_metadata["benchmark_human_decision"] is True
+        assert results[2].source_metadata["benchmark_human_decision"] is True  # No "Title/Abstract" in exclusion
         
         assert results[3].source_db == SearchDatabaseSource.PUBMED
         assert results[3].source_id == "4"
-        assert results[3].source_metadata["benchmark_human_decision"] is False
+        assert results[3].source_metadata["benchmark_human_decision"] is False  # Has "Title/Abstract" in exclusion
 
         assert results[4].source_db == SearchDatabaseSource.PUBMED
         assert results[4].source_id == "5"
-        assert results[4].source_metadata["benchmark_human_decision"] is None
+        assert results[4].source_metadata["benchmark_human_decision"] is True  # "Full text screen" means passed title/abstract
 
-    def test_csv_parsing_file_not_found(self, mocker: MockerFixture, mock_csv_reader: t.Any):
-        mocker.patch("builtins.open", side_effect=FileNotFoundError)
+    def test_excel_parsing_file_not_found(self, mocker: MockerFixture, mock_excel_reader: t.Any):
+        mock_excel_reader.side_effect = FileNotFoundError
         mock_logger_exception = mocker.patch("tools.seed_benchmark_data.logger.exception")
         
-        results = seed_benchmark_data.parse_csv_and_create_search_results(uuid.uuid4())
+        results = seed_benchmark_data.parse_excel_and_create_search_results(uuid.uuid4())
         assert len(results) == 0
-        mock_logger_exception.assert_called_once_with(f"Benchmark CSV file not found at {seed_benchmark_data.BENCHMARK_CSV_PATH}")
+        mock_logger_exception.assert_called_once_with(f"Benchmark Excel file not found at {seed_benchmark_data.BENCHMARK_EXCEL_PATH}")
 
-    def test_csv_parsing_general_read_error(self, mocker: MockerFixture, mock_csv_reader: t.Any):
-        mocker.patch("builtins.open", side_effect=IOError("read error"))
+    def test_excel_parsing_general_read_error(self, mocker: MockerFixture, mock_excel_reader: t.Any):
+        mock_excel_reader.side_effect = IOError("read error")
         mock_logger_exception = mocker.patch("tools.seed_benchmark_data.logger.exception")
 
-        results = seed_benchmark_data.parse_csv_and_create_search_results(uuid.uuid4())
+        results = seed_benchmark_data.parse_excel_and_create_search_results(uuid.uuid4())
         assert len(results) == 0
-        mock_logger_exception.assert_called_once_with(f"Outer exception: Failed to read or parse CSV {seed_benchmark_data.BENCHMARK_CSV_PATH}")
+        mock_logger_exception.assert_called_once_with(f"Failed to read or parse Excel file {seed_benchmark_data.BENCHMARK_EXCEL_PATH}")
 
-    def test_csv_row_processing_exception(self, mock_csv_reader: t.Any, mocker: MockerFixture):
-        sample_csv_data = [
-            {"key": "pmid_1", "title": "Title 1", "authors": "Auth A", "included_round1": "Y"},
-            {"key": "pmid_2", "title": "Title 2", "authors": "Auth B", "included_round1": "N"}, 
-            {"key": "pmid_3", "title": "Title 3", "authors": "Auth C", "included_round1": "Y"},
-        ]
-        mock_csv_reader.return_value = sample_csv_data
-        mocker.patch("builtins.open", mocker.mock_open(read_data="fake csv content"))
+    def test_excel_row_processing_exception(self, mock_excel_reader: t.Any, mocker: MockerFixture):
+        sample_data = pd.DataFrame([
+            {"key": "pmid_1", "title": "Title 1", "authors": "Auth A", "exclusion_stage_round1": ""},
+            {"key": "pmid_2", "title": "Title 2", "authors": "Auth B", "exclusion_stage_round1": "Title/Abstract"}, 
+            {"key": "pmid_3", "title": "Title 3", "authors": "Auth C", "exclusion_stage_round1": ""},
+        ])
+        mock_excel_reader.return_value = sample_data
         mock_logger_exception = mocker.patch("tools.seed_benchmark_data.logger.exception")
-        mock_logger_debug = mocker.patch("tools.seed_benchmark_data.logger.debug")
 
         original_search_result_init = models.SearchResult.__init__
         def faulty_init(self: models.SearchResult, *args: t.Any, **kwargs: t.Any):
@@ -224,7 +234,7 @@ class TestParseCsvAndCreateSearchResults:
         mocker.patch("sr_assistant.core.models.SearchResult.__init__", side_effect=faulty_init, autospec=True)
 
         review_id = uuid.uuid4()
-        results = seed_benchmark_data.parse_csv_and_create_search_results(review_id)
+        results = seed_benchmark_data.parse_excel_and_create_search_results(review_id)
 
         assert len(results) == 2 
         assert results[0].source_id == "pmid_1"
@@ -232,9 +242,8 @@ class TestParseCsvAndCreateSearchResults:
         
         mock_logger_exception.assert_called_once()
         call_args = mock_logger_exception.call_args[0][0]
-        assert "Error processing CSV row 3 (key: 'pmid_2')" in call_args 
-        
-        mock_logger_debug.assert_any_call("Problematic row data: {'key': 'pmid_2', 'title': 'Title 2', 'authors': 'Auth B', 'included_round1': 'N'}")
+        assert "Error processing Excel row" in call_args 
+        assert "'pmid_2'" in call_args
 
 class TestSeedDataToDb:
     def test_seed_new_review_and_results(self, mock_db_session: t.Any, mocker: MockerFixture):
@@ -312,17 +321,17 @@ class TestSeedDataToDb:
 
 def test_main_execution_flow_success(mocker: MockerFixture):
     mock_parse_protocol = mocker.patch("tools.seed_benchmark_data.parse_protocol_and_create_review")
-    mock_parse_csv = mocker.patch("tools.seed_benchmark_data.parse_csv_and_create_search_results")
+    mock_parse_excel = mocker.patch("tools.seed_benchmark_data.parse_excel_and_create_search_results")
     mock_session_factory = mocker.patch("tools.seed_benchmark_data.session_factory")
-    mock_seed_to_db = mocker.patch("tools.seed_benchmark_data.seed_data_to_db")
-    mock_logger = mocker.patch("tools.seed_benchmark_data.logger")
+    mocker.patch("tools.seed_benchmark_data.seed_data_to_db")
+    mocker.patch("tools.seed_benchmark_data.logger")
 
     mock_review_obj = mocker.MagicMock(spec=models.SystematicReview)
     mock_review_obj.id = uuid.uuid4()
     mock_parse_protocol.return_value = mock_review_obj
     
     mock_results_list = [mocker.MagicMock(spec=models.SearchResult)]
-    mock_parse_csv.return_value = mock_results_list
+    mock_parse_excel.return_value = mock_results_list
     
     mock_db_context = mocker.MagicMock()
     mock_session_factory.return_value.__enter__.return_value = mock_db_context
@@ -334,7 +343,7 @@ def test_main_execution_flow_success(mocker: MockerFixture):
     # seed_benchmark_data.main()
     # Then assertions would follow:
     # mock_parse_protocol.assert_called_once_with(mock_db_context)
-    # mock_parse_csv.assert_called_once_with(mock_review_obj.id)
+    # mock_parse_excel.assert_called_once_with(mock_review_obj.id)
     # mock_seed_to_db.assert_called_once_with(mock_db_context, mock_review_obj, mock_results_list)
     # mock_logger.info.assert_any_call("Starting benchmark data seeding process...")
     # mock_logger.info.assert_any_call("Benchmark data seeding process completed.")
@@ -342,8 +351,8 @@ def test_main_execution_flow_success(mocker: MockerFixture):
 
 def test_main_execution_flow_protocol_fail(mocker: MockerFixture):
     mock_parse_protocol = mocker.patch("tools.seed_benchmark_data.parse_protocol_and_create_review")
-    mock_logger = mocker.patch("tools.seed_benchmark_data.logger")
-    mocker.patch("tools.seed_benchmark_data.parse_csv_and_create_search_results")
+    mocker.patch("tools.seed_benchmark_data.logger")
+    mocker.patch("tools.seed_benchmark_data.parse_excel_and_create_search_results")
     mocker.patch("tools.seed_benchmark_data.session_factory")
     mocker.patch("tools.seed_benchmark_data.seed_data_to_db")
 
@@ -357,20 +366,20 @@ def test_main_execution_flow_protocol_fail(mocker: MockerFixture):
     #   mock_logger.error.assert_called_with("Failed to create benchmark review model. Seeding aborted.")
     pass
 
-def test_main_execution_flow_csv_fail(mocker: MockerFixture):
+def test_main_execution_flow_excel_fail(mocker: MockerFixture):
     mock_parse_protocol = mocker.patch("tools.seed_benchmark_data.parse_protocol_and_create_review")
-    mock_parse_csv = mocker.patch("tools.seed_benchmark_data.parse_csv_and_create_search_results")
-    mock_logger = mocker.patch("tools.seed_benchmark_data.logger")
+    mock_parse_excel = mocker.patch("tools.seed_benchmark_data.parse_excel_and_create_search_results")
+    mocker.patch("tools.seed_benchmark_data.logger")
     mocker.patch("tools.seed_benchmark_data.session_factory")
     mocker.patch("tools.seed_benchmark_data.seed_data_to_db")
 
     mock_review_obj = mocker.MagicMock(spec=models.SystematicReview)
     mock_review_obj.id = uuid.uuid4()
     mock_parse_protocol.return_value = mock_review_obj
-    mock_parse_csv.return_value = [] 
+    mock_parse_excel.return_value = [] 
     
     # Conceptual: if main() was called
     # If seed_benchmark_data had main():
     #   seed_benchmark_data.main()
-    #   mock_logger.warning.assert_called_with("No search results parsed from CSV. Seeding aborted.")
+    #   mock_logger.warning.assert_called_with("No search results parsed from Excel. Seeding aborted.")
     pass 

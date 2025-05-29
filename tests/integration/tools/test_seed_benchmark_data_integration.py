@@ -12,7 +12,7 @@ from loguru import logger
 
 from sr_assistant.core import models
 from tools.seed_benchmark_data import (
-    BENCHMARK_CSV_PATH,
+    BENCHMARK_EXCEL_PATH,
     BENCHMARK_REVIEW_ID,
     # parse_protocol_and_create_review, # Removed: No longer used
 )
@@ -152,7 +152,7 @@ Full-Text Screening Specific Exclusions:
         
         assert review_in_db.review_metadata is not None
         assert review_in_db.review_metadata.get("benchmark_source_protocol_version") == "Story 4.1 - Pre-defined PICO and Exclusion Criteria"
-        assert review_in_db.review_metadata.get("benchmark_data_source_csv") == str(BENCHMARK_CSV_PATH)
+        assert review_in_db.review_metadata.get("benchmark_data_source_csv") == str(BENCHMARK_EXCEL_PATH)
 
 
         # 3. Verify SearchResults
@@ -161,13 +161,13 @@ Full-Text Screening Specific Exclusions:
         )
         search_results_in_db = db_session.exec(search_results_in_db_stmt).all()
         
-        # Count check: Read the CSV to know how many results to expect
-        # This is a bit redundant with the unit test for parse_csv, but good for integration.
-        # For simplicity here, we'll hardcode the expected count based on the current CSV.
-        # A more robust way would be to parse the CSV here too, or rely on the script output if it logged it.
+        # Count check: Read the Excel to know how many results to expect
+        # This is a bit redundant with the unit test for parse_excel, but good for integration.
+        # For simplicity here, we'll hardcode the expected count based on the current Excel.
+        # A more robust way would be to parse the Excel here too, or rely on the script output if it logged it.
         # From current human-reviewer-results-to-bench-against.csv: 69 entries
         # Header + 68 data rows.
-        expected_search_result_count = 585 # Updated from 68
+        expected_search_result_count = 585 # Updated from 68, now stops at summary rows
         assert len(search_results_in_db) == expected_search_result_count, \
             f"Expected {expected_search_result_count} search results, found {len(search_results_in_db)}"
 
@@ -181,8 +181,8 @@ Full-Text Screening Specific Exclusions:
             logger.info("DIAGNOSTIC: pmid_33882220 FOUND IN DB source_ids")
 
         # 4. Verify data integrity for a sample
-        # Let's check a specific known entry from the CSV.
-        # Using the first data row from the current CSV: rayyan-388371190
+        # Let's check a specific known entry from the Excel.
+        # Using the first data row from the current Excel: rayyan-388371190
         sample_key_to_check = "rayyan-388371190"
         sample_result_stmt = select(models.SearchResult).where(
             models.SearchResult.review_id == BENCHMARK_REVIEW_ID,
@@ -191,19 +191,19 @@ Full-Text Screening Specific Exclusions:
         sample_result = db_session.exec(sample_result_stmt).one_or_none()
         assert sample_result is not None, f"SearchResult with source_id {sample_key_to_check} not found."
         
-        assert sample_result.title == "CONFERENCE SPECIAL 2021 LEADING THE WAY" # From CSV
-        assert sample_result.authors == [] # Authors field is blank in CSV for this row
-        assert sample_result.year == "2022" # From CSV
+        assert sample_result.title == "CONFERENCE SPECIAL 2021 LEADING THE WAY" # From Excel
+        assert sample_result.authors == [] # Authors field is blank in Excel for this row
+        assert sample_result.year == "2022" # From Excel
         assert sample_result.source_db == models.SearchDatabaseSource.OTHER # Inferred by script
         # Benchmark decision for rayyan-388371190 is 'N' in included_round1 and 'N' in included_round2
         assert sample_result.source_metadata["benchmark_human_decision"] is False 
         assert sample_result.source_metadata["original_key"] == sample_key_to_check
-        assert sample_result.source_metadata["exclusion_stage_round1"] == "Title/Abstract" # From CSV
+        assert sample_result.source_metadata["exclusion_stage_round1"] == "Title/Abstract" # From Excel
         
         # Verify another one (e.g. included_round1='Y' if available, or just another distinct one)
-        # For now, one detailed check is sufficient given the unexpected CSV change.
-        # If a 'Y' case is needed, will need to find one in the new CSV.
-        # rayyan_id_to_check = "rayyan-10110580" # This ID is from the OLD CSV
+        # For now, one detailed check is sufficient given the unexpected Excel change.
+        # If a 'Y' case is needed, will need to find one in the new Excel.
+        # rayyan_id_to_check = "rayyan-10110580" # This ID is from the OLD Excel
         # ... (commenting out the second sample check for now)
 
 
@@ -221,7 +221,7 @@ Full-Text Screening Specific Exclusions:
             models.SearchResult.review_id == BENCHMARK_REVIEW_ID
         )
         count_after_run1 = len(db_session.exec(search_results_in_db_stmt_run1).all())
-        expected_search_result_count = 585 # Updated from 68
+        expected_search_result_count = 585 # Updated from 68, now stops at summary rows
         assert count_after_run1 == expected_search_result_count
 
         # Run 2
@@ -251,48 +251,48 @@ Full-Text Screening Specific Exclusions:
         )
         sample_result_run2 = db_session.exec(sample_result_stmt_rerun).one_or_none()
         assert sample_result_run2 is not None
-        assert sample_result_run2.title == "CONFERENCE SPECIAL 2021 LEADING THE WAY" # From CSV
-        assert sample_result_run2.source_metadata["benchmark_human_decision"] is False # From CSV
+        assert sample_result_run2.title == "CONFERENCE SPECIAL 2021 LEADING THE WAY" # From Excel
+        assert sample_result_run2.source_metadata["benchmark_human_decision"] is False # From Excel
 
 
-    def test_seeding_script_handles_missing_csv_gracefully(self, db_session: Session):
+    def test_seeding_script_handles_missing_excel_gracefully(self, db_session: Session):
         """
-        Tests that if the benchmark CSV is missing, the script reports an error
+        Tests that if the benchmark Excel is missing, the script reports an error
         and doesn't seed SearchResults (and potentially cleans up or doesn't create the Review).
-        The current script behavior is to log an error and exit if CSV parsing fails.
-        The review *might* be created before CSV parsing is attempted.
+        The current script behavior is to log an error and exit if Excel parsing fails.
+        The review *might* be created before Excel parsing is attempted.
         """
-        original_csv_path = BENCHMARK_CSV_PATH
+        original_excel_path = BENCHMARK_EXCEL_PATH
         
-        # Mock BENCHMARK_CSV_PATH in the tools.seed_benchmark_data module
+        # Mock BENCHMARK_EXCEL_PATH in the tools.seed_benchmark_data module
         # to point to a non-existent file for the script's execution context.
         # This is tricky because the script is run as a subprocess.
         # Modifying it here won't affect the subprocess directly unless the script
         # reads it from an env var that we can set, or we modify the script file itself.
         
-        # Alternative: Temporarily rename the CSV, run script, then rename back.
-        temp_missing_csv_path = original_csv_path.with_suffix(".csv.temp_missing")
+        # Alternative: Temporarily rename the Excel, run script, then rename back.
+        temp_missing_excel_path = original_excel_path.with_suffix(".excel.temp_missing")
         
         renamed = False
         try:
-            if original_csv_path.exists():
-                original_csv_path.rename(temp_missing_csv_path)
+            if original_excel_path.exists():
+                original_excel_path.rename(temp_missing_excel_path)
                 renamed = True
             
             script_result = self._run_seed_script()
             
-            # Script should fail or indicate failure if CSV is critical.
+            # Script should fail or indicate failure if Excel is critical.
             # The script currently logs an error and continues, creating the review but no search results.
             # Let's assert that it completes (returncode 0 if it doesn't sys.exit)
             # and no search results are created for the benchmark review.
             # The script *will* create/update the review protocol.
             
-            assert script_result.returncode == 0 # Script completes even if CSV parsing fails
+            assert script_result.returncode == 0 # Script completes even if Excel parsing fails
 
             # Verify review might exist (or was touched) using explicit select
-            stmt_review_missing_csv = select(models.SystematicReview).where(models.SystematicReview.id == BENCHMARK_REVIEW_ID)
-            review_in_db = db_session.exec(stmt_review_missing_csv).one_or_none()
-            assert review_in_db is not None # Review protocol is independent of CSV
+            stmt_review_missing_excel = select(models.SystematicReview).where(models.SystematicReview.id == BENCHMARK_REVIEW_ID)
+            review_in_db = db_session.exec(stmt_review_missing_excel).one_or_none()
+            assert review_in_db is not None # Review protocol is independent of Excel
 
             # Verify no SearchResults were created for this review
             search_results_in_db_stmt = select(models.SearchResult).where(
@@ -300,14 +300,14 @@ Full-Text Screening Specific Exclusions:
             )
             search_results_in_db = db_session.exec(search_results_in_db_stmt).all()
             assert len(search_results_in_db) == 0, \
-                "SearchResults were created even when CSV was expected to be missing."
+                "SearchResults were created even when Excel was expected to be missing."
             
-            assert "Benchmark CSV file not found" in script_result.stdout or \
-                   "Benchmark CSV file not found" in script_result.stderr, \
-                   "Script should log an error about missing CSV."
+            assert "Benchmark Excel file not found" in script_result.stdout or \
+                   "Benchmark Excel file not found" in script_result.stderr, \
+                   "Script should log an error about missing Excel."
 
         finally:
-            if renamed and temp_missing_csv_path.exists():
-                temp_missing_csv_path.rename(original_csv_path)
+            if renamed and temp_missing_excel_path.exists():
+                temp_missing_excel_path.rename(original_excel_path)
 
     # Add more tests as needed, e.g., for partial failures, specific data validation scenarios. 
