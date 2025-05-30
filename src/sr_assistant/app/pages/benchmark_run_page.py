@@ -1740,9 +1740,48 @@ if st.session_state.selected_past_benchmark_run:
             if st.button("🔄 Calculate Metrics for This Run", type="primary"):
                 with st.spinner("Calculating and persisting performance metrics..."):
                     try:
+                        logger.info(
+                            f"Starting metrics calculation for benchmark run {st.session_state.selected_past_benchmark_run.id}"
+                        )
+
                         with session_factory() as session:
                             benchmark_run_repo = BenchmarkRunRepository()
                             benchmark_result_item_repo = BenchmarkResultItemRepository()
+
+                            # Debug: Check if run exists and has items
+                            run_check = benchmark_run_repo.get_by_id(
+                                session, st.session_state.selected_past_benchmark_run.id
+                            )
+                            items_check = (
+                                benchmark_result_item_repo.get_by_benchmark_run_id(
+                                    session,
+                                    st.session_state.selected_past_benchmark_run.id,
+                                )
+                            )
+
+                            logger.info(
+                                f"Run check: {run_check is not None}, Items found: {len(items_check) if items_check else 0}"
+                            )
+
+                            if not run_check:
+                                st.error(
+                                    f"❌ Benchmark run {st.session_state.selected_past_benchmark_run.id} not found in database!"
+                                )
+                                logger.error(
+                                    f"Benchmark run {st.session_state.selected_past_benchmark_run.id} not found"
+                                )
+                                st.stop()
+
+                            if not items_check:
+                                st.error("❌ No result items found for this run!")
+                                logger.error(
+                                    f"No result items found for run {st.session_state.selected_past_benchmark_run.id}"
+                                )
+                                st.stop()
+
+                            st.info(
+                                f"Found {len(items_check)} result items. Calculating metrics..."
+                            )
 
                             updated_run = calculate_and_update_benchmark_metrics(
                                 session=session,
@@ -1751,19 +1790,46 @@ if st.session_state.selected_past_benchmark_run:
                                 benchmark_result_item_repo=benchmark_result_item_repo,
                             )
 
-                            # Update the selected run in session state
-                            st.session_state.selected_past_benchmark_run = updated_run
-                            has_metrics = True
+                            if updated_run:
+                                # Update the selected run in session state
+                                st.session_state.selected_past_benchmark_run = (
+                                    updated_run
+                                )
+                                has_metrics = True
 
-                            logger.info(
-                                f"Successfully calculated metrics for benchmark run {updated_run.id}"
-                            )
-                            st.success("✅ Metrics calculated and saved successfully!")
-                            st.rerun()
+                                logger.info(
+                                    f"Successfully calculated metrics for benchmark run {updated_run.id}"
+                                )
+                                logger.info(
+                                    f"Calculated metrics: Accuracy={updated_run.accuracy}, TP={updated_run.tp}, TN={updated_run.tn}, FP={updated_run.fp}, FN={updated_run.fn}"
+                                )
+
+                                st.success(
+                                    "✅ Metrics calculated and saved successfully!"
+                                )
+                                st.info(
+                                    f"📊 New metrics: Accuracy={updated_run.accuracy:.3f}, TP={updated_run.tp}, TN={updated_run.tn}, FP={updated_run.fp}, FN={updated_run.fn}"
+                                )
+                                st.rerun()
+                            else:
+                                st.error(
+                                    "❌ Metrics calculation returned None - check logs for details"
+                                )
+                                logger.error(
+                                    "calculate_and_update_benchmark_metrics returned None"
+                                )
 
                     except Exception as e:
-                        logger.exception("Failed to calculate metrics for selected run")
-                        st.error(f"Failed to calculate metrics: {e}")
+                        logger.exception(
+                            f"Failed to calculate metrics for selected run {st.session_state.selected_past_benchmark_run.id}"
+                        )
+                        st.error(f"Failed to calculate metrics: {e!s}")
+                        st.error("Check the logs for detailed error information.")
+
+                        # Show the full traceback in debug mode
+                        import traceback
+
+                        st.code(traceback.format_exc(), language="python")
         else:
             st.error(
                 "❌ This run has no processed items. It may have failed during execution."
