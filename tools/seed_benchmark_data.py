@@ -58,39 +58,62 @@ def parse_protocol_and_create_review(db_session: Session) -> models.SystematicRe
         "- Empirical indicators of health care utilisation."
     )
 
-    inclusion_criteria_xml_parts = [
-        f"<population>{html.escape(pico_population_text)}</population>",
-        f"<intervention>{html.escape(pico_intervention_text)}</intervention>", # Or PhenomenonOfInterest
-        f"<comparison>{html.escape(pico_comparison_text)}</comparison>",
-        f"<outcome>{html.escape(pico_outcome_text)}</outcome>",
-    ]
-    inclusion_criteria_str = "\n".join(inclusion_criteria_xml_parts)
+    inclusion_criteria_xml_parts = """
+  <InclusionCriteria>
+    <Population>
+      <Item>Homeless</Item>
+      <Item>Key informants reporting on needs of Homeless</Item>
+    </Population>
+    <Setting>
+      <Item>Data collected in Republic of Ireland</Item>
+    </Setting>
+    <StudyDesign>
+      <Item>Empirical primary or secondary data on a health topic</Item>
+      <Item>Quantitative studies</Item>
+      <Item>Qualitative studies</Item>
+    </StudyDesign>
+    <PublicationType>
+      <Item>Peer-reviewed publications</Item>
+      <Item>Conference Abstracts</Item>
+      <Item>Systematic reviews examined for individual studies meeting inclusion criteria</Item>
+    </PublicationType>
+    <Topic>
+      <Item>Health conditions (e.g., addiction, diabetes, cancer, communicable/non-communicable disease, STI, pregnancy and childbirth, etc.)</Item>
+      <Item>Health behaviours (e.g., nutrition, child development, tobacco use, vaccination, etc.)</Item>
+      <Item>Health care access, utilisation, quality</Item>
+      <Item>Social determinants of health (e.g., social and community context, education, economic stability)</Item>
+    </Topic>
+    <Language>English</Language>
+    <Date>Published in 2012 or later</Date>
+  </InclusionCriteria>"""
 
     # --- Restored Exclusion Criteria from Story 4.1 / previous correct script version ---
-    exclusion_criteria_str = ("""Population-related:
-- Studies focusing on key informants reporting on the needs of the homeless, rather than the homeless population directly.
-- Studies with no data from the Republic of Ireland.
-- Studies using international/European datasets that include data from Ireland but do not report outcomes specific to the Republic of Ireland.
-Study Design & Publication Type-related:
-- Studies that do not generate empirical primary or secondary data on a health topic. This includes:
-    - Modelling studies.
-    - Commentaries/Letters.
-    - Individual case reports.
-- Conference Abstracts.
-- Policy papers.
-- Guidelines.
-- Grey literature (e.g., government documents and reports, pre-print articles, research reports, statistical reports) - due to resource limitations for a thorough search.
-Topic-related:
-- Animal studies.
-- Studies on economic, health care, or housing policy that do not relate directly to health outcomes or access for the homeless population.
-Language-related:
-- Studies not published in English.
-Date-related:
-- Studies published before January 1, 2012.
-Full-Text Screening Specific Exclusions:
-- Studies that do not contain empirical health indicators for the general, housed population (when a comparison is implied or attempted).
-- Studies that do not provide a method for comparing health indicator(s) between the exposed (homeless) and control (general housed) groups (e.g., missing denominators for calculating rates or risks).""").strip()
-
+    exclusion_criteria_str = """\
+  <ExclusionCriteria>
+    <Population></Population>
+    <Setting>
+      <Item>No data from the Republic of Ireland</Item>
+      <Item>Studies using international/European datasets without specific outcomes for Republic of Ireland</Item>
+    </Setting>
+    <StudyDesign>
+      <Item>No empirical primary or secondary data on a health topic</Item>
+      <Item>Modelling studies</Item>
+      <Item>Commentaries/Letters</Item>
+      <Item>Individual case reports</Item>
+    </StudyDesign>
+    <PublicationType>
+      <Item>Policy papers</Item>
+      <Item>Guidelines</Item>
+      <Item>Systematic reviews containing studies meeting inclusion criteria</Item>
+      <Item>Grey literature (government documents and reports, pre-print articles, research reports, statistical reports)</Item>
+    </PublicationType>
+    <Topic>
+      <Item>Animal study</Item>
+      <Item>Economic/health care/housing policy not relating to health</Item>
+    </Topic>
+    <Language>Any language that is not English</Language>
+    <Date>Published before 2012</Date>
+  </ExclusionCriteria>"""
     review_data_dict = {
         "title": "Benchmark Systematic Review on Homelessness and Healthcare Access in Dublin", # Kept concise title
         "research_question": "Benchmark: What is the health status, healthcare access/utilization/quality, and what are the health conditions, health behaviours, and social determinants of health for individuals experiencing homelessness in the Republic of Ireland, and how do these compare to the general housed population where data allows?",
@@ -98,14 +121,7 @@ Full-Text Screening Specific Exclusions:
                      "from Story 4.1 for Epic 4 (SRA Benchmarking Module Implementation). "
                      "It uses the dataset from 'docs/benchmark/human-reviewer-results-to-bench-against.csv' "
                      "and is intended for testing and evaluation purposes of the SRA screening module."),
-        "criteria_framework": CriteriaFramework.PICO, # Set the enum member
-        "criteria_framework_answers": { # Directly create the dict
-            "population": pico_population_text,
-            "intervention": pico_intervention_text,
-            "comparison": pico_comparison_text,
-            "outcome": pico_outcome_text,
-        },
-        "inclusion_criteria": inclusion_criteria_str,
+        "inclusion_criteria": inclusion_criteria_xml_parts,
         "exclusion_criteria": exclusion_criteria_str, # Already stripped
         "review_metadata": {
             "benchmark_source_protocol_version": "Story 4.1 - Pre-defined PICO and Exclusion Criteria",
