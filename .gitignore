@@ -14,6 +14,8 @@ htmlcov/
 # Environment variables
 .env
 .env.*
+!.env.example
+!.env.test.example
 
 # IDE specific files
 .idea/
