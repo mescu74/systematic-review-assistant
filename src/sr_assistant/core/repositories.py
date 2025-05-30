@@ -130,7 +130,7 @@ class BaseRepository[T: Base]:
     def _construct_get_stmt(self, id: uuid.UUID) -> SelectOfScalar[T]:
         Model = self.model_cls
         # Now T is bound to Base, which implicitly has 'id' via SQLModel
-        return select(Model).where(Model.id == id)
+        return select(Model).where(Model.id == id)  # pyright: ignore[attr-defined]
 
     def get_by_id(self, session: Session, id: uuid.UUID) -> T | None:
         try:
@@ -456,13 +456,10 @@ class SearchResultRepository(BaseRepository[SearchResult]):
             if search_params.doi is not None:
                 conditions.append(self.model_cls.doi == search_params.doi)
             if search_params.title is not None:
-                # Using `ilike` for case-insensitive partial matching (e.g., PostgreSQL).
-                # For broader compatibility without specific DB features, one might use
-                # from sqlalchemy import func
-                # conditions.append(func.lower(self.model_cls.title).contains(search_params.title.lower()))
+                # Use col() for ilike operations
                 conditions.append(
-                    self.model_cls.title.ilike(f"%{search_params.title}%")
-                )  # type: ignore[attr-defined]
+                    col(self.model_cls.title).ilike(f"%{search_params.title}%")
+                )
             if search_params.year is not None:
                 conditions.append(self.model_cls.year == search_params.year)
 
@@ -512,9 +509,10 @@ class SearchResultRepository(BaseRepository[SearchResult]):
                 if search_params.doi is not None:
                     conditions.append(self.model_cls.doi == search_params.doi)
                 if search_params.title is not None:
+                    # Use col() for ilike operations
                     conditions.append(
-                        self.model_cls.title.ilike(f"%{search_params.title}%")
-                    )  # type: ignore[attr-defined]
+                        col(self.model_cls.title).ilike(f"%{search_params.title}%")
+                    )
                 if search_params.year is not None:
                     conditions.append(self.model_cls.year == search_params.year)
 
@@ -748,12 +746,12 @@ class ScreeningResolutionRepository(BaseRepository[ScreeningResolution]):
             raise RepositoryError(msg) from exc
 
 
-class BenchmarkRunRepository(BaseRepository["BenchmarkRun"]):  # type: ignore[name-defined]
+class BenchmarkRunRepository(BaseRepository[BenchmarkRun]):
     """Repository for BenchmarkRun model operations."""
 
     def get_by_review_id(
         self, session: Session, review_id: uuid.UUID
-    ) -> Sequence[BenchmarkRun]:  # type: ignore[name-defined]
+    ) -> Sequence[BenchmarkRun]:
         """Get all BenchmarkRuns for a specific review."""
         try:
             stmt = select(self.model_cls).where(self.model_cls.review_id == review_id)
@@ -764,12 +762,12 @@ class BenchmarkRunRepository(BaseRepository["BenchmarkRun"]):  # type: ignore[na
             raise RepositoryError(msg) from exc
 
 
-class BenchmarkResultItemRepository(BaseRepository["BenchmarkResultItem"]):  # type: ignore[name-defined]
+class BenchmarkResultItemRepository(BaseRepository[BenchmarkResultItem]):
     """Repository for BenchmarkResultItem model operations."""
 
     def get_by_benchmark_run_id(
         self, session: Session, benchmark_run_id: uuid.UUID
-    ) -> Sequence[BenchmarkResultItem]:  # type: ignore[name-defined]
+    ) -> Sequence[BenchmarkResultItem]:
         """Get all BenchmarkResultItems for a specific benchmark run."""
         try:
             stmt = select(self.model_cls).where(
@@ -783,7 +781,7 @@ class BenchmarkResultItemRepository(BaseRepository["BenchmarkResultItem"]):  # t
 
     def get_by_search_result_id(
         self, session: Session, search_result_id: uuid.UUID
-    ) -> Sequence[BenchmarkResultItem]:  # type: ignore[name-defined]
+    ) -> Sequence[BenchmarkResultItem]:
         """Get all BenchmarkResultItems for a specific search result."""
         try:
             stmt = select(self.model_cls).where(

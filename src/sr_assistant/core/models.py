@@ -112,15 +112,10 @@ class SystematicReview(SQLModelBase, table=True):
     )
     """Database generated UTC timestamp when this `SystematicReview` was updated."""
 
-    background: str = Field(
-        default="",
-        sa_column=sa.Column(sa.Text()),
-    )
+    background: str = Field(default="", sa_column=sa.Column(sa.Text()))
     """Background context for the systematic review."""
 
-    research_question: str = Field(
-        sa_column=sa.Column(sa.Text(), nullable=False),
-    )
+    research_question: str = Field(sa_column=sa.Column(sa.Text(), nullable=False))
     """The research question."""
 
     # TODO: sort this out, update ui, these replace inclusion_criteria
@@ -141,8 +136,7 @@ class SystematicReview(SQLModelBase, table=True):
     """The criteria framework."""
 
     criteria_framework_answers: MutableMapping[str, JsonValue] = Field(
-        default_factory=dict,
-        sa_column=sa.Column(sa_pg.JSONB, nullable=False),
+        default_factory=dict, sa_column=sa.Column(sa_pg.JSONB, nullable=False)
     )
     """Answers to the criteria framework."""
 
@@ -166,7 +160,7 @@ class SystematicReview(SQLModelBase, table=True):
     """Screening results for the review."""
 
     log_records: Mapped[list["LogRecord"]] = Relationship(
-        sa_relationship_kwargs={"lazy": "selectin"},
+        sa_relationship_kwargs={"lazy": "selectin"}
     )
     """Log records for the review."""
 
@@ -176,8 +170,7 @@ class SystematicReview(SQLModelBase, table=True):
     """Screening resolutions associated with this review."""
 
     review_metadata: MutableMapping[str, JsonValue] = Field(
-        default_factory=dict,
-        sa_column=sa.Column(sa_pg.JSONB, nullable=False),
+        default_factory=dict, sa_column=sa.Column(sa_pg.JSONB, nullable=False)
     )
     """Any metadata associated with the review."""
 
@@ -237,9 +230,7 @@ class SearchResult(SQLModelBase, table=True):
         description="Unique identifier within the source database (e.g., PMID, Scopus ID)",
     )
     doi: str | None = Field(
-        default=None,
-        index=True,
-        description="Digital Object Identifier",
+        default=None, index=True, description="Digital Object Identifier"
     )
     title: str = Field(description="Article title")
     abstract: str | None = Field(default=None, sa_column=sa.Column(sa.Text()))
@@ -385,8 +376,7 @@ class ScreeningResolution(SQLModelBase, table=True):
     resolver_confidence_score: float = Field(ge=0.0, le=1.0, nullable=False)
     resolver_model_name: str | None = Field(default=None)
     response_metadata: Mapping[str, JsonValue] = Field(
-        default_factory=dict,
-        sa_column=sa.Column(sa_pg.JSONB, nullable=False),
+        default_factory=dict, sa_column=sa.Column(sa_pg.JSONB, nullable=False)
     )
     start_time: datetime | None = Field(
         default=None, sa_column=sa.Column(sa.DateTime(timezone=True), nullable=True)
@@ -402,14 +392,14 @@ class ScreeningResolution(SQLModelBase, table=True):
             "lazy": "selectin",
             "foreign_keys": "[ScreeningResolution.search_result_id]",
             "post_update": True,
-        },
+        }
     )
     review: Mapped["SystematicReview"] = Relationship(
         sa_relationship_kwargs={
             "lazy": "selectin",
             "foreign_keys": "[ScreeningResolution.review_id]",
             "post_update": True,
-        },
+        }
     )
 
 
@@ -480,9 +470,7 @@ class ScreenAbstractResult(SQLModelBase, table=True):
         ),
     )
     confidence_score: float = Field(
-        ge=0.0,
-        le=1.0,
-        description="The confidence score for the decision. [0.0, 1.0].",
+        ge=0.0, le=1.0, description="The confidence score for the decision. [0.0, 1.0]."
     )
     rationale: str = Field(
         description="Rationale for the screening decision",
@@ -508,18 +496,12 @@ class ScreenAbstractResult(SQLModelBase, table=True):
     start_time: datetime | None = Field(
         default=None,
         description="Chain/graph invocation start time.",
-        sa_column=sa.Column(
-            sa.DateTime(timezone=True),
-            nullable=True,
-        ),
+        sa_column=sa.Column(sa.DateTime(timezone=True), nullable=True),
     )
     end_time: datetime | None = Field(
         default=None,
         description="Chain/graph invocation end time.",
-        sa_column=sa.Column(
-            sa.DateTime(timezone=True),
-            nullable=True,
-        ),
+        sa_column=sa.Column(sa.DateTime(timezone=True), nullable=True),
     )
     screening_strategy: ScreeningStrategyType = Field(
         description="Currently either 'compherensive' or 'conservative'. Maps to kind of prompt used.",
@@ -534,7 +516,7 @@ class ScreenAbstractResult(SQLModelBase, table=True):
         ),
     )
     model_name: str = Field(
-        description="The API model name that generated this response. E.g., 'gemini-2.5-pro-preview-05-06'.",
+        description="The API model name that generated this response. E.g., 'gemini-2.5-pro-preview-05-06'."
     )
     response_metadata: Mapping[str, JsonValue] = Field(
         default_factory=dict,
@@ -600,8 +582,7 @@ class BenchmarkRun(SQLModelBase, table=True):
     """Configuration settings for the benchmark run (e.g., LLM models, prompt versions)."""
 
     run_notes: str | None = Field(
-        default=None,
-        sa_column=sa.Column(sa.Text(), nullable=True),
+        default=None, sa_column=sa.Column(sa.Text(), nullable=True)
     )
     """User-provided notes or comments about this specific benchmark run."""
 
@@ -720,6 +701,14 @@ class BenchmarkResultItem(SQLModelBase, table=True):
         default=None, sa_column=sa.Column(sa.Text())
     )
     """Rationale provided by the conservative screening agent."""
+    conservative_run_id: uuid.UUID | None = Field(
+        default=None, index=True, nullable=True
+    )
+    """LangSmith run ID for the conservative screening agent."""
+    conservative_trace_id: uuid.UUID | None = Field(
+        default=None, index=True, nullable=True
+    )
+    """LangSmith trace ID for the conservative screening agent."""
 
     # SRA's comprehensive agent decisions
     comprehensive_decision: ScreeningDecisionType | None = Field(
@@ -742,26 +731,14 @@ class BenchmarkResultItem(SQLModelBase, table=True):
         default=None, sa_column=sa.Column(sa.Text())
     )
     """Rationale provided by the comprehensive screening agent."""
-
-    # SRA's resolver agent decisions (if invoked)
-    resolver_decision: ScreeningDecisionType | None = Field(
-        default=None,
-        sa_column=sa.Column(
-            type_=sa_pg.ENUM(
-                ScreeningDecisionType,
-                name="screeningdecisiontype",
-                values_callable=enum_values,
-                create_type=False,
-            ),
-            nullable=True,
-            index=True,
-        ),
+    comprehensive_run_id: uuid.UUID | None = Field(
+        default=None, index=True, nullable=True
     )
-    """Decision from the resolver agent, if a conflict occurred and it was invoked."""
-    resolver_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
-    """Confidence score from the resolver agent (0.0 to 1.0)."""
-    resolver_reasoning: str | None = Field(default=None, sa_column=sa.Column(sa.Text()))
-    """Reasoning provided by the resolver agent."""
+    """LangSmith run ID for the comprehensive screening agent."""
+    comprehensive_trace_id: uuid.UUID | None = Field(
+        default=None, index=True, nullable=True
+    )
+    """LangSmith trace ID for the comprehensive screening agent."""
 
     # SRA's final output for this item in this benchmark run
     final_decision: ScreeningDecisionType = Field(
@@ -782,6 +759,26 @@ class BenchmarkResultItem(SQLModelBase, table=True):
         sa_column=sa.Column(sa.Text(), nullable=False)  # Non-nullable as per story
     )
     """Classification of the SRA's final_decision against the human_decision (e.g., 'TP', 'FP', 'TN', 'FN')."""
+
+    # SRA's resolver agent decisions (if invoked)
+    resolver_decision: ScreeningDecisionType | None = Field(
+        default=None,
+        sa_column=sa.Column(
+            type_=sa_pg.ENUM(
+                ScreeningDecisionType,
+                name="screeningdecisiontype",
+                values_callable=enum_values,
+                create_type=False,
+            ),
+            nullable=True,
+            index=True,
+        ),
+    )
+    """Decision from the resolver agent, if a conflict occurred and it was invoked."""
+    resolver_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    """Confidence score from the resolver agent (0.0 to 1.0)."""
+    resolver_reasoning: str | None = Field(default=None, sa_column=sa.Column(sa.Text()))
+    """Reasoning provided by the resolver agent."""
 
     # Relationships (optional, define if needed for direct object access, requires back_populates on other models)
     # benchmark_run: "BenchmarkRun" = Relationship(back_populates="result_items")
@@ -811,7 +808,7 @@ class LogRecord(SQLModelBase, table=True):
             ),
             nullable=False,
             index=True,
-        ),
+        )
     )
     message: str = Field(sa_column=sa.Column(sa.Text(), nullable=False))
     module: str | None = Field(
