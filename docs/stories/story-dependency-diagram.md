@@ -69,10 +69,11 @@ graph TD
         E4S4_7["4.7 Benchmark UI - Trigger Run & Process Items (Done)"]
         E4S4_8["4.8 Automated Metrics Calculation & Persistence (Done)"]
         E4S4_9("4.9 Benchmark UI - Display Summary Metrics (Planned)")
-        E4S4_10("4.10 Benchmark UI - Display AI Confidence Stats (Planned)")
-        E4S4_11("4.11 Benchmark Results Export - Detailed (Planned)")
+        E4S4_10("4.10 Benchmark UI - Display AI Confidence (Planned)")
+        E4S4_11("4.11 Benchmark Results Export - Detailed Items (Planned)")
         E4S4_12("4.12 Benchmark Results Export - Summary (Planned)")
         E4S4_13("4.13 Adherence to Logging Standards (Planned)")
+        E4S4_14("4.14 Improve Benchmark Screening Prompts (Planned)")
 
         %% Dependencies for Epic 4
         E2S2_2 --> E4S4_1 
@@ -106,6 +107,8 @@ graph TD
 
         E2S2_2 --> E4S4_13
         E4S4_12 --> E4S4_13 %% Logging standards apply to all preceding Epic 4 stories implementations
+
+        E4S4_7 --> E4S4_14
     end
 
     %% Styling notes from mermaid-synxtax-always.mdc:

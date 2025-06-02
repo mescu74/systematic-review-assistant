@@ -202,6 +202,21 @@ The functional and non-functional requirements outlined in [`docs/prd-benchmark-
     4. Relevant contextual information is included in log messages.
 - **Dependencies:** PRD FR7.1
 
+---
+**US4.14: Improve Benchmark Screening Prompts for Conservative Decision-Making**
+
+- **As a:** Developer
+- **I want:** To fine-tune the screening agent prompts to be more conservative in exclusion decisions
+- **So that:** The AI screening system minimizes false negatives (incorrectly excluding relevant papers) in the benchmark evaluations.
+- **Acceptance Criteria:**
+    1. System prompts are updated to emphasize that "the absence of evidence is not evidence of absence" (e.g., papers where the country of study is unclear should be included for full-text review rather than excluded).
+    2. Conservative and comprehensive agent prompts focus on applying the inclusion/exclusion criteria directly rather than trying to integrate PICO framework concepts.
+    3. Prompts explicitly state that the cost of false negatives (excluding relevant papers) is higher than false positives (including irrelevant papers).
+    4. Resolver agent prompt is updated to be consistent with the more conservative approach.
+    5. Benchmark re-run shows improved sensitivity (reduced false negatives) compared to baseline results.
+- **Dependencies:** US4.7 (benchmark execution must be functional), baseline benchmark results for comparison
+- **Notes:** This story addresses specific feedback from human reviewers who observed the AI being too aggressive in exclusions during benchmark testing.
+
 ## 5. Out of Scope (for this Epic - MVP)
 
 - User uploads for benchmark datasets (uses pre-defined CSV and protocol files).
