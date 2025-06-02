@@ -42,7 +42,7 @@ The project is organized to promote a clear separation of concerns, enabling eas
     - `script.py.mako`: Template for new migration scripts.
 - **`docs/`**: Project documentation.
     - **`templates/`**: Contains markdown templates for various documents (PRD, architecture, etc.).
-    - Other markdown files for PRDs (`prd-recovery.md`, `prd-resolver.md`), Epics (`epic1-...md`), project briefs, etc.
+    - Other markdown files for PRDs (`prd-recovery.md`, `prd-resolver.md`), project briefs, etc., with Epic files organized in `docs/epics/` directory.
 - **`tools/`**: Helper scripts for development, data generation, or one-off tasks (e.g., `test_models_and_gen_data.py`, `supabase-fn-new.py`).
 - **`supabase/`**: Supabase specific configurations, edge functions (if any are actively used beyond database hosting).
     - **`functions/`**: Directory for Supabase Edge Functions.

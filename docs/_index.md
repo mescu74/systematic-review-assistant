@@ -1,6 +1,53 @@
+---
+title: "Documentation Index"
+---
+
 # Documentation Index
 
-This index provides a central point of navigation for various documentation and development artifacts within the project.
+This directory contains comprehensive project documentation organized in a logical structure.
+
+## High-Level Directories
+
+* [`epics/`](./epics/) - Epic documentation moved from root docs/ to organized epics directory
+* [`stories/`](./stories/) - User stories and specifications moved from ai/stories/ for better organization
+* [`benchmark/`](./benchmark/) - Benchmark-related documentation
+* [`templates/`](./templates/) - Documentation templates
+* [`prompts/`](./prompts/) - Prompt engineering and related docs
+* [`_ai/`](./_ai/) - AI assistant conversation logs and metadata
+
+## Epic Files
+
+* [`epic1-recovery-search-stabilization.md`](./epics/epic1-recovery-search-stabilization.md): Documentation for Epic 1.
+* [`epic2-recovery-resolver-implementation.md`](./epics/epic2-recovery-resolver-implementation.md): Documentation for Epic 2.
+* [`epic3-recovery-testing-and-integrity.md`](./epics/epic3-recovery-testing-and-integrity.md): Documentation for Epic 3.
+* [`epic4-sra-benchmarking-module.md`](./epics/epic4-sra-benchmarking-module.md): Documentation for Epic 4.
+
+## Key Technical Documents
+
+* [`architecture.md`](./architecture.md): System architecture and design decisions
+* [`data-models.md`](./data-models.md): Comprehensive data model documentation
+* [`tech-stack.md`](./tech-stack.md): Technology stack and dependencies
+* [`coding-standards.md`](./coding-standards.md): Code style and development guidelines
+* [`testing-strategy.md`](./testing-strategy.md): Testing approach and framework
+* [`streamlit-testing-framework.md`](./streamlit-testing-framework.md): Streamlit-specific testing documentation
+
+## Product Documents
+
+* [`prd-recovery.md`](./prd-recovery.md): Product Requirements Document for recovery phase
+* [`prd-resolver.md`](./prd-resolver.md): Product Requirements Document for resolver implementation
+* [`prd-benchmark-may.md`](./prd-benchmark-may.md): Benchmark requirements and specifications
+
+## User Stories
+
+Contains user stories and specifications developed or refined with AI assistance. ([`docs/stories/`](./stories/))
+
+Story files:
+* [`1.1.story.md`](./stories/1.1.story.md)
+* [`1.2.story.md`](./stories/1.2.story.md)
+* [`1.3.story.md`](./stories/1.3.story.md)
+* [`1.5.story.md`](./stories/1.5.story.md)
+* [`2.1.story.md`](./stories/2.1.story.md)
+* [`2.2.story.md`](./stories/2.2.story.md)
 
 ## Core Documentation
 
@@ -11,21 +58,10 @@ This section links to key documents within the `docs` directory:
 * [`SRA_Recovery_PM_Prompt.md`](./SRA_Recovery_PM_Prompt.md): PM prompt for the SRA Recovery phase.
 * [`SRA_Recovery_Project_Brief.md`](./SRA_Recovery_Project_Brief.md): Project brief for the SRA Recovery phase.
 * [`api-reference.md`](./api-reference.md): API reference documentation.
-* [`architecture.md`](./architecture.md): Describes the system architecture.
-* [`coding-standards.md`](./coding-standards.md): Guidelines for writing code.
-* [`data-models.md`](./data-models.md): Details the data models used.
-* [`environment-vars.md`](./environment-vars.md): Information on environment variables.
-* [`epic1-recovery-search-stabilization.md`](./epic1-recovery-search-stabilization.md): Documentation for Epic 1.
-* [`epic2-recovery-resolver-implementation.md`](./epic2-recovery-resolver-implementation.md): Documentation for Epic 2.
-* [`epic3-recovery-testing-and-integrity.md`](./epic3-recovery-testing-and-integrity.md): Documentation for Epic 3.
 * [`naming-conventions.md`](./naming-conventions.md): Conventions for naming entities.
 * [`po-recovery-approval.md`](./po-recovery-approval.md): Product Owner approval documentation for recovery phase.
-* [`prd-recovery.md`](./prd-recovery.md): Product Requirements Document for the recovery phase.
-* [`prd-resolver.md`](./prd-resolver.md): Product Requirements Document for the resolver.
 * [`project-structure.md`](./project-structure.md): Overview of the project's directory layout.
 * [`sr_metrics.md`](./sr_metrics.md): Metrics related to the Systematic Review Assistant.
-* [`tech-stack.md`](./tech-stack.md): Lists the technologies used.
-* [`testing-strategy.md`](./testing-strategy.md): Approach to testing.
 
 ### AI Chats
 
@@ -36,17 +72,6 @@ Contains logs and transcripts of AI-assisted development sessions and discussion
 * [`1.2.story.sm-session-full.md`](../ai/chats/1.2.story.sm-session-full.md)
 * [`1.2.story.impl-session-full.md`](../ai/chats/1.2.story.impl-session-full.md)
 * [`1-po-validation.md`](../ai/chats/1-po-validation.md)
-
-### AI Stories
-
-Contains user stories and specifications developed or refined with AI assistance. ([`ai/stories/`](../ai/stories/))
-
-* [`1.1.story.md`](../ai/stories/1.1.story.md)
-* [`1.2.story.md`](../ai/stories/1.2.story.md)
-* [`1.3.story.md`](../ai/stories/1.3.story.md)
-* [`1.5.story.md`](../ai/stories/1.5.story.md)
-* [`2.1.story.md`](../ai/stories/2.1.story.md)
-* [`2.2.story.md`](../ai/stories/2.2.story.md)
 
 ### Templates
 

@@ -111,7 +111,7 @@ Key quality goals include:
 - Comprehensive testing of the `ScreeningService`, including the new conflict resolution methods and alignment of existing methods.
 - Verification of all defined Pydantic schemas in `schemas.py` through their usage in tests.
 - Validation of SQLModel definitions and database interactions, especially for `SearchResult`, `ScreenAbstractResult`, and `ScreeningResolution`, including the new `SearchResult.final_decision` field and FK relationships.
-- Testing all documented conflict scenarios that should trigger the resolver (as per `docs/epic3-recovery-testing-and-integrity.md`, Story 3.2).
+- Testing all documented conflict scenarios that should trigger the resolver (as per `docs/epics/epic3-recovery-testing-and-integrity.md`, Story 3.2).
 - **Consider applying property-based testing with Hypothesis, particularly for Pydantic schemas with complex validation logic (e.g., `ScreeningResponse`, `ResolverOutputSchema`) and critical utility functions, to enhance robustness against diverse inputs.**
 
 ## 9. Document Maintenance
