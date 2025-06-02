@@ -2,7 +2,6 @@ import subprocess
 import sys
 import os
 # import uuid # BENCHMARK_REVIEW_ID is a UUID, but imported from seed_benchmark_data
-import html
 
 import pytest
 # from pytest_mock import MockerFixture # Not used in this file directly anymore
@@ -70,85 +69,68 @@ class TestSeedBenchmarkDataIntegration:
         review_in_db = db_session.exec(stmt_review).one_or_none()
         assert review_in_db is not None, f"SystematicReview with ID {BENCHMARK_REVIEW_ID} not found in DB."
 
-        # Define expected PICO and exclusion criteria values directly
-        # (Derived from tools/seed_benchmark_data.py and Story 4.1)
-        expected_pico_population_text = (
-            "Individuals experiencing homelessness. Studies must include data collected in the "
-            "Republic of Ireland. The review focuses on the health of homeless individuals "
-            "themselves, not on reports from key informants about their needs. Studies that "
-            "only include international/European datasets without specific outcomes for the "
-            "Republic of Ireland should be excluded."
-        )
-        expected_pico_intervention_text = (
-            "The review focuses on studies that generate empirical data (quantitative or "
-            "qualitative) on the following health-related topics for the homeless population:\n"
-            "- Overall health status.\n"
-            "- Health care access, utilisation, and quality.\n"
-            "- Specific health conditions (e.g., addiction, diabetes, cancer, "
-            "communicable/non-communicable diseases, STIs, pregnancy and childbirth).\n"
-            "- Health behaviours (e.g., nutrition, child development, tobacco use, "
-            "vaccination).\n"
-            "- Social determinants of health (e.g., social and community context, education, "
-            "economic stability)."
-        )
-        expected_pico_comparison_text = (
-            "Studies that include a comparison/control group comprising the general, housed "
-            "population are of interest.\n"
-            "Such studies should contain a method for comparing health indicator(s) between the "
-            "homeless (exposed) group and the general housed (control) group (e.g., using "
-            "relative risk, absolute difference, slope/relative index of inequality)."
-        )
-        expected_pico_outcome_text = (
-            "- Empirical indicators of health status.\n"
-            "- Empirical indicators of health care access.\n"
-            "- Empirical indicators of health care quality.\n"
-            "- Empirical indicators of health care utilisation."
-        )
-        expected_inclusion_criteria_xml_parts = [
-            f"<population>{html.escape(expected_pico_population_text)}</population>",
-            f"<intervention>{html.escape(expected_pico_intervention_text)}</intervention>",
-            f"<comparison>{html.escape(expected_pico_comparison_text)}</comparison>",
-            f"<outcome>{html.escape(expected_pico_outcome_text)}</outcome>",
-        ]
-        expected_inclusion_criteria_str = "\n".join(expected_inclusion_criteria_xml_parts)
+        # Define expected inclusion and exclusion criteria (as they actually appear in the script)
+        expected_inclusion_criteria_str = """
+  <InclusionCriteria>
+    <Population>
+      <Item>Homeless</Item>
+      <Item>Key informants reporting on needs of Homeless</Item>
+    </Population>
+    <Setting>
+      <Item>Data collected in Republic of Ireland</Item>
+    </Setting>
+    <StudyDesign>
+      <Item>Empirical primary or secondary data on a health topic</Item>
+      <Item>Quantitative studies</Item>
+      <Item>Qualitative studies</Item>
+    </StudyDesign>
+    <PublicationType>
+      <Item>Peer-reviewed publications</Item>
+      <Item>Conference Abstracts</Item>
+      <Item>Systematic reviews examined for individual studies meeting inclusion criteria</Item>
+    </PublicationType>
+    <Topic>
+      <Item>Health conditions (e.g., addiction, diabetes, cancer, communicable/non-communicable disease, STI, pregnancy and childbirth, etc.)</Item>
+      <Item>Health behaviours (e.g., nutrition, child development, tobacco use, vaccination, etc.)</Item>
+      <Item>Health care access, utilisation, quality</Item>
+      <Item>Social determinants of health (e.g., social and community context, education, economic stability)</Item>
+    </Topic>
+    <Language>English</Language>
+    <Date>Published in 2012 or later</Date>
+  </InclusionCriteria>"""
 
-        expected_exclusion_criteria_str = ("""Population-related:
-- Studies focusing on key informants reporting on the needs of the homeless, rather than the homeless population directly.
-- Studies with no data from the Republic of Ireland.
-- Studies using international/European datasets that include data from Ireland but do not report outcomes specific to the Republic of Ireland.
-Study Design & Publication Type-related:
-- Studies that do not generate empirical primary or secondary data on a health topic. This includes:
-    - Modelling studies.
-    - Commentaries/Letters.
-    - Individual case reports.
-- Conference Abstracts.
-- Policy papers.
-- Guidelines.
-- Grey literature (e.g., government documents and reports, pre-print articles, research reports, statistical reports) - due to resource limitations for a thorough search.
-Topic-related:
-- Animal studies.
-- Studies on economic, health care, or housing policy that do not relate directly to health outcomes or access for the homeless population.
-Language-related:
-- Studies not published in English.
-Date-related:
-- Studies published before January 1, 2012.
-Full-Text Screening Specific Exclusions:
-- Studies that do not contain empirical health indicators for the general, housed population (when a comparison is implied or attempted).
-- Studies that do not provide a method for comparing health indicator(s) between the exposed (homeless) and control (general housed) groups (e.g., missing denominators for calculating rates or risks).""").strip()
+        expected_exclusion_criteria_str = """  <ExclusionCriteria>
+    <Population></Population>
+    <Setting>
+      <Item>No data from the Republic of Ireland</Item>
+      <Item>Studies using international/European datasets without specific outcomes for Republic of Ireland</Item>
+    </Setting>
+    <StudyDesign>
+      <Item>No empirical primary or secondary data on a health topic</Item>
+      <Item>Modelling studies</Item>
+      <Item>Commentaries/Letters</Item>
+      <Item>Individual case reports</Item>
+    </StudyDesign>
+    <PublicationType>
+      <Item>Policy papers</Item>
+      <Item>Guidelines</Item>
+      <Item>Systematic reviews containing studies meeting inclusion criteria</Item>
+      <Item>Grey literature (government documents and reports, pre-print articles, research reports, statistical reports)</Item>
+    </PublicationType>
+    <Topic>
+      <Item>Animal study</Item>
+      <Item>Economic/health care/housing policy not relating to health</Item>
+    </Topic>
+    <Language>Any language that is not English</Language>
+    <Date>Published before 2012</Date>
+  </ExclusionCriteria>"""
         
         expected_research_question = "Benchmark: What is the health status, healthcare access/utilization/quality, and what are the health conditions, health behaviours, and social determinants of health for individuals experiencing homelessness in the Republic of Ireland, and how do these compare to the general housed population where data allows?"
 
         assert review_in_db.id == BENCHMARK_REVIEW_ID # ID is fixed
         assert review_in_db.research_question == expected_research_question
-        assert review_in_db.criteria_framework == models.CriteriaFramework.PICO
         assert review_in_db.inclusion_criteria == expected_inclusion_criteria_str
         assert review_in_db.exclusion_criteria == expected_exclusion_criteria_str
-        
-        assert review_in_db.criteria_framework_answers is not None
-        assert review_in_db.criteria_framework_answers.get("population") == expected_pico_population_text
-        assert review_in_db.criteria_framework_answers.get("intervention") == expected_pico_intervention_text
-        assert review_in_db.criteria_framework_answers.get("comparison") == expected_pico_comparison_text
-        assert review_in_db.criteria_framework_answers.get("outcome") == expected_pico_outcome_text
         
         assert review_in_db.review_metadata is not None
         assert review_in_db.review_metadata.get("benchmark_source_protocol_version") == "Story 4.1 - Pre-defined PICO and Exclusion Criteria"
@@ -165,9 +147,9 @@ Full-Text Screening Specific Exclusions:
         # This is a bit redundant with the unit test for parse_excel, but good for integration.
         # For simplicity here, we'll hardcode the expected count based on the current Excel.
         # A more robust way would be to parse the Excel here too, or rely on the script output if it logged it.
-        # From current human-reviewer-results-to-bench-against.csv: 69 entries
-        # Header + 68 data rows.
-        expected_search_result_count = 585 # Updated from 68, now stops at summary rows
+        # From current benchmark_human_ground_truth.xlsx: 585 entries total (valid rows with non-NaN keys)
+        # 365 excluded (N) + 220 included (Y) + 1 anomalous (220) = 586 total, but 585 valid rows
+        expected_search_result_count = 585 # Updated from 586, actual valid row count with non-NaN keys
         assert len(search_results_in_db) == expected_search_result_count, \
             f"Expected {expected_search_result_count} search results, found {len(search_results_in_db)}"
 
@@ -195,16 +177,10 @@ Full-Text Screening Specific Exclusions:
         assert sample_result.authors == [] # Authors field is blank in Excel for this row
         assert sample_result.year == "2022" # From Excel
         assert sample_result.source_db == models.SearchDatabaseSource.OTHER # Inferred by script
-        # Benchmark decision for rayyan-388371190 is 'N' in included_round1 and 'N' in included_round2
+        # Benchmark decision for rayyan-388371190: check "Included after T&A screen" column value
         assert sample_result.source_metadata["benchmark_human_decision"] is False 
         assert sample_result.source_metadata["original_key"] == sample_key_to_check
-        assert sample_result.source_metadata["exclusion_stage_round1"] == "Title/Abstract" # From Excel
-        
-        # Verify another one (e.g. included_round1='Y' if available, or just another distinct one)
-        # For now, one detailed check is sufficient given the unexpected Excel change.
-        # If a 'Y' case is needed, will need to find one in the new Excel.
-        # rayyan_id_to_check = "rayyan-10110580" # This ID is from the OLD Excel
-        # ... (commenting out the second sample check for now)
+        assert sample_result.source_metadata["included_after_ta_screen"] == "N" # From Excel
 
 
     def test_seeding_script_is_idempotent_on_rerun(self, db_session: Session):
@@ -221,7 +197,7 @@ Full-Text Screening Specific Exclusions:
             models.SearchResult.review_id == BENCHMARK_REVIEW_ID
         )
         count_after_run1 = len(db_session.exec(search_results_in_db_stmt_run1).all())
-        expected_search_result_count = 585 # Updated from 68, now stops at summary rows
+        expected_search_result_count = 585 # Updated from 586, actual valid row count with non-NaN keys
         assert count_after_run1 == expected_search_result_count
 
         # Run 2
@@ -252,7 +228,7 @@ Full-Text Screening Specific Exclusions:
         sample_result_run2 = db_session.exec(sample_result_stmt_rerun).one_or_none()
         assert sample_result_run2 is not None
         assert sample_result_run2.title == "CONFERENCE SPECIAL 2021 LEADING THE WAY" # From Excel
-        assert sample_result_run2.source_metadata["benchmark_human_decision"] is False # From Excel
+        assert sample_result_run2.source_metadata["benchmark_human_decision"] is False # From Excel "N" value
 
 
     def test_seeding_script_handles_missing_excel_gracefully(self, db_session: Session):

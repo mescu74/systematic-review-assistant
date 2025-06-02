@@ -1,6 +1,5 @@
 import uuid
 from pathlib import Path
-import html # Added for XML escaping
 import sys # <--- Add this import
 
 import pandas as pd  # Add pandas for Excel reading
@@ -13,7 +12,7 @@ from sqlalchemy import text # Added for SQL text queries
 
 from sr_assistant.app.database import session_factory
 from sr_assistant.core import models 
-from sr_assistant.core.types import CriteriaFramework, SearchDatabaseSource
+from sr_assistant.core.types import SearchDatabaseSource
 
 # Fixed UUID for the benchmark review
 BENCHMARK_REVIEW_ID = uuid.UUID("00000000-1111-2222-3333-444444444444")
@@ -23,40 +22,6 @@ BENCHMARK_EXCEL_PATH = Path("docs/benchmark/benchmark_human_ground_truth.xlsx") 
 def parse_protocol_and_create_review(db_session: Session) -> models.SystematicReview:
     """Uses the user-provided PICO and exclusion criteria to create or update a SystematicReview model."""
     logger.info(f"Attempting to create/update benchmark SystematicReview object with ID: {BENCHMARK_REVIEW_ID}")
-
-    # --- Restored PICO Elements from Story 4.1 / previous correct script version ---
-    pico_population_text = (
-        "Individuals experiencing homelessness. Studies must include data collected in the "
-        "Republic of Ireland. The review focuses on the health of homeless individuals "
-        "themselves, not on reports from key informants about their needs. Studies that "
-        "only include international/European datasets without specific outcomes for the "
-        "Republic of Ireland should be excluded."
-    )
-    pico_intervention_text = ( # Note: Story 4.1 refers to this as 'Phenomenon of Interest' for non-intervention studies
-        "The review focuses on studies that generate empirical data (quantitative or "
-        "qualitative) on the following health-related topics for the homeless population:\n"
-        "- Overall health status.\n"
-        "- Health care access, utilisation, and quality.\n"
-        "- Specific health conditions (e.g., addiction, diabetes, cancer, "
-        "communicable/non-communicable diseases, STIs, pregnancy and childbirth).\n"
-        "- Health behaviours (e.g., nutrition, child development, tobacco use, "
-        "vaccination).\n"
-        "- Social determinants of health (e.g., social and community context, education, "
-        "economic stability)."
-    )
-    pico_comparison_text = (
-        "Studies that include a comparison/control group comprising the general, housed "
-        "population are of interest.\n"
-        "Such studies should contain a method for comparing health indicator(s) between the "
-        "homeless (exposed) group and the general housed (control) group (e.g., using "
-        "relative risk, absolute difference, slope/relative index of inequality)."
-    )
-    pico_outcome_text = (
-        "- Empirical indicators of health status.\n"
-        "- Empirical indicators of health care access.\n"
-        "- Empirical indicators of health care quality.\n"
-        "- Empirical indicators of health care utilisation."
-    )
 
     inclusion_criteria_xml_parts = """
   <InclusionCriteria>
@@ -229,14 +194,14 @@ def parse_excel_and_create_search_results(review_id: uuid.UUID) -> list[models.S
                 keywords_str = str(row.get("keywords", "")) if pd.notna(row.get("keywords")) else ""
                 keywords_list = [kw.strip() for kw in keywords_str.split(';') if kw.strip()]
                 
-                # Determine ground truth based on exclusion_stage_round1
-                exclusion_stage = str(row.get("exclusion_stage_round1", "")) if pd.notna(row.get("exclusion_stage_round1")) else ""
+                # Determine ground truth based on "Included after T&A screen" column
+                included_ta_screen = str(row.get("Included after T&A screen", "")) if pd.notna(row.get("Included after T&A screen")) else ""
                 
-                # If exclusion_stage_round1 contains "Title/Abstract", they were excluded at title/abstract
-                # Otherwise, they passed title/abstract screening (include = true)
-                human_decision = False if "Title/Abstract" in exclusion_stage else True
+                # If "Included after T&A screen" is "Y", they were included (passed title/abstract screening)
+                # Otherwise (including "N" or any other value), they were excluded
+                human_decision = True if included_ta_screen == "Y" else False
                 
-                logger.debug(f"Row {row_idx}: exclusion_stage_round1='{exclusion_stage}', human_decision={human_decision}")
+                logger.debug(f"Row {row_idx}: Included after T&A screen='{included_ta_screen}', human_decision={human_decision}")
                 
                 # Clean up year - strip .0 from float values
                 year_val = row.get("year")
@@ -272,7 +237,7 @@ def parse_excel_and_create_search_results(review_id: uuid.UUID) -> list[models.S
                     source_metadata={
                         "benchmark_human_decision": human_decision,
                         "original_key": key,
-                        "exclusion_stage_round1": exclusion_stage
+                        "included_after_ta_screen": included_ta_screen
                     }
                 )
                 parsed_search_results.append(result)

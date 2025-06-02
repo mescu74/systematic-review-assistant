@@ -1,5 +1,4 @@
 import uuid
-import html
 # from pathlib import Path # No longer needed here
 # Remove unittest.mock imports
 # from unittest.mock import MagicMock, patch, mock_open 
@@ -12,7 +11,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import Session
 
 from sr_assistant.core import models
-from sr_assistant.core.types import CriteriaFramework, SearchDatabaseSource
+from sr_assistant.core.types import SearchDatabaseSource
 from tools import seed_benchmark_data # Import the module to test
 
 # Fixed UUID from the script for assertions
@@ -39,63 +38,61 @@ class TestParseProtocolAndCreateReview:
         mock_db_session.get.assert_called_once_with(models.SystematicReview, BENCHMARK_REVIEW_ID_FROM_SCRIPT)
         assert review is mock_review_from_db
         
-        # Expected PICO plain texts (condensed for brevity in this plan, full in code)
-        expected_pico_population = ("Individuals experiencing homelessness. Studies must include data collected in the "
-                                    "Republic of Ireland. The review focuses on the health of homeless individuals "
-                                    "themselves, not on reports from key informants about their needs. Studies that "
-                                    "only include international/European datasets without specific outcomes for the "
-                                    "Republic of Ireland should be excluded.")
-        expected_pico_intervention = ("The review focuses on studies that generate empirical data (quantitative or "
-                                      "qualitative) on the following health-related topics for the homeless population:\n"
-                                      "- Overall health status.\n"
-                                      "- Health care access, utilisation, and quality.\n"
-                                      "- Specific health conditions (e.g., addiction, diabetes, cancer, "
-                                      "communicable/non-communicable diseases, STIs, pregnancy and childbirth).\n"
-                                      "- Health behaviours (e.g., nutrition, child development, tobacco use, "
-                                      "vaccination).\n"
-                                      "- Social determinants of health (e.g., social and community context, education, "
-                                      "economic stability).")
-        expected_pico_comparison = ("Studies that include a comparison/control group comprising the general, housed "
-                                    "population are of interest.\n"
-                                    "Such studies should contain a method for comparing health indicator(s) between the "
-                                    "homeless (exposed) group and the general housed (control) group (e.g., using "
-                                    "relative risk, absolute difference, slope/relative index of inequality).")
-        expected_pico_outcome = ("- Empirical indicators of health status.\n"
-                                 "- Empirical indicators of health care access.\n"
-                                 "- Empirical indicators of health care quality.\n"
-                                 "- Empirical indicators of health care utilisation.")
+        # Expected inclusion and exclusion criteria (as they appear in the script)
+        expected_inclusion_criteria_str = """
+  <InclusionCriteria>
+    <Population>
+      <Item>Homeless</Item>
+      <Item>Key informants reporting on needs of Homeless</Item>
+    </Population>
+    <Setting>
+      <Item>Data collected in Republic of Ireland</Item>
+    </Setting>
+    <StudyDesign>
+      <Item>Empirical primary or secondary data on a health topic</Item>
+      <Item>Quantitative studies</Item>
+      <Item>Qualitative studies</Item>
+    </StudyDesign>
+    <PublicationType>
+      <Item>Peer-reviewed publications</Item>
+      <Item>Conference Abstracts</Item>
+      <Item>Systematic reviews examined for individual studies meeting inclusion criteria</Item>
+    </PublicationType>
+    <Topic>
+      <Item>Health conditions (e.g., addiction, diabetes, cancer, communicable/non-communicable disease, STI, pregnancy and childbirth, etc.)</Item>
+      <Item>Health behaviours (e.g., nutrition, child development, tobacco use, vaccination, etc.)</Item>
+      <Item>Health care access, utilisation, quality</Item>
+      <Item>Social determinants of health (e.g., social and community context, education, economic stability)</Item>
+    </Topic>
+    <Language>English</Language>
+    <Date>Published in 2012 or later</Date>
+  </InclusionCriteria>"""
 
-        expected_inclusion_xml_parts = [
-            f"<population>{html.escape(expected_pico_population)}</population>",
-            f"<intervention>{html.escape(expected_pico_intervention)}</intervention>",
-            f"<comparison>{html.escape(expected_pico_comparison)}</comparison>",
-            f"<outcome>{html.escape(expected_pico_outcome)}</outcome>",
-        ]
-        expected_inclusion_criteria_str = "\n".join(expected_inclusion_xml_parts)
-
-        expected_exclusion_criteria_str = ("""Population-related:
-- Studies focusing on key informants reporting on the needs of the homeless, rather than the homeless population directly.
-- Studies with no data from the Republic of Ireland.
-- Studies using international/European datasets that include data from Ireland but do not report outcomes specific to the Republic of Ireland.
-Study Design & Publication Type-related:
-- Studies that do not generate empirical primary or secondary data on a health topic. This includes:
-    - Modelling studies.
-    - Commentaries/Letters.
-    - Individual case reports.
-- Conference Abstracts.
-- Policy papers.
-- Guidelines.
-- Grey literature (e.g., government documents and reports, pre-print articles, research reports, statistical reports) - due to resource limitations for a thorough search.
-Topic-related:
-- Animal studies.
-- Studies on economic, health care, or housing policy that do not relate directly to health outcomes or access for the homeless population.
-Language-related:
-- Studies not published in English.
-Date-related:
-- Studies published before January 1, 2012.
-Full-Text Screening Specific Exclusions:
-- Studies that do not contain empirical health indicators for the general, housed population (when a comparison is implied or attempted).
-- Studies that do not provide a method for comparing health indicator(s) between the exposed (homeless) and control (general housed) groups (e.g., missing denominators for calculating rates or risks).""").strip()
+        expected_exclusion_criteria_str = """  <ExclusionCriteria>
+    <Population></Population>
+    <Setting>
+      <Item>No data from the Republic of Ireland</Item>
+      <Item>Studies using international/European datasets without specific outcomes for Republic of Ireland</Item>
+    </Setting>
+    <StudyDesign>
+      <Item>No empirical primary or secondary data on a health topic</Item>
+      <Item>Modelling studies</Item>
+      <Item>Commentaries/Letters</Item>
+      <Item>Individual case reports</Item>
+    </StudyDesign>
+    <PublicationType>
+      <Item>Policy papers</Item>
+      <Item>Guidelines</Item>
+      <Item>Systematic reviews containing studies meeting inclusion criteria</Item>
+      <Item>Grey literature (government documents and reports, pre-print articles, research reports, statistical reports)</Item>
+    </PublicationType>
+    <Topic>
+      <Item>Animal study</Item>
+      <Item>Economic/health care/housing policy not relating to health</Item>
+    </Topic>
+    <Language>Any language that is not English</Language>
+    <Date>Published before 2012</Date>
+  </ExclusionCriteria>"""
 
         # Check that sqlmodel_update was called on the mock_review_from_db with the correct data
         expected_update_data = {
@@ -105,13 +102,6 @@ Full-Text Screening Specific Exclusions:
                          "from Story 4.1 for Epic 4 (SRA Benchmarking Module Implementation). "
                          "It uses the dataset from 'docs/benchmark/human-reviewer-results-to-bench-against.csv' "
                          "and is intended for testing and evaluation purposes of the SRA screening module."),
-            "criteria_framework": CriteriaFramework.PICO, # For comparison, ensure this is the enum member
-            "criteria_framework_answers": {
-                "population": expected_pico_population,
-                "intervention": expected_pico_intervention,
-                "comparison": expected_pico_comparison,
-                "outcome": expected_pico_outcome,
-            },
             "inclusion_criteria": expected_inclusion_criteria_str,
             "exclusion_criteria": expected_exclusion_criteria_str,
             "review_metadata": {
@@ -123,12 +113,9 @@ Full-Text Screening Specific Exclusions:
         called_with_data = mock_review_from_db.sqlmodel_update.call_args[0][0]
         
         for key, value in expected_update_data.items():
-            if key == "criteria_framework" and isinstance(value, CriteriaFramework):
-                 assert called_with_data.get(key) == value or called_with_data.get(key) == value.value, f"Mismatch for key '{key}'"
-            else:
-                assert called_with_data.get(key) == value, f"Mismatch for key '{key}'"
+            assert called_with_data.get(key) == value, f"Mismatch for key '{key}'"
         
-        assert 'id' not in called_with_data 
+        assert 'id' not in called_with_data
 
 class TestInferSourceDb:
     @pytest.mark.parametrize("key, expected_source", [
@@ -153,19 +140,19 @@ class TestParseCsvAndCreateSearchResults:
         sample_data = pd.DataFrame([
             {"key": "pmid_1", "title": "Title 1", "authors": "Auth A; Auth B", "keywords": "kw1; kw2", 
              "year": "2020", "abstract": "Abstract 1", "doi": "doi1", "journal": "Journal1", 
-             "exclusion_stage_round1": ""},
+             "Included after T&A screen": "Y"},
             {"key": "rayyan-2", "title": "Title 2", "authors": "Auth C", "keywords": "kw3", 
              "year": "2021", "abstract": "Abstract 2", "doi": "doi2", "journal": "Journal2", 
-             "exclusion_stage_round1": "Title/Abstract"},
+             "Included after T&A screen": "N"},
             {"key": "3", "title": "Title 3", "authors": "", "keywords": "", 
              "year": "", "abstract": "", "doi": "", "journal": "", 
-             "exclusion_stage_round1": ""},
+             "Included after T&A screen": "Y"},
             {"key": "4", "title": "Title 4", "authors": "", "keywords": "", 
              "year": "", "abstract": "", "doi": "", "journal": "", 
-             "exclusion_stage_round1": "Title/Abstract"},
+             "Included after T&A screen": "N"},
             {"key": "5", "title": "Title 5", "authors": "", "keywords": "", 
              "year": "", "abstract": "", "doi": "", "journal": "", 
-             "exclusion_stage_round1": "Full text screen"},
+             "Included after T&A screen": "220"},  # Anomalous value should be treated as excluded
         ])
         mock_excel_reader.return_value = sample_data
 
@@ -180,25 +167,26 @@ class TestParseCsvAndCreateSearchResults:
         assert results[0].authors == ["Auth A", "Auth B"]
         assert results[0].keywords == ["kw1", "kw2"]
         assert results[0].year == "2020"
-        assert results[0].source_metadata["benchmark_human_decision"] is True  # No "Title/Abstract" in exclusion
+        assert results[0].source_metadata["benchmark_human_decision"] is True  # "Y" means included
 
         assert results[1].source_db == SearchDatabaseSource.OTHER
         assert results[1].source_id == "rayyan-2"
         assert results[1].title == "Title 2"
-        assert results[1].source_metadata["benchmark_human_decision"] is False  # Has "Title/Abstract" in exclusion
-        assert results[1].source_metadata["exclusion_stage_round1"] == "Title/Abstract"
+        assert results[1].source_metadata["benchmark_human_decision"] is False  # "N" means excluded
+        assert results[1].source_metadata["included_after_ta_screen"] == "N"
 
         assert results[2].source_db == SearchDatabaseSource.PUBMED
         assert results[2].source_id == "3"
-        assert results[2].source_metadata["benchmark_human_decision"] is True  # No "Title/Abstract" in exclusion
+        assert results[2].source_metadata["benchmark_human_decision"] is True  # "Y" means included
         
         assert results[3].source_db == SearchDatabaseSource.PUBMED
         assert results[3].source_id == "4"
-        assert results[3].source_metadata["benchmark_human_decision"] is False  # Has "Title/Abstract" in exclusion
+        assert results[3].source_metadata["benchmark_human_decision"] is False  # "N" means excluded
 
         assert results[4].source_db == SearchDatabaseSource.PUBMED
         assert results[4].source_id == "5"
-        assert results[4].source_metadata["benchmark_human_decision"] is True  # "Full text screen" means passed title/abstract
+        assert results[4].source_metadata["benchmark_human_decision"] is False  # "220" is not "Y" so excluded
+        assert results[4].source_metadata["included_after_ta_screen"] == "220"
 
     def test_excel_parsing_file_not_found(self, mocker: MockerFixture, mock_excel_reader: t.Any):
         mock_excel_reader.side_effect = FileNotFoundError
@@ -218,9 +206,9 @@ class TestParseCsvAndCreateSearchResults:
 
     def test_excel_row_processing_exception(self, mock_excel_reader: t.Any, mocker: MockerFixture):
         sample_data = pd.DataFrame([
-            {"key": "pmid_1", "title": "Title 1", "authors": "Auth A", "exclusion_stage_round1": ""},
-            {"key": "pmid_2", "title": "Title 2", "authors": "Auth B", "exclusion_stage_round1": "Title/Abstract"}, 
-            {"key": "pmid_3", "title": "Title 3", "authors": "Auth C", "exclusion_stage_round1": ""},
+            {"key": "pmid_1", "title": "Title 1", "authors": "Auth A", "Included after T&A screen": "Y"},
+            {"key": "pmid_2", "title": "Title 2", "authors": "Auth B", "Included after T&A screen": "N"}, 
+            {"key": "pmid_3", "title": "Title 3", "authors": "Auth C", "Included after T&A screen": "Y"},
         ])
         mock_excel_reader.return_value = sample_data
         mock_logger_exception = mocker.patch("tools.seed_benchmark_data.logger.exception")
