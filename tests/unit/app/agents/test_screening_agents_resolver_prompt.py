@@ -84,8 +84,7 @@ def test_format_exclusion_reasons_none():
 
 def test_format_exclusion_reasons_all_empty_or_none():
     reasons = schemas.ExclusionReasons(
-        population_exclusion_reasons=None,
-        intervention_exclusion_reasons=[],
+        population_exclusion_reasons=None, intervention_exclusion_reasons=[]
     )
     assert _format_exclusion_reasons(reasons) == "N/A"  # pyright: ignore[reportPrivateUsage]
 
@@ -332,13 +331,11 @@ def test_resolver_prompt_formatting():
     assert system_message_content == RESOLVER_SYSTEM_PROMPT
 
     assert "<title>Test Title</title>" in human_message_content
-    assert (
-        "<abstract>\nTest Abstract Content.\n    </abstract>" in human_message_content
-    )
+    assert "<abstract>\nTest Abstract Content.\n  </abstract>" in human_message_content
     assert "<criteria_framework>PICO</criteria_framework>" in human_message_content
     assert "<decision>include</decision>" in human_message_content
     assert (
-        "<rationale>\nConservative rationale: Looks good.\n    </rationale>"
+        "<rationale>\nConservative rationale: Looks good.\n  </rationale>"
         in human_message_content
     )
     assert "- Relevant quote A from abstract by comprehensive." in human_message_content

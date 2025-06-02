@@ -49,13 +49,7 @@ from langchain_core.runnables import RunnableConfig, RunnableParallel
 from langchain_google_genai.chat_models import ChatGoogleGenerativeAI
 from langchain_openai.chat_models import ChatOpenAI
 from loguru import logger
-from pydantic import (
-    BaseModel,
-    ConfigDict,
-    Field,
-    TypeAdapter,
-    model_validator,
-)
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
 import sr_assistant.app.utils as ut
 from sr_assistant.app.config import get_settings
@@ -71,12 +65,13 @@ if t.TYPE_CHECKING:
     from langchain_community.callbacks.openai_info import OpenAICallbackHandler
     from langchain_core.tracers.schemas import Run
 
-
+REVIEWER_MODEL_NAME = "gpt-4o"
+RESOLVER_MODEL_NAME = "gemini-2.5-pro-preview-05-06"
 # NOTE: IMPORTANT - the order of with_structured_output and with_retry matters.
 #       with_structured_output must be before with_retry.
 resolver_model = (
     ChatGoogleGenerativeAI(
-        model="gemini-2.5-pro-preview-05-06",
+        model=RESOLVER_MODEL_NAME,
         temperature=0,
         max_tokens=None,
         # thinking_budget=24576,  # TODO: This is a langchain-google-genai v2.1.4 featere, but we can't upgrade due to LangChain minor version upgrade breaking the way on_end listener works (its modifications to RunTree are not present in chain output in later versions. We will file a bug report for this as it's an undocumented breaking change.) For now we've pinned LangChain and Pydantic versions to known working versions. We may need to refactor screening logic later on, for now we stick with this setup. Gemini uses thinking by default, without a budget, how deeply it thinks is dependent on the prompt, so it must encourage deep analysis!)  # noqa: W505
@@ -94,71 +89,104 @@ resolver_model = (
 )
 
 
-RESOLVER_SYSTEM_PROMPT = """You are an expert systematic review screening assistant, specializing in conflict resolution. You are an analytical, critical, and deep thinker.
+RESOLVER_SYSTEM_PROMPT = """You are an expert systematic review screening resolution specialist. Your primary function is to resolve discrepancies between two independent reviewers (conservative and comprehensive) with a strong bias toward inclusion to minimize false negatives.
 
-Your primary function is to resolve discrepancies in screening decisions between two independent reviewers (one 'conservative', one 'comprehensive') or to provide a definitive decision when both reviewers are 'uncertain'. Your goal is to arrive at a final, well-reasoned screening decision for a given research article based on the provided context.
+## Core Resolution Principle: "Absence of Evidence is Not Evidence of Absence"
 
-To achieve this, you must think step-by-step. Analyze all provided information meticulously. Consider the perspectives and rationales of both reviewers, delving into their decision-making processes by examining their provided decision, confidence, rationale, extracted quotes, and any exclusion reasons. Explain your reasoning comprehensively before stating your final decision and confidence. Show your work clearly.
+When resolving conflicts, prioritize inclusion over exclusion. The cost of missing relevant research (false negative) is significantly higher than including papers for full-text review that may later be excluded (false positive).
 
-Your final output must conform to the specified structured format. Ensure your reasoning is thorough and directly supports your final decision.
-"""
+## Resolution Framework
+
+When reviewers disagree or when both are uncertain:
+1. **Default to inclusion** unless there is clear evidence of exclusion criteria violation
+2. **Treat missing information as reason for inclusion**, not exclusion
+3. **Apply inclusion/exclusion criteria directly** to the available evidence
+4. **Consider that abstracts often omit details** that would be found in the full text
+
+## Decision Logic Priority
+
+1. **Both include**: INCLUDE (agreement achieved)
+2. **Both exclude with clear violation**: EXCLUDE (strong evidence against inclusion)
+3. **One includes, one excludes**: INCLUDE (favor inclusion bias)
+4. **Both uncertain**: INCLUDE (uncertainty should not prevent full-text evaluation)
+5. **Mixed uncertain/include**: INCLUDE (lean toward inclusion)
+6. **Mixed uncertain/exclude**: INCLUDE unless exclusion criteria clearly violated
+
+## Analysis Requirements
+
+You must think step-by-step and analyze:
+- Each reviewer's rationale and evidence
+- Whether exclusion decisions are based on clear criteria violations vs. missing information
+- The potential for full-text review to resolve uncertainties
+- The relative cost of inclusion vs. exclusion errors
+
+## Examples of Conservative Resolution
+
+- **Country unclear**: If location not mentioned but study otherwise relevant → INCLUDE
+- **Methodology ambiguous**: If study design unclear but potentially appropriate → INCLUDE  
+- **Population partially described**: If target group mentioned but details missing → INCLUDE
+- **Intervention briefly described**: If treatment mentioned but protocol unclear → INCLUDE
+
+Your final decision must err on the side of inclusion to ensure comprehensive systematic review coverage. When in doubt, include for full-text evaluation rather than risk losing potentially relevant research.
+
+Your final output must conform to the specified structured format with thorough reasoning that directly supports your inclusion-biased decision."""
 
 RESOLVER_HUMAN_PROMPT_TEMPLATE = """Please resolve the screening decision for the following research article based on the following detailed information.
 
 <search_result_context>
-    <title>{article_title}</title>
-    <abstract>
+  <title>{article_title}</title>
+  <abstract>
 {article_abstract}
-    </abstract>
-    <journal>{article_journal}</journal>
-    <year>{article_year}</year>
-    <source_id>{article_source_id}</source_id>
-    <keywords>{article_keywords}</keywords>
-    <mesh_terms>{article_mesh_terms}</mesh_terms>
+  </abstract>
+  <journal>{article_journal}</journal>
+  <year>{article_year}</year>
+  <source_id>{article_source_id}</source_id>
+  <keywords>{article_keywords}</keywords>
+  <mesh_terms>{article_mesh_terms}</mesh_terms>
 </search_result_context>
 
 <systematic_review_protocol>
-    <background>
+  <background>
 {review_background}
-    </background>
-    <research_question>
+  </background>
+  <research_question>
 {review_research_question}
-    </research_question>
-    <criteria_framework>{review_criteria_framework}</criteria_framework>
-    <inclusion_criteria>
+  </research_question>
+  <criteria_framework>{review_criteria_framework}</criteria_framework>
+  <inclusion_criteria>
 {review_inclusion_criteria}
-    </inclusion_criteria>
-    <exclusion_criteria>
+  </inclusion_criteria>
+  <exclusion_criteria>
 {review_exclusion_criteria}
-    </exclusion_criteria>
+  </exclusion_criteria>
 </systematic_review_protocol>
 
 <conservative_reviewer_assessment>
-    <decision>{conservative_reviewer_decision}</decision>
-    <confidence_score>{conservative_reviewer_confidence}</confidence_score>
-    <rationale>
+  <decision>{conservative_reviewer_decision}</decision>
+  <confidence_score>{conservative_reviewer_confidence}</confidence_score>
+  <rationale>
 {conservative_reviewer_rationale}
-    </rationale>
-    <extracted_quotes>
+  </rationale>
+  <extracted_quotes>
 {conservative_reviewer_quotes}
-    </extracted_quotes>
-    <exclusion_reasons>
+  </extracted_quotes>
+  <exclusion_reasons>
 {conservative_reviewer_exclusion_reasons}
-    </exclusion_reasons>
+  </exclusion_reasons>
 </conservative_reviewer_assessment>
 
 <comprehensive_reviewer_assessment>
-    <decision>{comprehensive_reviewer_decision}</decision>
-    <confidence_score>{comprehensive_reviewer_confidence}</confidence_score>
-    <rationale>
+  <decision>{comprehensive_reviewer_decision}</decision>
+  <confidence_score>{comprehensive_reviewer_confidence}</confidence_score>
+  <rationale>
 {comprehensive_reviewer_rationale}
-    </rationale>
-    <extracted_quotes>
+  </rationale>
+  <extracted_quotes>
 {comprehensive_reviewer_quotes}
-    </extracted_quotes>
-    <exclusion_reasons>
+  </extracted_quotes>
+  <exclusion_reasons>
 {comprehensive_reviewer_exclusion_reasons}
-    </exclusion_reasons>
+  </exclusion_reasons>
 </comprehensive_reviewer_assessment>
 
 <instructions_for_resolver>
@@ -175,10 +203,7 @@ After your thinking process, provide the structured output including:
 """
 
 resolver_prompt = ChatPromptTemplate.from_messages(
-    [
-        ("system", RESOLVER_SYSTEM_PROMPT),
-        ("human", RESOLVER_HUMAN_PROMPT_TEMPLATE),
-    ]
+    [("system", RESOLVER_SYSTEM_PROMPT), ("human", RESOLVER_HUMAN_PROMPT_TEMPLATE)]
 )
 
 
@@ -549,9 +574,7 @@ class ScreenAbstractsChainInput(BaseModel):
     """
 
     model_config = ConfigDict(
-        from_attributes=True,
-        validate_assignment=True,
-        extra="ignore",
+        from_attributes=True, validate_assignment=True, extra="ignore"
     )
     # Protocol
     background: str | None = Field(default="<no background provided>")
@@ -821,8 +844,7 @@ def screen_abstracts_chain_on_end_cb(run_obj: Run) -> None:  # noqa: C901
 
 @logger.catch(onerror=lambda exc: st.error(exc) if ut.in_streamlit() else None)  # pyright: ignore [reportArgumentType]
 def make_screen_abstracts_chain_input(
-    search_results_batch: list[models.SearchResult],
-    review: models.SystematicReview,
+    search_results_batch: list[models.SearchResult], review: models.SystematicReview
 ) -> ScreenAbstractsChainBatchInputDict:
     """Create input for a batch to be passed to abstracts screening chain.
 
@@ -889,38 +911,86 @@ def make_screen_abstracts_chain_input(
 # Prompts for screening
 
 conservative_reviewer_prompt_text = """\
-You are a highly conservative systematic reviewer, focusing on methodological \
-rigor and strict interpretation of inclusion criteria. Your priority is to avoid \
-including studies that might not fully meet the criteria.
+You are a systematic review screening specialist with a conservative inclusion approach. Your primary objective is to minimize false negatives (incorrectly excluding relevant papers) because the cost of missing relevant research is higher than including papers for full-text review that may later be excluded.
 
-When assessing abstracts:
-- Require explicit statements matching criteria
-- Flag any methodological ambiguity
-- Consider unclear reporting as potential exclusion
-- Demand high specificity in study characteristics
-- Interpret missing information as a reason for uncertainty
+## Core Principle: "Absence of Evidence is Not Evidence of Absence"
 
-Confidence Scoring for Conservative Review:
-- Score < 0.7: Mark as "uncertain" when any required information is implicit or missing
-- Score 0.7-0.85: Clear criteria match but some details could be more explicit
-- Score > 0.85: Only when all criteria are explicitly and unambiguously met"""
+When information is unclear, missing, or not explicitly stated in the abstract, this is NOT grounds for exclusion. Instead:
+- Include papers when key information (e.g., country, population details, methodology) is not mentioned but could be present in the full text
+- Recognize that abstracts often omit details that would be found in the complete paper
+- Default to inclusion when there is reasonable possibility the paper meets criteria
+
+## Decision Framework
+
+Apply the inclusion and exclusion criteria directly to the abstract content. Focus on:
+1. **What is explicitly stated** - Use clear evidence of exclusion criteria violations
+2. **What can be reasonably inferred** - Consider typical conventions in the field
+3. **What is missing** - Treat missing information as requiring full-text review, not exclusion
+
+## Cost of Errors
+
+Remember: False negatives (excluding relevant papers) are more costly than false positives (including papers for full-text review). When in doubt, include rather than exclude.
+
+## Examples of Conservative Inclusion Decisions
+
+- **Missing country information**: If a study doesn't mention location but otherwise fits criteria → INCLUDE (country may be in methods section)
+- **Unclear population size**: If sample size isn't in abstract but population matches → INCLUDE (full text will have complete methods)
+- **Ambiguous intervention**: If intervention description is brief but potentially relevant → INCLUDE (full description likely in complete paper)
+- **Methodology not detailed**: If study design isn't fully described but suggests appropriate approach → INCLUDE (methods section will clarify)
+
+## Confidence Scoring Guidelines
+
+- Score < 0.7: Mark as "uncertain" only when critical exclusion criteria are clearly violated
+- Score 0.7-0.85: Include when criteria are likely met based on available information
+- Score > 0.85: Include when criteria are clearly and explicitly met
+
+Focus on finding reasons to include rather than reasons to exclude. Your role is to ensure no potentially relevant research is lost at this stage."""
 
 comprehensive_reviewer_prompt_text = """\
-You are a comprehensive systematic reviewer, focusing on potential relevance and \
-broader interpretation of inclusion criteria. Your priority is to avoid excluding \
-potentially relevant studies.
+You are a systematic review screening specialist with a comprehensive inclusion approach. Your role complements the conservative reviewer by conducting thorough analysis while maintaining the same fundamental principle: minimizing false negatives is more important than avoiding false positives.
 
-When assessing abstracts:
-- Consider both explicit and implicit indicators
-- Look for contextual clues about methodology
-- Interpret typical field conventions
-- Allow for variance in reporting styles
-- Seek reasons to include when borderline
+## Shared Core Principle: "Absence of Evidence is Not Evidence of Absence"
 
-Confidence Scoring for Comprehensive Review:
-- Score < 0.7: Mark as "uncertain" only when critical information is completely absent
-- Score 0.7-0.85: Can infer required information from context
-- Score > 0.85: Clear match with criteria, either explicit or strongly implied"""
+Like your conservative counterpart, you must NOT exclude papers based on missing or unclear information. Your comprehensive approach means:
+- Examine all available evidence in the abstract thoroughly
+- Consider contextual clues and field-specific conventions
+- Look for any indicators that suggest potential relevance
+- Apply broad interpretation while respecting explicit exclusion criteria
+
+## Decision Framework
+
+Apply the inclusion and exclusion criteria directly to the abstract content through comprehensive analysis:
+1. **Explicit content analysis** - Identify clear statements about study characteristics
+2. **Implicit content inference** - Draw reasonable conclusions from available context
+3. **Knowledge-based interpretation** - Apply understanding of research conventions and typical practices
+4. **Missing information handling** - Treat gaps as opportunities for inclusion, not exclusion
+
+## Cost of Errors Principle
+
+Maintain awareness that excluding a relevant paper (false negative) is more problematic than including a paper that may be excluded at full-text review (false positive). Your comprehensive analysis should err on the side of inclusion.
+
+## Comprehensive Analysis Approach
+
+- **Population**: Look for any mention of relevant groups, even if not fully described
+- **Intervention**: Consider brief mentions or implied interventions that could match criteria
+- **Comparison**: Accept studies even with unclear control groups if otherwise relevant
+- **Outcomes**: Include studies mentioning relevant endpoints, even if not primary focus
+- **Study Design**: Accept studies with implied appropriate methodology
+
+## Examples of Comprehensive Inclusion Reasoning
+
+- **Incomplete population description**: "patients" without specifics → INCLUDE (likely detailed in methods)
+- **Brief intervention mention**: "standard care" without details → INCLUDE (protocol likely in full text)
+- **Implied methodology**: Results suggest RCT but not explicitly stated → INCLUDE (design clarified in methods)
+- **Partial outcome reporting**: Mentions relevant endpoint among others → INCLUDE (full results in complete paper)
+
+## Confidence Scoring for Comprehensive Review
+
+- Score < 0.7: Mark as "uncertain" only when exclusion criteria are explicitly violated
+- Score 0.7-0.85: Include when reasonable evidence suggests criteria are met
+- Score > 0.85: Include when strong evidence indicates criteria are met
+
+Your comprehensive approach should capture potentially relevant studies that might be missed by more restrictive screening. Focus on maximizing sensitivity while maintaining analytical rigor."""
 
 
 task_prompt_text = """\
@@ -967,8 +1037,8 @@ comprehensive_reviewer_prompt = ChatPromptTemplate.from_messages(
 )
 
 # TODO: probably no need for two of these, can reuse one
-llm1 = ChatOpenAI(model="gpt-4o", temperature=0)
-llm2 = ChatOpenAI(model="gpt-4o", temperature=0)
+llm1 = ChatOpenAI(model=REVIEWER_MODEL_NAME, temperature=0)
+llm2 = ChatOpenAI(model=REVIEWER_MODEL_NAME, temperature=0)
 
 # These return Pydantic models
 llm1_with_structured_output = llm1.with_structured_output(schemas.ScreeningResponse)
@@ -990,8 +1060,7 @@ screen_abstracts_chain = RunnableParallel(
         retry_if_exception_type=(Exception,),
     ),
 ).with_listeners(
-    on_end=screen_abstracts_chain_on_end_cb,
-    on_error=chain_on_error_listener_cb,
+    on_end=screen_abstracts_chain_on_end_cb, on_error=chain_on_error_listener_cb
 )  # .with_types(
 #        output_type=ScreenAbstractsChainOutputDict # pyright: ignore [reportArgumentType]
 # )
@@ -1069,8 +1138,7 @@ def screen_abstracts_batch(
 
                 if not isinstance(conservative, ScreeningResult):
                     conservative = ScreeningError(
-                        search_result=search_result,
-                        error=conservative,
+                        search_result=search_result, error=conservative
                     )
                     batch_logger.error(f"Conservative reviewer error: {conservative!r}")
                 else:
@@ -1078,8 +1146,7 @@ def screen_abstracts_batch(
 
                 if not isinstance(comprehensive, ScreeningResult):
                     comprehensive = ScreeningError(
-                        search_result=search_result,
-                        error=comprehensive,
+                        search_result=search_result, error=comprehensive
                     )
                     batch_logger.error(
                         f"Comprehensive reviewer error: {comprehensive!r}"
@@ -1095,8 +1162,7 @@ def screen_abstracts_batch(
                 chain_outputs.append(res_tuple)
 
             return ScreenAbstractsBatchOutput(
-                results=chain_outputs,
-                cb=deepcopy(cb_openai),
+                results=chain_outputs, cb=deepcopy(cb_openai)
             )
         except Exception:
             batch_logger.exception("Exception occurred during screen_abstracts_batch")
@@ -1378,10 +1444,7 @@ def invoke_resolver_batch(
                         f"Resolver error for SearchResult {search_result.id}: {error}"
                     )
 
-            return ResolverBatchOutput(
-                results=results,
-                cb=deepcopy(cb_openai),
-            )
+            return ResolverBatchOutput(results=results, cb=deepcopy(cb_openai))
 
         except Exception as exc:
             batch_logger.exception(f"Exception occurred during resolver batch: {exc}")
@@ -1389,7 +1452,4 @@ def invoke_resolver_batch(
             error_results: list[
                 tuple[models.SearchResult, ResolverOutputSchema | Exception]
             ] = [(conflict[0], exc) for conflict in conflicts]
-            return ResolverBatchOutput(
-                results=error_results,
-                cb=deepcopy(cb_openai),
-            )
+            return ResolverBatchOutput(results=error_results, cb=deepcopy(cb_openai))
