@@ -1477,8 +1477,10 @@ def get_all_completed_benchmark_runs() -> list[models.BenchmarkRun]:
                     completed_runs.append(run)
 
             # Sort by created_at descending (newest first)
+            # NOTE: Fix timezone-aware datetime comparison issue
             completed_runs.sort(
-                key=lambda x: x.created_at or datetime.min, reverse=True
+                key=lambda x: x.created_at or datetime.min.replace(tzinfo=timezone.utc),
+                reverse=True,
             )
             return completed_runs
         except Exception:
@@ -1634,30 +1636,24 @@ def load_benchmark_result_items_for_past_run(run_id: str) -> pd.DataFrame:
 # Initialize session state for run selection
 if "selected_past_benchmark_run" not in st.session_state:
     st.session_state.selected_past_benchmark_run = None
-if "available_benchmark_runs" not in st.session_state:
-    st.session_state.available_benchmark_runs = []
+if "selected_benchmark_run_index" not in st.session_state:
+    st.session_state.selected_benchmark_run_index = 0
 
-# Load available runs and setup dropdown
+# Always load fresh data from database to ensure dropdown shows latest metrics
 with st.spinner("Loading available benchmark runs..."):
     available_runs = get_all_completed_benchmark_runs()
-    st.session_state.available_benchmark_runs = available_runs
 
 if available_runs:
-    st.subheader("📊 Select Benchmark Run to View")
+    st.subheader("📋 Select a Past Benchmark Run")
 
-    # Create options for selectbox with run information
+    # Generate dropdown options with fresh data
     run_options = []
     for i, run in enumerate(available_runs):
         created_str = (
-            run.created_at.strftime("%Y-%m-%d %H:%M:%S")
-            if run.created_at
-            else "Unknown"
+            run.created_at.strftime("%Y-%m-%d %H:%M") if run.created_at else "Unknown"
         )
 
-        # Check if metrics are available
-        has_metrics = run.accuracy is not None
-
-        if has_metrics:
+        if run.accuracy is not None:
             accuracy_str = f"Accuracy: {run.accuracy:.3f}"
             status_str = "✅"
         else:
@@ -1676,15 +1672,25 @@ if available_runs:
     # Add "None" option at the beginning
     run_options.insert(0, "-- Select a benchmark run --")
 
+    # Preserve selection after metrics calculation
+    current_index = st.session_state.selected_benchmark_run_index
+    if current_index >= len(run_options):
+        current_index = 0
+        st.session_state.selected_benchmark_run_index = 0
+
     selected_run_index = st.selectbox(
         "Choose a completed benchmark run:",
         options=range(len(run_options)),
         format_func=lambda x: run_options[x],
         key="benchmark_run_selector",
-        index=0,
+        index=current_index,
     )
 
-    # Update selected run based on dropdown selection
+    # Update session state when selection changes
+    if selected_run_index != st.session_state.selected_benchmark_run_index:
+        st.session_state.selected_benchmark_run_index = selected_run_index
+
+    # Update selected run based on dropdown selection (using fresh data)
     if selected_run_index > 0:  # Skip the "-- Select --" option
         selected_run = available_runs[selected_run_index - 1]
         st.session_state.selected_past_benchmark_run = selected_run
@@ -1795,6 +1801,7 @@ if st.session_state.selected_past_benchmark_run:
                                 st.session_state.selected_past_benchmark_run = (
                                     updated_run
                                 )
+                                # Fresh data will be loaded on page refresh, no need to update session state
                                 has_metrics = True
 
                                 logger.info(
