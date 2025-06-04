@@ -30,10 +30,7 @@ from sr_assistant.app.agents.screening_agents import (
 from sr_assistant.app.database import session_factory
 from sr_assistant.core import models, repositories, schemas
 from sr_assistant.core.repositories import RecordNotFoundError
-from sr_assistant.core.types import (
-    ScreeningStrategyType,
-    SearchDatabaseSource,
-)
+from sr_assistant.core.types import ScreeningStrategyType, SearchDatabaseSource
 
 if t.TYPE_CHECKING:
     from collections.abc import Sequence
@@ -455,10 +452,7 @@ class SearchService(BaseService):
 
     # --- Core Service Methods (Synchronous) ---
     def search_pubmed_and_store_results(
-        self,
-        review_id: uuid.UUID,
-        query: str,
-        max_results: int = 100,
+        self, review_id: uuid.UUID, query: str, max_results: int = 100
     ) -> Sequence[schemas.SearchResultRead]:
         """Performs a PubMed search, maps results, stores them, and handles sessions.
 
@@ -526,10 +520,7 @@ class SearchService(BaseService):
                 self.session_factory() as session
             ):  # Use a new session for this read operation
                 existing_pmids_in_db = self.search_repo.get_existing_source_ids(
-                    session,
-                    review_id,
-                    SearchDatabaseSource.PUBMED,
-                    fetched_pmids,
+                    session, review_id, SearchDatabaseSource.PUBMED, fetched_pmids
                 )
 
             new_pmids_to_fetch_details = [
@@ -700,10 +691,7 @@ class SearchService(BaseService):
                 raise ServiceError("Failed to get search results") from e_ex
 
     def get_search_result_by_source_details(
-        self,
-        review_id: uuid.UUID,
-        source_db: SearchDatabaseSource,
-        source_id: str,
+        self, review_id: uuid.UUID, source_db: SearchDatabaseSource, source_id: str
     ) -> schemas.SearchResultRead | None:  # MODIFIED return type
         """Retrieves a specific search result using its source database and ID (sync), converted to schema."""  # MODIFIED comment
         logger.debug(
@@ -994,10 +982,7 @@ class ScreeningService(BaseService):
 
     # --- New Methods ---
     def get_screening_result_by_strategy(
-        self,
-        session: Session,
-        review_id: uuid.UUID,
-        strategy: ScreeningStrategyType,
+        self, session: Session, review_id: uuid.UUID, strategy: ScreeningStrategyType
     ) -> models.ScreenAbstractResult | None:
         """Gets a screening result for a review and strategy. Returns first found."""
         try:
@@ -1301,6 +1286,25 @@ class ScreeningService(BaseService):
                     processed_agent_results[i] = processed_agent_results[i]._replace(
                         comprehensive_result=result_tuple.comprehensive_result
                     )
+
+            # Flush all ScreenAbstractResult records first to ensure they exist in the database
+            # before updating SearchResult records with foreign key references
+            session.flush()
+
+            # Now update all SearchResult records with their foreign key references
+            for i, result_tuple in enumerate(agent_output.results):
+                original_search_result_from_agent = result_tuple.search_result
+                current_search_result_in_session = next(
+                    (
+                        sr_model
+                        for sr_model in search_results_to_screen_models
+                        if sr_model.id == original_search_result_from_agent.id
+                    ),
+                    None,
+                )
+
+                if not current_search_result_in_session:
+                    continue
 
                 # Update SearchResult in DB if any screening result ID was set
                 if (

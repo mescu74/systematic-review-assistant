@@ -18,10 +18,7 @@ from sr_assistant.app.agents.screening_agents import (
     invoke_resolver_chain,
 )
 from sr_assistant.app.database import session_factory
-from sr_assistant.core.models import (
-    SearchResult,
-    SystematicReview,
-)
+from sr_assistant.core.models import SearchResult, SystematicReview
 from sr_assistant.core.repositories import (
     RecordNotFoundError,
     ScreenAbstractResultRepository,
@@ -94,6 +91,25 @@ def render_df() -> None:
         "list[tuple[SearchResult, ScreeningResult]]",
         st.session_state.screen_abstracts_results,
     )
+    # Build a lookup for resolved results by PMID
+    # We need to match resolved outputs with their conflicts since the conflicts contain the PMID
+    resolved_reasoning_lookup = {}
+    resolved_decision_lookup = {}
+    resolved_outputs = st.session_state.get("screen_abstracts_resolved", [])
+    conflicts = st.session_state.get("screen_abstracts_conflicts", [])
+
+    # Match resolved outputs to conflicts by index (they should be in the same order)
+    for i, resolved_output in enumerate(resolved_outputs):
+        if i < len(conflicts) and hasattr(resolved_output, "resolver_reasoning"):
+            conflict_pm_result, _, _ = conflicts[i]
+            resolved_reasoning_lookup[conflict_pm_result.source_id] = (
+                resolved_output.resolver_reasoning
+            )
+            if hasattr(resolved_output, "resolver_decision"):
+                resolved_decision_lookup[conflict_pm_result.source_id] = (
+                    resolved_output.resolver_decision
+                )
+
     df_data = [
         {
             "PMID": search_result.source_id,
@@ -105,9 +121,13 @@ def render_df() -> None:
             "Rationale": screening_result.rationale,
             "Extracted quotes": screening_result.extracted_quotes,
             "Result ID": str(screening_result.id),
-            "Final Decision": search_result.final_decision,
+            "Final Decision": resolved_decision_lookup.get(
+                search_result.source_id, search_result.final_decision
+            ),
             "Resolved": bool(search_result.resolution_id),
-            "Resolver Reasoning": None,
+            "Resolver Reasoning": resolved_reasoning_lookup.get(
+                search_result.source_id, None
+            ),
         }
         for search_result, screening_result in results
     ]
@@ -353,8 +373,7 @@ def screen_abstracts(  # noqa: C901
     )
 
     screening_status = st.status(
-        f"Screening {total_to_screen} abstracts...",
-        expanded=True,
+        f"Screening {total_to_screen} abstracts...", expanded=True
     )
 
     with screening_status:
@@ -455,19 +474,29 @@ def screen_abstracts(  # noqa: C901
                 )
 
                 # Conflict detection
-                if (
-                    isinstance(res_tuple.conservative_result, ScreeningResult)
-                    and isinstance(res_tuple.comprehensive_result, ScreeningResult)
-                    and res_tuple.conservative_result.decision
-                    != res_tuple.comprehensive_result.decision
-                ):
-                    st.session_state.screen_abstracts_conflicts.append(
-                        (
-                            pm_r,
-                            res_tuple.conservative_result,
-                            res_tuple.comprehensive_result,
-                        )
+                # A conflict occurs when:
+                # 1. The two strategies have different decisions, OR
+                # 2. Both strategies are uncertain (requiring human resolution)
+                if isinstance(
+                    res_tuple.conservative_result, ScreeningResult
+                ) and isinstance(res_tuple.comprehensive_result, ScreeningResult):
+                    cons_decision = res_tuple.conservative_result.decision
+                    comp_decision = res_tuple.comprehensive_result.decision
+
+                    # Conflict if decisions differ OR both are uncertain
+                    is_conflict = cons_decision != comp_decision or (
+                        cons_decision == ScreeningDecisionType.UNCERTAIN
+                        and comp_decision == ScreeningDecisionType.UNCERTAIN
                     )
+
+                    if is_conflict:
+                        st.session_state.screen_abstracts_conflicts.append(
+                            (
+                                pm_r,
+                                res_tuple.conservative_result,
+                                res_tuple.comprehensive_result,
+                            )
+                        )
 
         except RecordNotFoundError as e:
             logger.error(f"Service error (RecordNotFound): {e}")
@@ -554,7 +583,11 @@ def screen_abstracts_page(review_id: uuid.UUID | None = None) -> None:
         st.error("Please complete and save the review protocol first.")
         st.stop()
     if not review_id:
-        review_id = st.session_state.review_id
+        review_id = st.session_state.get("review_id")
+        if not review_id:
+            st.error("Please complete and save the review protocol first.")
+            st.stop()
+            return
 
     # Init session state
     init_review_repository()
@@ -579,6 +612,7 @@ def screen_abstracts_page(review_id: uuid.UUID | None = None) -> None:
             f"Systematic Review with ID {review_id} not found. Please ensure it exists."
         )
         st.stop()
+        return  # Ensure execution stops here in tests
 
     screening_notification_widget = st.empty()
 
@@ -587,8 +621,8 @@ def screen_abstracts_page(review_id: uuid.UUID | None = None) -> None:
     # overriding any SearchResultRead instances that might be in session_state from the search page.
     # The review_id used here is confirmed to be non-None by guards at the start of screen_abstracts_page.
     confirmed_review_id = (
-        st.session_state.review_id
-    )  # This is guaranteed to be a UUID by prior checks
+        review_id  # Use the validated review_id instead of unsafe session state access
+    )
     logger.info(
         f"Screening page: Fetching SearchResult models for review_id: {confirmed_review_id}"
     )
@@ -665,7 +699,7 @@ def screen_abstracts_page(review_id: uuid.UUID | None = None) -> None:
         render_errors()
 
 
-# Ensure the main page logic is called when the script is run by AppTest or Streamlit.
-# The test fixture app_test_env will have set up st.session_state.review_id and st.session_state.review.
-# For direct streamlit run, review_id might need to be handled (e.g. from query params or a default).
-screen_abstracts_page(st.session_state.get("review_id"))
+# AppTest will execute this module-level code when at.run() is called.
+# For direct streamlit run from the command line, the page would be loaded via main app navigation.
+# Call the main page function unconditionally - it will handle session state validation internally.
+screen_abstracts_page()
