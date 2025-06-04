@@ -3127,6 +3127,19 @@ wheels = [
 ]
 
 [[package]]
+name = "pyalex"
+version = "0.18"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "requests" },
+    { name = "urllib3" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/3f/9f/3a67cbe13359441817ca6bee9c0681a11cd0331afef0818349a0690d47e0/pyalex-0.18.tar.gz", hash = "sha256:b71df6e0e104101783a64ecb2b41b24c75059ee4563aa5966499454168bee5e7", size = 46939, upload-time = "2025-03-11T15:39:21.043Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/87/3f/b93b7976a43fbeacdb684fe333bb82d926b636f663e75afbbceec8ddc539/pyalex-0.18-py3-none-any.whl", hash = "sha256:16cb0e0b89f7b20370e8a8a217c372d11f9bc2e539f366709aa3a47d97055d4c", size = 13258, upload-time = "2025-03-11T15:39:20.172Z" },
+]
+
+[[package]]
 name = "pyarrow"
 version = "18.1.0"
 source = { registry = "https://pypi.org/simple" }
@@ -4261,6 +4274,21 @@ wheels = [
 ]
 
 [[package]]
+name = "synergy-dataset"
+version = "1.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pyalex" },
+    { name = "requests" },
+    { name = "tabulate" },
+    { name = "tqdm" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/5f/17/65d3d256a42c8ba2e52c78f7ae3d1c75988164b9d80a590ee9631864b158/synergy-dataset-1.2.tar.gz", hash = "sha256:eab4cbc18a415a4a23ec4209cb7659b77498e6d58498d7a321ea529fc7ea44fe", size = 11365, upload-time = "2023-07-18T08:48:55.845Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/de/d3/dd9112ea782dab608c2332c2b7a4deb940d3f6a8cdd1cc520a10d81ae031/synergy_dataset-1.2-py3-none-any.whl", hash = "sha256:62ba2eb67352cd464cbadfa54d48ffb53af44ea6cba0bb0b6d3265c1123bd3f9", size = 8880, upload-time = "2023-07-18T08:48:54.397Z" },
+]
+
+[[package]]
 name = "systematic-review-assistant"
 version = "0.1.0"
 source = { editable = "." }
@@ -4313,6 +4341,9 @@ dependencies = [
 ]
 
 [package.dev-dependencies]
+benchmark = [
+    { name = "synergy-dataset" },
+]
 dev = [
     { name = "alembic", extra = ["tz"] },
     { name = "coverage" },
@@ -4407,6 +4438,7 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
+benchmark = [{ name = "synergy-dataset", specifier = ">=1.2" }]
 dev = [
     { name = "alembic", extras = ["tz"], specifier = ">=1.14.0" },
     { name = "coverage", specifier = ">=7.6.10" },

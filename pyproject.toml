@@ -97,6 +97,9 @@ observability = [
   "opentelemetry-instrumentation-tornado>=0.51b0",
   "opentelemetry-instrumentation-urllib>=0.51b0",
 ]
+benchmark = [
+    "synergy-dataset>=1.2",
+]
 
 [tool.logfire]
 pydantic_plugin_record = "all"
