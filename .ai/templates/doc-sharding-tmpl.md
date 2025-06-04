@@ -12,7 +12,7 @@ This plan directs the agent on how to break down large source documents into sma
 
 - **Instruction:** For each Epic identified within the PRD:
 - **Source Section(s) to Copy:** The complete text for the Epic, including its main description, goals, and all associated user stories or detailed requirements under that Epic. Ensure to capture content starting from a heading like "**Epic X:**" up to the next such heading or end of the "Epic Overview" section.
-- **Target File Pattern:** `docs/epics/epicN[-desc].md`
+- **Target File Pattern:** `docs/epic-<id>.md`
   - _Agent Note: `<id>` should correspond to the Epic number._
 
 ---
@@ -35,7 +35,7 @@ This plan directs the agent on how to break down large source documents into sma
   - _Agent Note: Prioritize a dedicated 'Environment Variables' section or linked 'environment-vars.md' source if available. If not, extract relevant configuration details from 'Infrastructure and Deployment Overview'. This shard is for specific variable definitions and usage._
 
 - **Source Section(s) to Copy:** Section(s) detailing "Project Structure".
-- **Target File:** `docs/dev/project-structure.md`
+- **Target File:** `docs/project-structure.md`
 
   - _Agent Note: If the project involves multiple repositories (not a monorepo), ensure this file clearly describes the structure of each relevant repository or links to sub-files if necessary._
 

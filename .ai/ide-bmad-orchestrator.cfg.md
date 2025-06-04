@@ -14,7 +14,7 @@ Example: If above cfg has `agent-root: root/foo/` and `tasks: (agent-root)/tasks
 
 ## Title: Analyst
 
-- Name: Analyst
+- Name: Wendy
 - Customize: ""
 - Description: "Research assistant, brain storming coach, requirements gathering, project briefs."
 - Persona: "analyst.md"
@@ -23,21 +23,18 @@ Example: If above cfg has `agent-root: root/foo/` and `tasks: (agent-root)/tasks
   - [Deep Research Prompt Generation](In Analyst Memory Already)
   - [Create Project Brief](In Analyst Memory Already)
 
-## Title: Product Owner AKA PO
+## Title: Product Manager (PM)
 
-- Name: PO
+- Name: Bill
 - Customize: ""
-- Description: "Jack of many trades, from PRD Generation and maintenance to the mid sprint Course Correct. Also able to draft masterful stories for the dev agent."
-- Persona: "po.md"
+- Description: "Jack has only one goal - to produce or maintain the best possible PRD - or discuss the product with you to ideate or plan current or future efforts related to the product."
+- Persona: "pm.md"
 - Tasks:
   - [Create PRD](create-prd.md)
-  - [Create Next Story](create-next-story-task.md)
-  - [Slice Documents](doc-sharding-task.md)
-  - [Correct Course](correct-course.md)
 
 ## Title: Architect
 
-- Name: Arch
+- Name: Timmy
 - Customize: ""
 - Description: "Generates Architecture, Can help plan a story, and will also help update PRD level epic and stories."
 - Persona: "architect.md"
@@ -48,7 +45,7 @@ Example: If above cfg has `agent-root: root/foo/` and `tasks: (agent-root)/tasks
 
 ## Title: Design Architect
 
-- Name: FE Arch
+- Name: Karen
 - Customize: ""
 - Description: "Help design a website or web application, produce prompts for UI GEneration AI's, and plan a full comprehensive front end architecture."
 - Persona: "design-architect.md"
@@ -57,32 +54,35 @@ Example: If above cfg has `agent-root: root/foo/` and `tasks: (agent-root)/tasks
   - [Create Next Story](create-ai-frontend-prompt.md)
   - [Slice Documents](create-uxui-spec.md)
 
-## Title: Product Manager (PM)
+## Title: Product Owner AKA PO
 
-- Name: PM
+- Name: Jimmy
 - Customize: ""
-- Description: "Jack has only one goal - to produce or maintain the best possible PRD - or discuss the product with you to ideate or plan current or future efforts related to the product."
-- Persona: "pm.md"
+- Description: "Jack of many trades, from PRD Generation and maintenance to the mid sprint Course Correct. Also able to draft masterful stories for the dev agent."
+- Persona: "po.md"
 - Tasks:
   - [Create PRD](create-prd.md)
+  - [Create Next Story](create-next-story-task.md)
+  - [Slice Documents](doc-sharding-task.md)
+  - [Correct Course](correct-course.md)
 
 ## Title: Frontend Dev
 
-- Name: FE-dev
+- Name: Rodney
 - Customize: "Specialized in NextJS, React, Typescript, HTML, Tailwind"
 - Description: "Master Front End Web Application Developer"
 - Persona: "dev.ide.md"
 
 ## Title: Full Stack Dev
 
-- Name: FS-dev
+- Name: James
 - Customize: ""
 - Description: "Master Generalist Expert Senior Senior Full Stack Developer"
 - Persona: "dev.ide.md"
 
 ## Title: Scrum Master: SM
 
-- Name: SM
+- Name: Fran
 - Customize: ""
 - Description: "Specialized in Next Story Generation"
 - Persona: "sm.md"

@@ -11,7 +11,7 @@ Transform large project documents into smaller, granular files within the `docs/
 1. If not provided, ask the user which source documents they wish to process (PRD, Main Architecture, Front-End Architecture)
 2. Validate prerequisites:
 
-   - Provided `doc-sharding-tmpl.md` or access to `docs/_ai/templates/doc-sharding-tmpl.md`
+   - Provided `doc-sharding-tmpl.txt` or access to `bmad-agent/doc-sharding-tmpl.txt`
    - Location of source documents to process
    - Write access to the `docs/` directory
    - Output method (file system or chat interface)
@@ -45,7 +45,7 @@ Transform large project documents into smaller, granular files within the `docs/
 
 1. **Source Document Paths** - Path to document(s) to process (PRD, Architecture, or Front-End Architecture)
 2. **Documents to Process** - Which documents to shard in this session
-3. **Sharding Plan** - Confirm `docs/_ai/templates/doc-sharding-tmpl.md` exists or `doc-sharding-tmpl.md` has been provided
+3. **Sharding Plan** - Confirm `docs/templates/doc-sharding-tmpl.txt` exists or `doc-sharding-tmpl.txt` has been provided
 4. **Output Location** - Confirm Target directory (default: `docs/`) and index.md or in memory chat output
 
 Would you like to proceed with document sharding? Please provide the required input.

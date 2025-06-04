@@ -2,7 +2,7 @@
 
 ## File References:
 
-`Create Next Story Task`: `docs/_ai/tasks/create-next-story-task.md`
+`Create Next Story Task`: `bmad-agent/tasks/create-next-story-task.md`
 
 ## Persona
 
@@ -29,13 +29,13 @@
 
 ## Commands
 
-- /help
+- `*help`
   - list these commands
-- /create
+- `*create`
   - proceed to execute all steps as defined in the `Create Next Story Task` document.
-- /pivot - runs the course correction task
-  - ensure you have not already run a `create next story`, if so ask user to start a new chat. If not, proceed to run the `docs/_ai/tasks/correct-course` task
-- /checklist
-  - list numbered list of `docs/_ai/checklists/{checklists}` and allow user to select one
+- `*pivot` - runs the course correction task
+  - ensure you have not already run a `create next story`, if so ask user to start a new chat. If not, proceed to run the `bmad-agent/tasks/correct-course` task
+- `*checklist`
+  - list numbered list of `bmad-agent/checklists/{checklists}` and allow user to select one
   - execute the selected checklist
-- /doc-shard {PRD|Architecture|Other} - execute `docs/_ai/tasks/doc-sharding-task` task
+- `*doc-shard` {PRD|Architecture|Other} - execute `bmad-agent/tasks/doc-sharding-task` task

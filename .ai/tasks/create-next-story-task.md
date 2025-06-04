@@ -8,19 +8,19 @@ To identify the next logical story based on project progress and epic definition
 
 - Access to the project's documentation repository, specifically:
   - `docs/index.md` (hereafter "Index Doc")
-  - All Epic files (e.g., `docs/epics/epicN[-desc].md` - hereafter "Epic Files")
+  - All Epic files (e.g., `docs/epic-{n}.md` - hereafter "Epic Files")
   - Existing story files in `docs/stories/`
   - Main PRD (hereafter "PRD Doc")
   - Main Architecture Document (hereafter "Main Arch Doc")
   - Frontend Architecture Document (hereafter "Frontend Arch Doc," if relevant)
-  - Project Structure Guide (`docs/dev/project-structure.md`)
-  - Operational Guidelines Document (`docs/dev/operational-guidelines.md`)
-  - Technology Stack Document (`docs/dev/tech-stack.md`)
+  - Project Structure Guide (`docs/project-structure.md`)
+  - Operational Guidelines Document (`docs/operational-guidelines.md`)
+  - Technology Stack Document (`docs/tech-stack.md`)
   - Data Models Document (as referenced in Index Doc)
   - API Reference Document (as referenced in Index Doc)
   - UI/UX Specifications, Style Guides, Component Guides (if relevant, as referenced in Index Doc)
-- The `docs/_ai/templates/story-tmpl.md` (hereafter "Story Template")
-- The `docs/_ai/checklists/story-draft-checklist.md` (hereafter "Story Draft Checklist")
+- The `bmad-agent/templates/story-tmpl.md` (hereafter "Story Template")
+- The `bmad-agent/checklists/story-draft-checklist.md` (hereafter "Story Draft Checklist")
 - User confirmation to proceed with story identification and, if needed, to override warnings about incomplete prerequisite stories.
 
 ## Task Execution Instructions
@@ -48,10 +48,10 @@ To identify the next logical story based on project progress and epic definition
 
   - Proceed only if user selects option 3 (Override) or if the last story was 'Done'.
   - If proceeding: Check the Epic File for `{lastEpicNum}` for a story numbered `{lastStoryNum + 1}`. If it exists and its prerequisites (per Epic File) are met, this is the next story.
-  - Else (story not found or prerequisites not met): The next story is the first story in the next Epic File (e.g., `docs/epics/epic-{lastEpicNum + 1}.md`, then `{lastEpicNum + 2}.md`, etc.) whose prerequisites are met.
+  - Else (story not found or prerequisites not met): The next story is the first story in the next Epic File (e.g., `docs/epic-{lastEpicNum + 1}.md`, then `{lastEpicNum + 2}.md`, etc.) whose prerequisites are met.
 
 - **If no story files exist in `docs/stories/`:**
-  - The next story is the first story in `docs/epics/epic-1.md` (then `docs/epic-2.md`, etc.) whose prerequisites are met.
+  - The next story is the first story in `docs/epic-1.md` (then `docs/epic-2.md`, etc.) whose prerequisites are met.
 - If no suitable story with met prerequisites is found, report to the user that story creation is blocked, specifying what prerequisites are pending. HALT task.
 - Announce the identified story to the user: "Identified next story for preparation: {epicNum}.{storyNum} - {Story Title}".
 

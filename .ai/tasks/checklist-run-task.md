@@ -4,7 +4,7 @@ This task provides instructions for validating documentation against checklists.
 
 ## Context
 
-The Nexus Method uses various checklists to ensure quality and completeness of different artifacts. The mapping between checklists and their required documents is defined in `checklist-mappings`. This allows for easy addition of new checklists without modifying this task.
+The BMAD Method uses various checklists to ensure quality and completeness of different artifacts. The mapping between checklists and their required documents is defined in `checklist-mappings`. This allows for easy addition of new checklists without modifying this task.
 
 ## Instructions
 
