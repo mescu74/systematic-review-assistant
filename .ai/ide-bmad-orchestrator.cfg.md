@@ -2,7 +2,7 @@
 
 ## Data Resolution
 
-agent-root: (project-root)/docs/\_ai
+agent-root: (project-root)/.ai
 checklists: (agent-root)/checklists
 data: (agent-root)/data
 personas: (agent-root)/personas

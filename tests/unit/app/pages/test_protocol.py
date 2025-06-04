@@ -13,10 +13,7 @@ from pytest import MonkeyPatch
 from sr_assistant.app import services  # For services.ReviewService
 
 # Import functions and classes to test
-from sr_assistant.app.pages.protocol import (
-    build_review_model_from_pico,
-    persist_review,
-)
+from sr_assistant.app.pages.protocol import build_review_model_from_pico, persist_review
 from sr_assistant.core import (
     schemas as app_schemas,  # For app_schemas.SystematicReviewCreate etc.
 )
@@ -137,6 +134,53 @@ def test_build_review_model_from_pico_missing_fields(
         "comparison": "",
         "outcome": "",
     }
+    mock_response_widget.success.assert_called_once()
+
+
+def test_build_review_model_from_pico_manual_inclusion_criteria_precedence(
+    mock_session_state_with_pico: dict[str, Any],
+):
+    """Test that manual inclusion criteria takes precedence over PICO fields."""
+    # Add manual inclusion criteria to session state
+    manual_criteria = (
+        "Studies must include RCTs with participants aged 18-65, published after 2020"
+    )
+    st.session_state.inclusion_criteria = manual_criteria
+
+    mock_response_widget = MagicMock()
+    review = build_review_model_from_pico(mock_response_widget)
+
+    assert isinstance(review, SystematicReview)
+    # Manual inclusion criteria should be used, not PICO-derived
+    assert review.inclusion_criteria == manual_criteria
+    # PICO answers should still be preserved in criteria_framework_answers
+    assert review.criteria_framework_answers == {
+        "population": "Adults with disease X",
+        "intervention": "Drug Y 50mg",
+        "comparison": "Placebo",
+        "outcome": "Symptom reduction",
+    }
+    assert review.criteria_framework == CriteriaFramework.PICO
+    mock_response_widget.success.assert_called_once()
+
+
+def test_build_review_model_from_pico_empty_manual_falls_back_to_pico(
+    mock_session_state_with_pico: dict[str, Any],
+):
+    """Test that empty manual inclusion criteria falls back to PICO-derived criteria."""
+    # Set empty manual inclusion criteria
+    st.session_state.inclusion_criteria = "   "  # Just whitespace
+
+    mock_response_widget = MagicMock()
+    review = build_review_model_from_pico(mock_response_widget)
+
+    assert isinstance(review, SystematicReview)
+    # Should fall back to PICO-derived inclusion criteria
+    assert review.inclusion_criteria is not None
+    assert "Population: Adults with disease X" in review.inclusion_criteria
+    assert "Intervention: Drug Y 50mg" in review.inclusion_criteria
+    assert "Comparison: Placebo" in review.inclusion_criteria
+    assert "Outcome: Symptom reduction" in review.inclusion_criteria
     mock_response_widget.success.assert_called_once()
 
 
