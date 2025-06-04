@@ -75,11 +75,11 @@ def pubmed_search(query: str, max_results: int = 1000) -> list[str]:
             msg = "No results found for query: {!r}"
             logger.warning(msg, query)
 
-        return cast(list[str], pmid_list)
+        return cast("list[str]", pmid_list)
 
     except Exception as e:
-        msg = f"PubMed search failed: {e!s}"
-        logger.opt(exception=True).error(msg)
+        msg = "PubMed search failed"
+        logger.exception(msg)
         raise
 
 
@@ -211,19 +211,21 @@ def extract_article_info(article: dict[str, Any]) -> dict[str, str]:
     """
     try:
         pmc = doi = ""
-        for v in article["PubmedData"]["ArticleIdList"]:
-            if v.attributes.get("IdType") == "pmc":
-                pmc = str(v)
-            elif v.attributes.get("IdType") == "doi":
-                doi = str(v)
+        article_id_list = article.get("PubmedData", {}).get("ArticleIdList", [])
+        for v in article_id_list:
+            if isinstance(v, dict):
+                id_type = v.get("IdType")
+                id_value = v.get("Id")
+                if id_type == "pmc":
+                    pmc = str(id_value) if id_value else pmc
+                elif id_type == "doi":
+                    doi = str(id_value) if id_value else doi
 
-        medline = article["MedlineCitation"]
-        article_info = medline["Article"]
+        medline = article.get("MedlineCitation", {})
+        article_info = medline.get("Article", {})
 
-        # Handle PMID correctly (it's a string element)
-        pmid = str(medline["PMID"])
+        pmid = str(medline.get("PMID", "No PMID"))
 
-        # Handle abstract (might be a list of StringElements)
         abstract_text = article_info.get("Abstract", {}).get(
             "AbstractText", ["No abstract"]
         )
@@ -232,19 +234,46 @@ def extract_article_info(article: dict[str, Any]) -> dict[str, str]:
         else:
             abstract = str(abstract_text)
 
+        journal_title = str(article_info.get("Journal", {}).get("Title", "No journal"))
+        year = (
+            article_info.get("Journal", {})
+            .get("JournalIssue", {})
+            .get("PubDate", {})
+            .get("Year", "No year")
+        )
+
+        author_list_data = article_info.get("AuthorList", [])
+        authors = []
+        if isinstance(author_list_data, list):
+            for author in author_list_data:
+                if isinstance(author, dict):
+                    last_name = author.get("LastName", "")
+                    # fore_name = author.get("ForeName", "")
+                    initials = author.get("Initials", "")
+                    if last_name:
+                        authors.append(
+                            f"{last_name}, {initials}" if initials else last_name
+                        )
+
+        keyword_list_data = medline.get("KeywordList", [])
+        keywords = []
+        if isinstance(keyword_list_data, list):
+            for kw_group in keyword_list_data:
+                if isinstance(kw_group, list):
+                    keywords.extend([str(kw) for kw in kw_group if isinstance(kw, str)])
+                elif isinstance(kw_group, str):
+                    keywords.append(kw_group)
+
         return {
             "pmid": pmid,
             "pmc": pmc,
             "doi": doi,
+            "keywords": keywords,
+            "authors": authors,
             "title": str(article_info.get("ArticleTitle", "No title")),
             "abstract": abstract,
-            "journal": str(article_info.get("Journal", {}).get("Title", "No journal")),
-            "year": str(
-                article_info.get("Journal", {})
-                .get("JournalIssue", {})
-                .get("PubDate", {})
-                .get("Year", "No year")
-            ),
+            "journal": journal_title,
+            "year": year,
         }
 
     except KeyError:

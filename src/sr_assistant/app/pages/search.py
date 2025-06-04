@@ -1,20 +1,24 @@
 from __future__ import annotations
 
-import uuid
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 import streamlit as st
-from Bio import Entrez
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from loguru import logger
 from pydantic import BaseModel, Field
 
+from sr_assistant.app.database import session_factory
+from sr_assistant.app.services import SearchService
 from sr_assistant.core.models import CriteriaFramework, SystematicReview
 from sr_assistant.core.repositories import (
-    PubMedResultRepository,
     SystematicReviewRepository,
 )
-from sr_assistant.step2.pubmed_integration import pubmed_fetch_details, pubmed_search
+
+# Define TypeVar for structured output types
+T = TypeVar("T")
+StructuredLLMOutput = Callable[[dict[str, Any]], T]
 
 
 class PubMedQuery(BaseModel):
@@ -85,14 +89,15 @@ def get_query(review: SystematicReview) -> str:
         fallback_chain = fallback_prompt | ChatOpenAI(
             model="gpt-4o", temperature=0.0
         ).with_structured_output(PubMedQuery)
-        result_object: PubMedQuery = fallback_chain.invoke(
+        result_object = fallback_chain.invoke(
             {"research_question": review.research_question}
         )
-        return result_object.query if result_object else ""
+        # LangChain's result type is complex, but we know it implements a 'query' attribute
+        return result_object.query  # type: ignore
 
     pico = review.criteria_framework_answers
     logger.info(f"Generating query from PICO: {pico}")
-    result_object: PubMedQuery = st.session_state.query_chain.invoke(
+    result_object = st.session_state.query_chain.invoke(
         {
             "background": review.background or "",
             "research_question": review.research_question,
@@ -103,21 +108,12 @@ def get_query(review: SystematicReview) -> str:
             "exclusion_criteria": review.exclusion_criteria or "",
         }
     )
-    return result_object.query if result_object else ""
+    # LangChain's result type is complex, but we know it implements a 'query' attribute
+    return result_object.query  # type: ignore
 
 
 def gen_query_cb() -> None:
     st.session_state.query_value = get_query(st.session_state.review)
-
-
-def expand_query_cb() -> None:
-    Entrez.email = st.session_state.config.NCBI_EMAIL
-    Entrez.api_key = st.session_state.config.NCBI_API_KEY.get_secret_value()
-
-    with Entrez.esearch(db="pubmed", term=st.session_state.query_value) as handle:
-        result = Entrez.read(handle)  # type: ignore
-        res = result.get("QueryTranslation", "")  # type: ignore
-    st.session_state.query_value = res
 
 
 def init_review_repository() -> SystematicReviewRepository:
@@ -127,42 +123,63 @@ def init_review_repository() -> SystematicReviewRepository:
     return st.session_state.repo_review
 
 
-def init_pubmed_repository() -> PubMedResultRepository:
-    if "repo_pubmed" not in st.session_state:
-        repo = PubMedResultRepository()
-        st.session_state.repo_pubmed = repo
-    return st.session_state.repo_pubmed
-
-
-def search_page(review_id: uuid.UUID | None = None) -> None:
+def search_page() -> None:
     """PubMed search page."""
     st.title("PubMed Search")
     st.markdown(
         "This page allows you to search PubMed for relevant articles based on your systematic review protocol."
     )
-    init_review_repository()
-    if (
-        not review_id
-        or "review_id" not in st.session_state
-        or st.session_state.review_id != review_id
-    ):
-        # Added check if the review_id in session matches the one passed (or expected)
+
+    # 1. Ensure a review_id is in session state (presumably set by protocol page or navigation)
+    if "review_id" not in st.session_state or not st.session_state.review_id:
         st.error(
-            "Invalid or missing review context. Please go back to the protocol page."
+            "No active review selected. Please go back to the protocol page and select or create a review."
         )
         st.stop()
 
-    if "review" not in st.session_state or st.session_state.review.id != review_id:
-        review = st.session_state.repo_review.get_by_id(review_id)
-        if not review:
-            st.error(f"Could not load review with ID: {review_id}")
+    active_review_id = st.session_state.review_id
+
+    # 2. Load the review object if not already loaded or if ID changed
+    if (
+        "review" not in st.session_state
+        or st.session_state.review.id != active_review_id
+    ):
+        repo = init_review_repository()  # Ensure repo is initialized
+        # The get_by_id method from BaseRepository expects a session.
+        # We need to create/get a session here if init_review_repository doesn't provide one directly for this call.
+        # For simplicity, assuming init_review_repository handles its own session or service does.
+        # However, repository methods themselves expect an explicit session.
+        # Let's get a session from the factory if the repo isn't already session-scoped in its methods.
+        # The init_review_repository() stores the repo in session_state, but its methods still need a session.
+        # This part of the logic assumes a service layer would handle session scope.
+        # Given direct repo usage here, we must provide a session.
+        with session_factory() as session:  # Get a session for this operation
+            review_object = repo.get_by_id(session, active_review_id)
+
+        if not review_object:
+            st.error(
+                f"Could not load the active review with ID: {active_review_id}. Please return to protocol page."
+            )
+            st.session_state.pop(
+                "review", None
+            )  # Clear potentially stale review object
+            st.session_state.pop("review_id", None)  # Clear problematic review_id
             st.stop()
-        st.session_state.review = review
-    # Ensure the loaded review is used
+        st.session_state.review = review_object
+
     current_review = st.session_state.review
 
+    # Ensure logger is configured with the now-validated review_id from current_review
+    if (
+        "logger_extra_configured_search" not in st.session_state
+        or st.session_state.get("logger_review_id_search") != current_review.id
+    ):
+        logger.configure(extra={"review_id": current_review.id})
+        st.session_state.logger_extra_configured_search = True
+        st.session_state.logger_review_id_search = current_review.id
+
     init_query_chain()
-    repo = init_pubmed_repository()
+    search_service = SearchService()
 
     # Initial query generation using the loaded review
     if "query_value" not in st.session_state or st.session_state.query_value is None:
@@ -175,9 +192,9 @@ def search_page(review_id: uuid.UUID | None = None) -> None:
         height=100,
         key="query",  # Keep key if needed for direct access, though callbacks use query_value
     )
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3 = st.columns(3)
     with col1:
-        submitted = st.button("Search")
+        submitted = st.button("Search", key="search_button")
     with col2:
         st.session_state.max_results = st.slider(
             "Max results",
@@ -188,38 +205,31 @@ def search_page(review_id: uuid.UUID | None = None) -> None:
         )
     with col3:
         st.button("Generate query", on_click=gen_query_cb)
-    with col4:
-        st.button("Expand query", on_click=expand_query_cb)
 
     if submitted:
         with st.status("Searching...", expanded=True) as status:
             try:
-                # Search PubMed
                 logger.info("Searching PubMed: {!r}", st.session_state.query_value)
-                st.write("Searching PubMed...")
-                pmids = pubmed_search(
-                    st.session_state.query_value, st.session_state.max_results
+                st.write("Searching PubMed and storing results...")
+
+                # Call SearchService
+                search_results = search_service.search_pubmed_and_store_results(
+                    review_id=current_review.id,
+                    query=st.session_state.query_value,
+                    max_results=st.session_state.max_results,
                 )
-                if not pmids:
+
+                if not search_results:
                     st.warning("No results found")
-                    status.update(
-                        label="No results found", state="complete"
-                    )  # Update status
-                    st.stop()  # Stop further processing
+                    status.update(label="No results found", state="complete")
+                else:
+                    logger.info(f"Search returned {len(search_results)} articles")
+                    st.success(
+                        f"Search complete. Found {len(search_results)} articles."
+                    )
+                    # Store results in session state for display
+                    st.session_state.search_results = search_results
 
-                st.write(f"Found {len(pmids)} results, fetching study details ...")
-
-                # Fetch details
-                records = pubmed_fetch_details(pmids)
-                logger.info(f"Fetched {len(records['PubmedArticle'])} study details")
-                st.write(f"Fetched {len(records['PubmedArticle'])} study details")
-
-                # Store in Supabase
-                results = repo.store_results(
-                    review_id, st.session_state.query_value, records
-                )
-                logger.info(f"Stored {len(results)} articles")
-                st.success(f"Stored {len(results)} articles")
                 status.update(label="Search complete", state="complete")
 
             except Exception as e:
@@ -229,37 +239,46 @@ def search_page(review_id: uuid.UUID | None = None) -> None:
                 # Do not return here, allow results display below
 
     if st.button("Clear search results"):
-        repo.delete_by_review_id(review_id)
-        st.session_state.pubmed_results = []  # Clear local state too
-        st.success("Search results cleared")
-        st.rerun()  # Rerun to reflect cleared results
+        # NOTE: This currently only clears results from the session state display.
+        # It does not delete any data from the database.
+        # Future improvement: Add a SearchService.delete_results_by_review_id method
+        # that properly manages the database transaction.
+        st.session_state.search_results = []
+        logger.info(f"Cleared search results for review_id: {active_review_id}")
+        st.success("Search results cleared from display. Re-search to fetch again.")
+        st.rerun()
 
-    # Show existing results
-    existing = repo.get_by_review_id(review_id)
+    # Show existing results - now from st.session_state.search_results populated by the service call
+    if "search_results" not in st.session_state:
+        st.session_state.search_results = []  # Initialize if not present
+
+    existing = st.session_state.search_results
+
     if not existing:
-        st.info("No search results available for this review yet.")
-        st.stop()  # Stop if no results
-
-    st.session_state.pubmed_results = existing
+        st.info("No search results available. Perform a search to fetch articles.")
+        # st.stop() # Allow page to render even with no results
 
     st.divider()
     df_data = [
         {
-            "PMID": r.pmid,
+            "Source ID": r.source_id,
             "DOI": r.doi,
-            "PMC": r.pmc,
             "Title": r.title,
             "Journal": r.journal,
             "Year": r.year,
-            "Query": r.query,
         }
         for r in existing
     ]
+
     st.dataframe(df_data, use_container_width=True)
 
     if existing:
-        if pmid := st.selectbox("Select article:", [r.pmid for r in existing]):
-            article = next((r for r in existing if r.pmid == pmid), None)
+        if selected_source_id := st.selectbox(
+            "Select article by Source ID:", [r.source_id for r in existing]
+        ):
+            article = next(
+                (r for r in existing if r.source_id == selected_source_id), None
+            )
             if article:
                 st.subheader(article.title)
                 st.text(f"{article.journal} ({article.year})")
@@ -277,7 +296,9 @@ def search_page(review_id: uuid.UUID | None = None) -> None:
 if "review" not in st.session_state:
     st.error("Please define a systematic review protocol first")
 else:
-    if "logger_extra_configured" not in st.session_state:
-        logger.configure(extra={"review_id": st.session_state.review.id})
-        st.session_state.logger_extra_configured = True
-    search_page(review_id=st.session_state.review.id)
+    # The main call to search_page no longer needs review_id parameter
+    # It will pick up review_id from session_state internally
+    # if "logger_extra_configured" not in st.session_state: # This global logger config is problematic
+    #     logger.configure(extra={"review_id": st.session_state.review.id})
+    #     st.session_state.logger_extra_configured = True
+    search_page()

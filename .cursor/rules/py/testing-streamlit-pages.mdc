@@ -1,0 +1,13 @@
+---
+description:
+globs: tests/unit/app/pages/*.py,src/sr_assistant/app/pages/*.py
+alwaysApply: false
+---
+# Testing Streamlit Pages with Session State
+
+<CRITICAL_NOTE>
+- This rule is outdated. See [streamlit-testing-framework.md](mdc:docs/streamlit-testing-framework.md) for a better way using the Streamlit's native UI testing library that also handles session state for testing.
+- These below approaches do work but the native Streamlit testing library offers a better way to handle this in many cases.
+- The below guidance is left here for reference as it does contain useful tips and tricks that complement the ST native testing library.
+</CRITICAL_NOTE>
+<!-- old content deleted -->

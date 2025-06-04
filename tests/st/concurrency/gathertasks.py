@@ -1,7 +1,7 @@
-import streamlit as st
 import asyncio
 import time
-from typing import List
+
+import streamlit as st
 
 
 async def simulate_processing(text: str, delay: float = 1.0) -> str:
@@ -17,7 +17,7 @@ async def process_batch(texts: list[str]) -> list[str]:
         results = await asyncio.gather(*tasks)
         return results
     except Exception as e:
-        st.error(f"Error in process_batch: {str(e)}")
+        st.error(f"Error in process_batch: {e!s}")
         return []
 
 
@@ -52,7 +52,7 @@ def main():
                         st.write(f"{i}. {result}")
 
         except Exception as e:
-            st.error(f"Error in main: {str(e)}")
+            st.error(f"Error in main: {e!s}")
 
 
 if __name__ == "__main__":

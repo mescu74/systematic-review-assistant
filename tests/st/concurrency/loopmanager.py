@@ -1,8 +1,8 @@
 import asyncio
 import threading
 import time
-from typing import Set
 from dataclasses import dataclass, field
+
 import streamlit as st
 
 
@@ -72,7 +72,7 @@ class LoopManager:
             print(f"Task {task_id} starting")
             for i in range(duration):
                 await asyncio.sleep(1)
-                print(f"Task {task_id}: {i+1}/{duration} seconds")
+                print(f"Task {task_id}: {i + 1}/{duration} seconds")
             print(f"Task {task_id} completed")
             return f"Task {task_id} result"
 

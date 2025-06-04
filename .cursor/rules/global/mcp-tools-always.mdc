@@ -1,0 +1,31 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+## MCP Tool rules
+
+Use MCP tools proactively!
+
+*   **Postgres Database Query:**
+    *   `mcp_postgres-sra_query`: Provides read-only access to the current app live prototype/prod Supabase database (`postgres`). Use it to inspect schemas, tables, functions, triggers, types. ALWAYS verify changes after running Alembic or Supabase migrations.
+*   **Context7 (Library Documentation):**
+    *   `mcp_context7_resolve-library-id`: Proactively look up available libraries.
+    *   `mcp_context7_get-library-docs`: ALWAYS use context7 when working with an external library to pull latest docs and code examples. Your knowledge is outdated!
+*   **Docs Index (curated External and Internal Documentation):** ALWAYS follow rules related to doc-index!
+    *   `mcp_docs-index_list_doc_sources`: Proactively check available curated documentation, they're made available because I want you to read context-relevant docs BEFORE taking action or planning anything!
+    *   `mcp_docs-index_fetch_docs`: Fetches user provided docs or external `llm.txt` files that further link to external documentation. ALWAYS recurse into relevant links and read the all relevant docs. DO NOT stop after checking one or two links, read ALL relevant links.
+*   **Tavily (Web Search & Extraction):**
+    *   `mcp_tavily-mcp_tavily-search`: IMPORTANT: ALWAYS use Tavily search instead of Cursor web search. PROACTIVELY use it to verify, research (also when asked to conduct deep research!), and find up-to-date information from the web.
+    *   `mcp_tavily-mcp_tavily-extract`: Use Tavily extract to fetch web page contents, e.g., links from search results etc.
+*   **Markdownify (Content Conversion):**: PROACTIVELY use Markdownify tools to convert file paths and URLs to Markdown! E.g., if I link a PDF, use `mcp_markdownify_pdf-to-markdown` to read it, similarly for Youtube URLs, etc.
+    *   `mcp_markdownify_audio-to-markdown`
+    *   `mcp_markdownify_bing-search-to-markdown`
+    *   `mcp_markdownify_docx-to-markdown`
+    *   `mcp_markdownify_get-markdown-file`
+    *   `mcp_markdownify_image-to-markdown`
+    *   `mcp_markdownify_pdf-to-markdown`
+    *   `mcp_markdownify_pptx-to-markdown`
+    *   `mcp_markdownify_webpage-to-markdown`
+    *   `mcp_markdownify_xlsx-to-markdown`
+    *   `mcp_markdownify_youtube-to-markdown`

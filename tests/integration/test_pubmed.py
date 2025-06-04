@@ -25,14 +25,14 @@ def test_pubmed_search() -> None:
 @pytest.mark.integration
 def test_pubmed_fetch() -> None:
     """Test fetching article details."""
-    # Use a small sample of PMIDs
-    pmids = ["123456", "789012"]
+    pmids = ["39826015", "39912237"]
     records = pubmed_fetch_details(pmids)
 
     assert isinstance(records, dict)
     assert "PubmedArticle" in records
 
 
+# FIXME: not an integration test, not calling any API
 @pytest.mark.integration
 def test_extract_article_info() -> None:
     """Test article info extraction."""
@@ -44,27 +44,36 @@ def test_extract_article_info() -> None:
                 "ArticleTitle": "Progress report on multiple endocrine neoplasia type 1.",
                 "Abstract": {
                     "AbstractText": [
-                        "Multiple endocrine neoplasia type 1 (MEN1) syndrome is an ",
-                        "autosomal dominant disorder caused by a germline pathogenic ",
-                        "variant in the MEN1 tumor suppressor gene. Patients with MEN1 ",
-                        "have a high risk for primary hyperparathyroidism (PHPT) with a ",
-                        "penetrance of nearly 100%, pituitary adenomas (PitAd) in 40% of ",
-                        "patients, and neuroendocrine neoplasms (NEN) of the pancreas ",
-                        "with a mainline mortality of 40%...",
+                        "Multiple endocrine neoplasia type 1 (MEN1) syndrome is an "
+                        "autosomal dominant disorder caused by a germline pathogenic "
+                        "variant in the MEN1 tumor suppressor gene. Patients with MEN1 "
+                        "have a high risk for primary hyperparathyroidism (PHPT) with a "
+                        "penetrance of nearly 100%, pituitary adenomas (PitAd) in 40% of "
+                        "patients, and neuroendocrine neoplasms (NEN) of the pancreas "
+                        "with a mainline mortality of 40%..."
                     ]
                 },
                 "Journal": {
                     "Title": "Familial cancer",
-                },
-                "JournalIssue": {
-                    "PubDate": {
-                        "Year": "2024",
+                    "JournalIssue": {
+                        "PubDate": {
+                            "Year": "2024",
+                        },
                     },
                 },
             },
         },
         "PubmedData": {
-            "ArticleIdList": [],
+            "ArticleIdList": [
+                {
+                    "Id": "PMC11753851",
+                    "IdType": "pmc",
+                },
+                {
+                    "Id": "10.1155/jimr/5845167",
+                    "IdType": "doi",
+                },
+            ],
         },
     }
     info = extract_article_info(article)
@@ -78,10 +87,25 @@ def test_extract_article_info() -> None:
     assert info["journal"] == article["MedlineCitation"]["Article"]["Journal"]["Title"]
     assert (
         info["year"]
-        == article["MedlineCitation"]["Article"]["JournalIssue"]["PubDate"]["Year"]
+        == article["MedlineCitation"]["Article"]["Journal"]["JournalIssue"]["PubDate"][
+            "Year"
+        ]
     )
+    assert info["title"] == article["MedlineCitation"]["Article"]["ArticleTitle"]
+    assert info["journal"] == article["MedlineCitation"]["Article"]["Journal"]["Title"]
+    assert (
+        info["year"]
+        == article["MedlineCitation"]["Article"]["Journal"]["JournalIssue"]["PubDate"][
+            "Year"
+        ]
+    )
+    # assert info["authors"] == expected_authors # Author list format can vary
+    # Add more checks as needed (DOI, keywords, etc.)
+    assert info["doi"] == "10.1155/jimr/5845167"
+    # keywords
 
 
+# FIXME: should test exc pattern
 @pytest.mark.integration
 def test_pubmed_error_handling() -> None:
     """Test error handling in PubMed functions."""

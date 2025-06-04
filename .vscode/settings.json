@@ -1,3 +1,5 @@
+// Copyright 2025 Gareth Morgan <garethm@lifework.health>.
+// SPDX-License-Identifier: MIT
 {
   "ruff.enable": true,
   "ruff.codeAction.fixViolation": {
@@ -7,15 +9,47 @@
   "ruff.lint.enable": true,
   "ruff.organizeImports": true,
   "ruff.importStrategy": "fromEnvironment",
-  "ruff.nativeServer": true,
+  "ruff.nativeServer": "auto",
   "ruff.configurationPreference": "filesystemFirst",
   "ruff.lineLength": 88,
   "[python]": {
     "editor.defaultFormatter": "charliermarsh.ruff",
     "editor.formatOnSave": true,
     "editor.codeActionsOnSave": {
-      "source.organizeImports.ruff": "always",
-      "source.fixAll.ruff": "always"
+      "source.organizeImports.ruff": "explicit",
+      "source.fixAll.ruff": "explicit",
+      "source.fixAll.pylance": "explicit"
     }
-  }
+  },
+  "[markdown]": {
+    // TODO: finalize .markdownlint-cli2.mjs rules, note that "ul-style" isn't fixable but is set to "dash"
+    //       In general, rules should be aligned with AI token friendly formatting while balancing readability.
+    "editor.codeActionsOnSave": {
+      "source.organizeLinkDefinitions": "explicit",
+      "source.fixAll.markdownlint": "explicit"
+    },
+    "editor.formatOnSave": true
+  },
+  "python.testing.pytestArgs": [
+    "tests"
+  ],
+  "python.testing.unittestEnabled": false,
+  "python.testing.pytestEnabled": true,
+  "notebook.defaultFormatter": "charliermarsh.ruff",
+  "python.analysis.typeCheckingMode": "strict",
+  "files.associations": {
+    "*.py.bak": "python",
+    "*.md.txt": "markdown"
+  },
+  "licenser.author": "Gareth Morgan <garethm@lifework.health>",
+  "licenser.license": "MIT",
+  "licenser.projectName": "MPH SR Assistant",
+  "licenser.useSPDXLicenseFormat": true,
+  "licenser.customHeader": "@FILENAME@ - @PROJECT@\\nCopyright @YEAR@ @AUTHOR@\\nSPDX-License-Identifier: MIT",
+  "licenser.customSPDXId": "MIT",
+  "licenser.excludeFileExtensions": [
+    "*.md",
+    "*.rst",
+    "*.txt"
+  ]
 }

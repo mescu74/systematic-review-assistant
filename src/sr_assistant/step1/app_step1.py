@@ -16,7 +16,7 @@ load_dotenv()
 
 def init_agent_config() -> RunnableConfig:
     if "agent_config" in st.session_state:
-        return cast(RunnableConfig, st.session_state.agent_config)
+        return cast("RunnableConfig", st.session_state.agent_config)
 
     config = RunnableConfig(
         recursion_limit=1000, configurable={"thread_id": str(uuid.uuid4().hex)}

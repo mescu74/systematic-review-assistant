@@ -13,12 +13,13 @@ dependencies = [
   "biopython>=1.83",
   "dependency-injector>=4.45.0",
   "devtools>=0.12.2",
+  "elsapy>=0.5.0",
   "fastapi>=0.115.6",
   "langchain-anthropic>=0.3.1",
-  "langchain-community>=0.3.14",
-  "langchain-core>=0.3.29",
-  "langchain-openai>=0.2.14",
-  "langchain>=0.3.14",
+  "langchain-community==0.3.18",
+  "langchain-core==0.3.37",
+  "langchain-openai==0.3.6",
+  "langchain==0.3.19",
   "langgraph-checkpoint-postgres>=2.0.12",
   "langgraph>=0.2.61",
   "langsmith>=0.3.6",
@@ -35,8 +36,8 @@ dependencies = [
   "psycopg2-binary>=2.9.10",
   "psycopg[binary,pool]>=3.2.4",
   "pydantic-extra-types>=2.10.2",
-  "pydantic-settings>=2.7.1",
-  "pydantic>=2.10.4",
+  "pydantic-settings==2.8.0",
+  "pydantic==2.10.6",
   "pypdf>=5.1.0,<6.0.0",
   "python-docx==1.0.1",
   "sqlalchemy[asyncio]>=2.0.36",
@@ -49,6 +50,10 @@ dependencies = [
   "streamlit>=1.41.1",
   "supabase>=2.11.0",
   "uuid6>=2024.7.10",
+  "openpyxl>=3.1.5",
+  "langchain-text-splitters==0.3.6",
+  "langchain-google-genai>=2.0.11",
+  "scikit-learn>=1.6.1",
 ]
 
 [dependency-groups]
@@ -75,6 +80,7 @@ dev = [
   "langchain-mcp-tools>=0.1.7",
   "pyright>=1.1.395",
   "pytest-dotenv>=0.5.2",
+  "pyupgrade>=3.19.1",
 ]
 security = ["pip-audit>=2.7.3", "ruff>=0.8.6"]
 observability = [
@@ -90,6 +96,9 @@ observability = [
   "opentelemetry-instrumentation-sqlite3>=0.51b0",
   "opentelemetry-instrumentation-tornado>=0.51b0",
   "opentelemetry-instrumentation-urllib>=0.51b0",
+]
+benchmark = [
+    "synergy-dataset>=1.2",
 ]
 
 [tool.logfire]
@@ -154,11 +163,15 @@ exclude = ["typings"]
 
 [tool.ruff]
 line-length = 88
+cache-dir = "~/.cache/ruff"
 
 src = ["src/sr_assistant", "tests"]
 namespace-packages = []
 target-version = "py312"
 respect-gitignore = true
+#Default value: ["*.py", "*.pyi", "*.ipynb", "**/pyproject.toml"]
+#include = []
+
 
 extend-exclude = [
   "generated",
@@ -167,8 +180,17 @@ extend-exclude = [
   "typings",
   ".pytest_cache",
   "tools",
+  "frontend",
+  "supabase",
+  "alembic",
 ]
+# https://docs.astral.sh/ruff/settings/#fix
 fix = true
+
+[tool.ruff.analyze]
+detect-string-imports = true
+# https://docs.astral.sh/ruff/settings/#analyze_direction
+exclude = ["generated"]
 
 [tool.ruff.lint]
 logger-objects = ["loguru.logger"]
@@ -182,6 +204,8 @@ ignore = [
   "D104",    # Missing docstring in public package
   "D400",    # First line should end with a period TODO: enable this
   "D412",    # newline after docstring section: to create a note admonition in mkdocstrings docs, a blank line is needed
+  "FIX001",  # FIXME: comments are reported by this rule. We use other tools to scan for TODO etc. comments.
+  "FIX002",  # TODO comments
   "E501",    # Line too long, formatting will handle and sometimes it's fine
   "ERA001",  # Commented-out code
   "ISC001",
@@ -191,6 +215,7 @@ ignore = [
   #"PLR",     # Design related pylint codes
   #"PT011",   # `pytest.raises(ValueError)` is too broad, set the `match` parameter or use a more specific exception"
   "T201",   # Use of print
+  "TD001",  # incorret TODO comment label, e.g., this flags FIXME which is valid in our project. TODO: is this configurable?
   "TD002",
   "TD003",
   "TRY300", # Use else in try except
@@ -198,13 +223,23 @@ ignore = [
 ]
 fixable = ["ALL"]
 unfixable = [
-  "T20",   # Removes print statements
+  # "T20",   # Removes print statements  # Rational: use icecream or devootls.debug
   "F841",  # Removes unused variables
   "UP017", # datetime.UTC instead of datetime.timezone.utc. Don't think so.
 
 ]
 
-task-tags = ["TODO", "FIXME", "XXX", "HACK", "BUG", "NOTE", "PERF"]
+task-tags = [
+  "TODO",
+  "FIXME",
+  "XXX",
+  "HACK",
+  "BUG",
+  "NOTE",
+  "INFO",
+  "PERF",
+  "OPTIM",
+]
 
 [tool.ruff.lint.flake8-unused-arguments]
 ignore-variadic-names = true
@@ -213,6 +248,9 @@ ignore-variadic-names = true
 quote-style = "double"
 exclude = ["generated", "3rdparty", "vendor"]
 docstring-code-format = true
+line-ending = "lf"
+skip-magic-trailing-comma = true
+
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
@@ -234,11 +272,15 @@ extend-immutable-calls = [
 [tool.ruff.lint.pyupgrade]
 keep-runtime-typing = true
 
+
 [tool.ruff.lint.flake8-builtins]
 builtins-ignorelist = ["id", "type", "input"]
 
 [tool.ruff.lint.pep8-naming]
 staticmethod-decorators = []
+
+[tool.ruff.lint.flake8-implicit-str-concat]
+allow-multiline = false
 
 [tool.ruff.lint.isort]
 known-first-party = [
@@ -254,6 +296,7 @@ required-imports = []
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = [
+  "ANN201", # missing return type annotation
   "T20",
   "D100",
   "D101",
@@ -263,9 +306,9 @@ required-imports = []
   "D105",
   "D106",
   "D107",
-  "S101", # use of "assert"
-  "S102", # use of "exec"
-  "S106", # possible hardcoded password.
+  "S101",   # use of "assert"
+  "S102",   # use of "exec"
+  "S106",   # possible hardcoded password.
 ]
 "tools/**" = [
   "S603", # `subprocess` call: check for execution of untrusted input (false positive)
@@ -282,12 +325,23 @@ avoid-escape = true
 
 [tool.ruff.lint.pycodestyle]
 max-line-length = 88
-max-doc-length = 120
+max-doc-length = 200
 ignore-overlong-task-comments = true
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"cgi".msg = "The cgi module is deprecated, see https://peps.python.org/pep-0594/#cgi."
+"typing.Mapping".msg = "Use `from collections.abc import Mapping` instead."
+"typing.MutableMapping".msg = "Use `from collections.abc import MutableMapping` instead."
+"typing.Sequence".msg = "Use `from collections.abc import Sequence` instead."
+"typing_extensions.TypedDict".msg = "Use `from typing import TypedDict` instead."
+"typing.Dict".msg = "Use `dict` insteads, this is Python 3.12!"
+"typing.List".msg = "Use `list` insteads, this is Python 3.12!"
+"typing.Optional".msg = "Use ` | None` instead, this is Python 3.12!"
+"typing.TypeVar".msg = "TypeVar is deprecated in Python 3.12, use `type` instead if even needed."
 
 [tool.pytest.ini_options]
 addopts = "-vvv -ra -q --import-mode=importlib"
-pythonpath = ["src/sr_assistant", "tools/"]
+pythonpath = [".", "src/sr_assistant", "tools"]
 testpaths = ["tests/unit"]
 markers = [
   "integration: marks tests as integration tests (require database connection)",

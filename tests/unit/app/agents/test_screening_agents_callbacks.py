@@ -22,41 +22,38 @@ class TestChainOnErrorListenerCb:
         run_id = str(uuid.uuid4())
         mock_run.id = run_id
         mock_run.name = "test_run"
+        # Define the error and attach it to the run object
+        test_error = ValueError("Simulated error for testing")
+        mock_run.error = test_error
 
         mock_child_run1 = MagicMock(name="MockChildRun1")
         mock_child_run1.id = str(uuid.uuid4())
         mock_child_run1.name = "child_run1"
+        mock_child_run1.error = None  # No error for child 1
 
         mock_child_run2 = MagicMock(name="MockChildRun2")
         mock_child_run2.id = str(uuid.uuid4())
         mock_child_run2.name = "child_run2"
+        child_error_2 = TypeError("Child error")
+        mock_child_run2.error = child_error_2  # Error for child 2
 
         mock_run.child_runs = [mock_child_run1, mock_child_run2]
 
-        # Define the error
-        test_error = ValueError("Simulated error for testing")
-
-        # Call the function with the error and the run object in kwargs
-        # Note: The original callback signature might have been different previously
-        # Ensure this call matches the signature in screening_agents.py
-        chain_on_error_listener_cb(test_error, run=mock_run)
+        # Call the function with just the run object
+        chain_on_error_listener_cb(mock_run)
 
         # Get the list of calls made to the mock_logger and its returned mocks
-        calls = mock_logger.mock_calls
+        # calls = mock_logger.mock_calls # Removed unused variable
 
         # Expected sequence of calls:
         expected_calls = [
             # 1. Initial bind for parent run
             call.bind(run_id=run_id, run_name=mock_run.name),
-            # 2. Exception log on the bound logger
+            # 2. Exception log for parent run error
             call.bind().exception(
-                f"Error during chain execution: run_id={run_id}, error={test_error!r}, kwargs={{'run': {mock_run!r}}}",
-                error=test_error,
-                kwargs={
-                    "run": mock_run
-                },  # Note: The actual kwargs dict might vary slightly based on test execution context
+                f"Error during chain execution: {test_error!r}", error=test_error
             ),
-            # 3. Error log for parent run object
+            # 3. Error log for parent run object details
             call.bind().error("Associated run object: {run_obj!r}", run_obj=mock_run),
             # 4. Bind for first child run
             call.bind(
@@ -65,8 +62,10 @@ class TestChainOnErrorListenerCb:
                 parent_run_id=run_id,
                 parent_run_name=mock_run.name,
             ),
-            # 5. Error log for first child run
-            call.bind().error("Associated child run: {cr!r}", cr=mock_child_run1),
+            # 5. Error log for first child run details (no error)
+            call.bind().error(
+                "Associated child run details: {cr!r}", cr=mock_child_run1
+            ),
             # 6. Bind for second child run
             call.bind(
                 run_id=mock_child_run2.id,
@@ -74,8 +73,12 @@ class TestChainOnErrorListenerCb:
                 parent_run_id=run_id,
                 parent_run_name=mock_run.name,
             ),
-            # 7. Error log for second child run
-            call.bind().error("Associated child run: {cr!r}", cr=mock_child_run2),
+            # 7. Exception log for second child run error
+            call.bind().exception(
+                f"Associated child run failed: {child_error_2!r}",
+                error=child_error_2,
+                cr=mock_child_run2,
+            ),
         ]
 
         # Use assert_has_calls to check if these calls occurred in sequence.
@@ -263,9 +266,9 @@ class TestScreenAbstractsChainOnEndCb:
         )
 
     @patch("sr_assistant.app.agents.screening_agents.logger")
-    def test_child_run_missing_pubmed_result_id(self, mock_logger: MagicMock) -> None:
-        """Test case where child run metadata is missing pubmed_result_id."""
-        # Create a mock Run object with outputs and a child run with missing pubmed_result_id
+    def test_child_run_missing_search_result_id(self, mock_logger: MagicMock) -> None:
+        """Test case where child run metadata is missing search_result_id."""
+        # Create a mock Run object with outputs and a child run with missing search_result_id
         mock_run = MagicMock()
         mock_run.id = str(uuid.uuid4())
         mock_run.name = "test_run"
@@ -284,11 +287,11 @@ class TestScreenAbstractsChainOnEndCb:
         # Call the function
         screen_abstracts_chain_on_end_cb(mock_run)
 
-        # Should log an error for the child run with missing pubmed_result_id
+        # Should log an error for the child run with missing search_result_id
         bound_logger = mock_logger.bind.return_value
         assert bound_logger.error.called
         assert any(
-            "Missing pubmed_result_id in metadata" in str(call)
+            "Missing search_result_id in metadata" in str(call)
             for call in bound_logger.error.call_args_list
         )
 
@@ -301,10 +304,10 @@ class TestScreenAbstractsChainOnEndCb:
         can process a valid input without raising exceptions.
         """
         # Create a mock Run object with all required fields
-        run_id = str(uuid.uuid4())
+        # run_id = str(uuid.uuid4()) # Removed unused variable
         trace_id = str(uuid.uuid4())
         review_id = str(uuid.uuid4())
-        pubmed_result_id = str(uuid.uuid4())
+        search_result_id = str(uuid.uuid4())  # Updated variable name
 
         # Create mocks with minimum required fields
         mock_run = MagicMock()
@@ -317,7 +320,7 @@ class TestScreenAbstractsChainOnEndCb:
         mock_child_run.tags = ["map:key:conservative"]
         mock_child_run.metadata = {
             "review_id": review_id,
-            "pubmed_result_id": pubmed_result_id,
+            "search_result_id": search_result_id,
         }
         mock_child_run.trace_id = trace_id
         mock_child_run.start_time = datetime.now(timezone.utc)

@@ -1,0 +1,190 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# ALWAYS use **pytest-mock** and **mocker** instead of unittest.mock.patch or unittest's MagicMock.
+
+-   **Rationale**: This project is standardized on **pytest**, and **pytest-mock** provides superior developer experience (DX), simplifies code, and is the idiomatic way to mock with pytest. There is NO justification for using `unittest.mock` as the `pytest` plugin ecosystem is vastly superior.
+-   **DO NOT USE `unittest.mock`** or any artifacts from the `unittest` module unless explicitly and exceptionally approved. ALWAYS prefer **pytest** and its ecosystem.
+-   Propose installing new **pytest plugins** if they can simplify or enhance testing strategies. Use `uv add --dev pytest[-plugin]` to add plugins.
+-   ALWAYS use **context7** MCP tools and **tavily-mcp** to lookup documentation and best practices for `pytest-mock` if unsure.
+
+## Core `pytest-mock` Usage
+
+-   **Import `MockerFixture`**: For type hinting the `mocker` fixture itself, always import and use `MockerFixture` from `pytest_mock`.
+    ```python
+    from pytest_mock import MockerFixture
+
+    def test_example(mocker: MockerFixture):
+        # ...
+    ```
+
+-   **Creating Mocks**: Use `mocker.MagicMock()` to create `MagicMock` instances. Do not attempt to import `MagicMock` from `unittest.mock` or `pytest_mock` directly for instantiation.
+    -   **Type Hinting Mocks**:
+        -   For the `mocker` fixture itself: `mocker: MockerFixture`.
+        -   For variables holding `MagicMock` instances: Use `typing.Any` as a general fallback if precise mock typing is complex or if the mock replaces an object with a hard-to-define interface for the test's scope.
+        -   You can also use `pytest_mock.Mock` or `pytest_mock.MagicMock` as types if you `import pytest_mock`, but instances are created via `mocker.MagicMock()`.
+        -   Often, `spec=ActualClass` or `spec_set=ActualClass` with `mocker.MagicMock()` provides good type checking for the mock object itself.
+
+    ```python
+    import typing as t
+    from pytest_mock import MockerFixture
+    from sr_assistant.core.models import SystematicReview # Example class
+
+    def test_mock_creation(mocker: MockerFixture):
+        # Mock an instance of SystematicReview
+        mock_review = mocker.MagicMock(spec=SystematicReview)
+        mock_review.id = uuid.uuid4()
+        mock_review.title = "Test Review"
+
+        # Generic mock if spec is not crucial or too complex for the test
+        generic_mock: t.Any = mocker.MagicMock()
+    ```
+
+-   **Patching**:
+    -   Use `mocker.patch('path.to.target')` to replace objects, functions, or methods.
+    -   `mocker.patch.object(instance, 'attribute_name')` is useful for mocking methods on an already existing instance.
+    -   Remember to mock where the object is *looked up*, not where it's defined. For example, if `module_a.py` has `from module_b import ClassB` and you want to mock `ClassB` for `module_a`'s usage, you patch `'module_a.ClassB'`.
+    -   **Patching Builtins**: Use `mocker.patch('builtins.open', mocker.mock_open(read_data='...'))` for file operations.
+
+-   **Asserting Calls**:
+    -   `mock_object.assert_called_once()`
+    -   `mock_object.assert_called_once_with(*args, **kwargs)`
+    -   `mock_object.assert_any_call(*args, **kwargs)`
+    -   `mock_object.assert_not_called()`
+    -   `mock_object.call_count`
+    -   `mock_object.call_args` (returns the arguments of the last call)
+    -   `mock_object.call_args_list` (returns a list of all calls and their arguments)
+
+-   **`autospec=True`**: Consider using `autospec=True` with `mocker.patch()` or `mocker.MagicMock(spec=...)`. This creates mocks that have the same signature as the target, helping to catch incorrect calls at the test definition phase.
+
+## Testing `if __name__ == "__main__":` Blocks
+
+-   **BEST PRACTICE**: Refactor the logic within the `if __name__ == "__main__":` block into a dedicated function (e.g., `main()`).
+-   This `main()` function can then be imported into your test file and tested directly.
+-   Mock the dependencies of this `main()` function using `mocker.patch()`.
+-   **AVOID**: Trying to directly execute the script file in a way that triggers the `if __name__ == "__main__":` block from within a test. This is complex, less reliable, and makes mocking harder.
+
+## Structuring Tests
+
+-   Use classes (e.g., `TestMyFunctionality`) to group related tests for better organization.
+-   Use `pytest.fixture` (potentially with `mocker` for mock setup) to create reusable test setup logic.
+
+## Examples
+
+<example>
+# Valid pytest-mock usage
+
+import pytest
+from pytest_mock import MockerFixture
+import typing as t
+import uuid # Assuming uuid is used by the module under test
+
+# Imagine this is in 'my_script.py'
+# --- my_script.py ---
+# import uuid
+#
+# def get_session():
+#     # Simulates getting a DB session
+#     print("Real session created")
+#     return "REAL_SESSION"
+#
+# def process_item(item_id: uuid.UUID, session: str):
+#     if not session:
+#         raise ValueError("Session is required")
+#     print(f"Processing item {item_id} with session {session}")
+#     return f"Processed {item_id}"
+#
+# def main_logic():
+#     print("Main logic started")
+#     session = get_session()
+#     item_id = uuid.uuid4()
+#     result = process_item(item_id, session)
+#     print(f"Main logic result: {result}")
+#     return result
+#
+# if __name__ == "__main__":
+#     main_logic()
+# --- End of my_script.py ---
+
+
+# In your test file (e.g., tests/unit/test_my_script.py)
+from tools import seed_benchmark_data # Correctly import the module to be tested if main_logic is there
+# Or: from my_project import my_script # If 'my_script.py' is structured as a module
+
+class TestMyScriptMainLogic:
+    def test_main_logic_success(self, mocker: MockerFixture):
+        # Mock dependencies of main_logic
+        mock_get_session = mocker.patch("tools.seed_benchmark_data.get_session") # Path to where get_session is looked up
+        mock_process_item = mocker.patch("tools.seed_benchmark_data.process_item")
+        mock_uuid_val = uuid.UUID("12345678-1234-5678-1234-567812345678")
+        mocker.patch("uuid.uuid4", return_value=mock_uuid_val) # Mocking uuid.uuid4
+
+        # Configure mock return values
+        mock_get_session.return_value = "MOCK_SESSION"
+        mock_process_item.return_value = f"Processed {mock_uuid_val} via mock"
+
+        # Call the refactored main function
+        # Assume seed_benchmark_data.py has a main_logic() function now
+        result = seed_benchmark_data.main_logic() 
+
+        mock_get_session.assert_called_once()
+        mock_process_item.assert_called_once_with(mock_uuid_val, "MOCK_SESSION")
+        assert result == f"Processed {mock_uuid_val} via mock"
+
+    def test_process_item_with_mock_session(self, mocker: MockerFixture):
+        mock_session: t.Any = mocker.MagicMock(name="MockSession") # Create a generic mock
+        item_id = uuid.uuid4()
+        
+        # Assume process_item is imported or part of the module under test
+        # from my_script import process_item
+        # result = process_item(item_id, mock_session)
+        # assert f"Processed {item_id}" in result
+        pass # Placeholder for actual call if process_item was in seed_benchmark_data
+
+# Example of mocking a class method
+class MyService:
+    def __init__(self, dependency: t.Any):
+        self._dependency = dependency
+
+    def do_work(self, task_id: int) -> str:
+        # Imagine this calls a method on the dependency
+        status = self._dependency.get_status(task_id)
+        return f"Work done for {task_id}, status: {status}"
+
+def test_my_service_do_work(mocker: MockerFixture):
+    mock_dependency_instance = mocker.MagicMock()
+    mock_dependency_instance.get_status.return_value = "COMPLETED_MOCK"
+    
+    service = MyService(dependency=mock_dependency_instance)
+    result = service.do_work(task_id=123)
+    
+    mock_dependency_instance.get_status.assert_called_once_with(123)
+    assert result == "Work done for 123, status: COMPLETED_MOCK"
+
+</example>
+
+<example type="invalid">
+# Invalid or less ideal practices
+
+from unittest.mock import MagicMock, patch # DO NOT DO THIS
+
+def test_with_unittest_mock(mocker: MockerFixture): # mocker fixture is fine
+    # Problem: Instantiating MagicMock from unittest.mock
+    my_mock = MagicMock() # BAD: Should be mocker.MagicMock()
+    
+    # Problem: Using patch from unittest.mock
+    with patch('sys.exit') as mock_exit: # BAD: Should be mocker.patch('sys.exit')
+        pass
+
+# Not refactoring __main__ block for testing:
+# Attempting to run a script and assert stdout or side effects of the __main__ block
+# is brittle and hard to manage. Refactor to a testable main() function.
+
+# Vague type hints for mocks when spec could be used:
+def test_vague_mock(mocker: MockerFixture):
+    # 'spec=SomeClass' would be better if SomeClass methods are called
+    some_service_mock: t.Any = mocker.MagicMock() 
+    # some_service_mock.non_existent_method() # This would pass if no spec, but fail with spec
+</example>

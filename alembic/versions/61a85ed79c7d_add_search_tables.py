@@ -5,6 +5,7 @@ Revises: 254fe6c3d36d
 Create Date: 2025-01-22 12:19:29.584379+00:00
 
 """
+
 from __future__ import annotations
 
 from collections.abc import Sequence

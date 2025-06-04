@@ -78,7 +78,7 @@ Example:
     ...         print(message)
     ...     else:
     ...         message.pretty_print()
-"""  # noqa: W505
+"""
 
 
 class AgentGraphInput(t.TypedDict):

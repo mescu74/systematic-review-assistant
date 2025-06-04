@@ -1,5 +1,9 @@
 {
     "recommendations": [
         "charliermarsh.ruff",
+        "ymotongpoo.licenser",
+        "DavidAnson.vscode-markdownlint",
+        "Gruntfuggly.todo-tree",
+        "Supabase.vscode-supabase-extension"
     ]
 }

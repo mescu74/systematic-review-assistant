@@ -1,0 +1,18 @@
+---
+description: ALWAYS follow thesee rules WHEN working with Alembic or Supabase MIGRATIONS! They explain CRITICAL details about how the environment is configured to connect to the correct database. If you don't follow these rules you may run Alembic against the wrong database and cause data loss!
+globs: 
+alwaysApply: false
+---
+
+# Alembic migration rules
+- ALWAYS explicitly prefix with `ENVIRONMENT=prototype` when working with `alembic` commands targeting the actual app database (`postgres`, referred to as the"prototype/prod/live database). This is REQUIRED so that `alembic/env.py` configures correct settings.
+- ALWAYS check alembic [env.py](mdc:alembic/env.py) to understand how Alembic is configured. Note the dotenv handling and safety checks and connection string masking in all outputs.
+- NOTE: We'll soon introduce `pgTap` testing. For now schemas need to manually checked with `mcp_postgres-sra_query` tool.
+
+## Generate migrations
+- ALWAYS use `mcp_postgres-sra_query` tool before AND after a migration to understand current state and verify changes.
+- ALWAYS carefully review generated migration rules in `alembic/versions`.
+- Verify and validate sequencing and dependencies. Proactively edit the generated migration script.
+- **BEFORE generating a migration:** Run `ENVIRONMENT=prototype uv run alembic heads` and `ENVIRONMENT=prototype uv run alembic current` and verify versions match. If not, debug the situation without making changes. Check the Alembic versions table in the db with `mcp_postgres-sra_query` tool.
+- **Generate migration:**
+    - `ENVIRONMENT=prototype uv run alembic revision --autogenerate -m "snake_case_desc"`

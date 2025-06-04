@@ -1,8 +1,8 @@
-import streamlit as st
 import asyncio
 import threading
 import time
-from typing import List
+
+import streamlit as st
 from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
 
 
@@ -66,7 +66,6 @@ async def process_batches(
     db_items: list[str], cpu_items: list[str], status_container, results_container
 ) -> None:
     """Process items using different workers."""
-
     # Create and start workers
     db_worker = WorkerThread("db")
     cpu_worker = WorkerThread("cpu")
@@ -142,7 +141,7 @@ def main():
                 st.success("All processing complete!")
 
         except Exception as e:
-            st.error(f"Error in main: {str(e)}")
+            st.error(f"Error in main: {e!s}")
 
 
 if __name__ == "__main__":

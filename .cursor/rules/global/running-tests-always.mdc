@@ -1,0 +1,19 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Rules for running tests
+- **Always use `uv run`** to run `pytest`. Flags are already configured in [pyproject.toml](mdc:pyproject.toml)
+- Story unit test tasks/sub-tasks can only be marked as completed once all `make test.unit` tests are passing.
+
+## Unit testing rules
+- ALWAYS run unit tests `make test.unit` before moving to the next task/sub-task. ALL tests must pass. Coverage target is 80%.
+- ALWAAYS run unit tests with `make test.unit`, these must ALL pass before a story is marked for review. The command provides coverage report to terminal and htmlcov/.
+- REMEMBER unit tests coverage target is **80%**
+- If a unit test NOT related to your current story and task is failing, it means YOUR NEW CODE BROKE IT. DO NOT touch the failing test. Fix your own code instead.
+- It is OK for tests related to YOUR current story and task to fail during development (story status: `In-Progress`).
+
+## Integration testing rules
+- ALWAYS run TARGETED integration tests: `uv run pytest -m integration tests/integration/<pkg>/test_example.py`. These tests are slow and incur costs, so only integration tests relevant to the current story should be ran (and tests for other affected code).
+- NEVER run `make test.integration` which executes the full integration test suite unless EXPLICITLY INSTRUCTED. *Rationale*: it is very slow and incurs costs, and there are known failing tests that will be addressed later on. It is better to run targeted integration tests during development and leave running the full suite for the user.

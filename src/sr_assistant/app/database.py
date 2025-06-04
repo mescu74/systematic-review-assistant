@@ -27,12 +27,18 @@ from sr_assistant.core.models import SQLModelBase
 settings = get_settings()
 
 # sync
-engine = create_engine(url=str(settings.DATABASE_URL), echo=False)
+engine = create_engine(
+    url=str(settings.DATABASE_URL),
+    echo=False,
+    pool_size=10,  # Number of connections to maintain in the pool
+    max_overflow=20,  # Additional connections beyond pool_size
+    pool_timeout=30,  # Seconds to wait for a connection from the pool
+    pool_recycle=3600,  # Recycle connections after 1 hour
+    pool_pre_ping=True,  # Validate connections before use
+)
 
 session_factory = sessionmaker(
-    bind=engine,
-    class_=SQLModelSession,
-    expire_on_commit=False,
+    bind=engine, class_=SQLModelSession, expire_on_commit=False
 )
 """`sessionmaker` context manager for sync sessions.
 
@@ -54,7 +60,7 @@ def create_tables() -> None:
 
 def persist_model(model: SQLModelBase) -> SQLModelBase:
     session_factory = t.cast(
-        sessionmaker[SQLModelSession], st.session_state.session_factory
+        "sessionmaker[SQLModelSession]", st.session_state.session_factory
     )
     # with session_factory() as session:
     #    model = session.merge(model)
@@ -75,7 +81,15 @@ def is_persisted(model: SQLModelBase) -> bool:
 ## ---------------------------------------------------- queries
 
 # async
-async_engine = create_async_engine(url=str(settings.DATABASE_URL), echo=False)
+async_engine = create_async_engine(
+    url=str(settings.DATABASE_URL),
+    echo=False,
+    pool_size=10,
+    max_overflow=20,
+    pool_timeout=30,
+    pool_recycle=3600,
+    pool_pre_ping=True,
+)
 
 asession_factory = async_sessionmaker(
     bind=async_engine,

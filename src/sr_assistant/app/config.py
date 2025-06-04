@@ -7,7 +7,7 @@ import streamlit as st
 from pydantic import (
     Field,
 )
-from pydantic.networks import EmailStr, PostgresDsn  # noqa: TC002
+from pydantic.networks import EmailStr, PostgresDsn
 from pydantic.types import SecretStr  # noqa: TC002
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -58,18 +58,21 @@ class Settings(BaseSettings):
     )
     """Not used."""
 
+    GOOGLE_API_KEY: SecretStr = Field(
+        validation_alias="google_api_key",
+    )
+    """Google Gemini API key. For resolver, uses reasoning."""
+
     SUPABASE_URL: str = Field(validation_alias="sra_supabase_url")
     SUPABASE_KEY: SecretStr = Field(
         validation_alias="sra_supabase_service_role_key"
     )  # TODO: only for local proto, this should never be exposed client side
     SUPABASE_DIRECT_URL: PostgresDsn = Field(
-        default="postgresql://postgres:postgres@127.0.0.1:54322/postgres",  # pyright: ignore [reportAssignmentType]
-        validation_alias="sra_supabase_direct_url",
+        default=PostgresDsn("postgresql://postgres:postgres@127.0.0.1:54322/postgres")
     )
     DATABASE_URL: PostgresDsn = Field(
-        default="postgresql://postgres:postgres@127.0.0.1:54322/postgres",  # pyright: ignore [reportAssignmentType]
-        description="For test and prototype envs this should be a `postgresql+psycopg:// useing pooled SupaBase DSN.",
-        validation_alias="database_url",
+        default=PostgresDsn("postgresql://postgres:postgres@127.0.0.1:54322/postgres"),
+        description="App SA DB DSN. Either points to staging or production. This should be a `postgresql+psycopg:// using pooled SupaBase DSN.",
     )
     """For test and prototype envs this should be a `postgresql+psycopg:// useing pooled SupaBase DSN."""
 

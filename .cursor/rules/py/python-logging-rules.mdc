@@ -1,0 +1,10 @@
+---
+description: Python loguru logging rules. Ensure you follow these especially when 1) handling exceptions, 2) logging errors, 3) logging variables.
+globs: *.py
+alwaysApply: false
+---
+
+# Python logging rules
+- ALWAYS use `from loguru import logger`
+- `logger.exception(f"do NOT add {exc} to exception log messages, the exception is logged automatically.")`
+- ALWAYS use repr when logging a variable `logger.error(f"example {error!r}")`

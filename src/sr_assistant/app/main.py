@@ -65,6 +65,18 @@ def main() -> None:  # noqa: C901
         icon=":material/preview:",
     )
 
+    # Benchmark pages
+    human_benchmark_page = st.Page(
+        "pages/benchmark_prep_page.py",
+        title="Protocol Review",
+        icon=":material/description:",
+    )
+    benchmark_tool_page = st.Page(
+        "pages/benchmark_run_page.py",
+        title="Run Benchmark",
+        icon=":material/analytics:",
+    )
+
     if st.session_state.logged_in:
         pg = st.navigation(
             {
@@ -72,6 +84,7 @@ def main() -> None:  # noqa: C901
                 "Protocol": [protocol_page],
                 "Search Strategy": [search_page],
                 "Screening": [abstracts_page, fulltext_screening_page],
+                "Benchmark": [human_benchmark_page, benchmark_tool_page],
             }
         )
         if "config" not in st.session_state:
@@ -89,7 +102,16 @@ def main() -> None:  # noqa: C901
             st.session_state.session_factory = session_factory
         if "asession_factory" not in st.session_state:
             st.session_state.asession_factory = asession_factory
-        logger.info("main() initialized")
+
+        # Remove review_id dependent logger configuration from main.py
+        # Individual pages will handle their review-specific logging context.
+        # if "logger_extra_configured" not in st.session_state:
+        #     # This was problematic as st.session_state.review might not be valid here
+        #     # logger.configure(extra={"review_id": st.session_state.review.id})
+        #     st.session_state.logger_extra_configured = True
+        logger.info(
+            "main() initialized"
+        )  # This log will no longer try to add a potentially invalid review_id
     else:
         pg = st.navigation([login_page])
 

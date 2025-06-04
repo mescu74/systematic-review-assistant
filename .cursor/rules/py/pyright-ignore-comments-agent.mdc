@@ -1,0 +1,105 @@
+---
+description: This rule explains how and when to use `# pyright: ignore` comments to manage Pyright linter warnings. While the goal is to write code that doesn't need suppression comments, they can be useful for specific, acknowledged cases. Especially in tests.
+globs: *.py
+alwaysApply: false
+---
+# Pyright Ignore Comments
+
+This rule explains how and when to use `# pyright: ignore` comments and file-level diagnostic configurations to manage Pyright linter warnings. While the goal is to write code that doesn't need suppression comments, they can be useful for specific, acknowledged cases.
+
+## Critical Rules
+
+-   **Inline Ignores - Syntax:** For isolated warnings, use the format `# pyright: ignore[<category>]` at the end of the line causing the warning. If the specific category is not known or multiple distinct warnings on a single line need to be suppressed, a general `# pyright: ignore` can be used, but this is less preferred.
+    -   **Specificity:** Always prefer specific categories (e.g., `reportPrivateUsage`, `reportArgumentType`) over a general `# pyright: ignore` when the category is known from the linter output. This makes the suppression more targeted and understandable.
+
+-   **File-Level Diagnostic Configuration:** For warnings that are permissibly widespread throughout a specific file (e.g., `reportPrivateUsage` in test files that frequently access helper methods for focused testing), prefer configuring the diagnostic at the file level instead of adding numerous inline ignores.
+    -   **Syntax:** Add a comment at the top of the Python file (usually after imports or module docstring): 
+        `# pyright: report<DiagnosticName>=false` (to disable the warning, e.g., `# pyright: reportPrivateUsage=false`)
+        `# pyright: report<DiagnosticName>=true` (to explicitly enable, usually for overriding stricter global settings if applicable)
+        `# pyright: report<DiagnosticName>=none` (to use the global setting if one was locally overridden)
+    -   **Example Categories for File-Level Configuration:** `reportPrivateUsage`, `reportUnknownMemberType`, `reportGeneralTypeIssues` (if used, apply with caution and clear justification).
+    -   **Judicious Use:** File-level suppression should be used thoughtfully and typically reserved for situations where a specific type of diagnostic is systematically unhelpful or overly noisy for the entire file's context (e.g., many legitimate private accesses in a test suite).
+
+-   **Justification:** When any suppression (inline or file-level) is not self-explanatory, add a brief standard code comment (`# NOTE: ...` or similar) nearby to explain the rationale. This is especially important for file-level changes.
+
+-   **Sparing Use Overall:** Suppression comments and configurations should be used sparingly. Always prioritize fixing the underlying code to satisfy Pyright and adhere to type safety and project standards. Ignores are for exceptions, not the rule.
+
+## Common Categories and Use Cases for Inline Ignores
+
+-   `# pyright: reportPrivateUsage=false`
+    -   **Use Case:** Add to the top of of a test module to disable this diagnostic for the whole file. It's fine for tests. Do not add individual ignore comments for this rule in tests, just disable for the file.
+-   `# pyright: ignore[reportPrivateUsage]`
+    -   **Use Case:** For isolated instances of accessing conventionally private members when a file-level disable is not appropriate or desired.
+    -   Place this comment on the line where the private member is accessed, or at the import statement if the linter flags the import itself.
+
+-   `# pyright: ignore[reportArgumentType]`
+    -   **Use Case:** In unit tests, when you pass a simplified mock object or a fixture that doesn't perfectly match the complex type signature of a function parameter, but is sufficient for the specific test's purpose. This avoids making overly complex mocks for simple test cases.
+    -   Place this comment on the line where the function is called, or on the line of the specific argument if Pyright points there.
+
+-   `# pyright: ignore` (General Inline Ignore)
+    -   **Use Case:** When Pyright reports an error that is complex to categorize immediately, or if a section of code is temporarily causing multiple issues that will be refactored soon. This should be a temporary measure and replaced with specific ignores or code fixes.
+
+## Examples
+
+<example>
+# Valid use of pyright ignore comments and file-level configuration
+
+# --- Example of File-Level Configuration (imagine this at the top of a test file) ---
+# pyright: reportPrivateUsage=false
+# This line would allow all subsequent private member accesses in this file without inline ignores.
+
+from sr_assistant.app.agents.screening_agents import _format_extracted_quotes # No ignore needed if file-level set
+from sr_assistant.core import models
+
+class MyService:
+    def _internal_helper(self, val: int) -> str:
+        return f"Value: {val}"
+
+    def public_method(self, item_id: int) -> str:
+        result = self._internal_helper(item_id) 
+        return result
+
+# --- Example of Inline Ignores (if file-level is not set or for other categories) ---
+def test_internal_formatter_inline():
+    # Assume no file-level ignore for reportPrivateUsage is active here.
+    # Accessing a conventionally private helper for focused unit testing.
+    assert _format_extracted_quotes(["test"]) == "- test" # pyright: ignore[reportPrivateUsage]
+
+class MockDBModel:
+    def __init__(self, name: str, value: int):
+        self.name = name
+        self.value = value
+
+def process_data(data: models.SearchResult):
+    print(data.title)
+
+def test_process_data_with_simple_mock():
+    mock_data = MockDBModel(name="Test Title from Mock", value=123)
+    # The process_data function expects a full models.SearchResult, but for this test,
+    # we assume it only uses the 'title' attribute which our mock provides.
+    process_data(mock_data) # pyright: ignore[reportArgumentType]
+
+</example>
+
+<example type="invalid">
+# Invalid or less ideal use of pyright ignore comments
+
+def risky_function(data: dict):
+    # Overly broad inline ignore for something that might be a real type error.
+    # This makes it harder to catch genuine mistakes later.
+    key = data["non_existent_key"] # pyright: ignore 
+    return key
+
+# Instead of a broad ignore, try to fix or understand the error first.
+# If data is expected to have "non_existent_key", type `data` more accurately (e.g., TypedDict).
+# If the key might be missing, use `data.get("non_existent_key")`.
+
+# Using too many inline ignores where a file-level configuration would be cleaner:
+# # pyright: ignore[reportPrivateUsage]
+# call_to_private1(...)
+# # pyright: ignore[reportPrivateUsage]
+# call_to_private2(...)
+# # pyright: ignore[reportPrivateUsage]
+# call_to_private3(...) 
+# ^ Consider a file-level "# pyright: reportPrivateUsage=false" instead for such cases.
+</example>
