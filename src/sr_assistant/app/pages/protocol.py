@@ -53,29 +53,39 @@ def init_suggestion_agent() -> SuggestionAgent:
 
 @logger.catch(Exception, message="Error building review model from PICO")
 def build_review_model_from_pico(response_widget: DeltaGenerator) -> SystematicReview:
-    """Builds the SystematicReview model using PICO fields."""
-    inclusion_criteria_parts = []
+    """Builds the SystematicReview model using PICO fields and manual inclusion criteria."""
+    # Use manual inclusion criteria if provided, otherwise generate from PICO
+    manual_inclusion_criteria = st.session_state.get("inclusion_criteria", "")
 
-    if st.session_state.pico_population:
-        inclusion_criteria_parts.append(
-            f"Population: {st.session_state.pico_population}"
-        )
-    if st.session_state.pico_intervention:
-        inclusion_criteria_parts.append(
-            f"Intervention: {st.session_state.pico_intervention}"
-        )
-    if st.session_state.pico_comparison:
-        inclusion_criteria_parts.append(
-            f"Comparison: {st.session_state.pico_comparison}"
-        )
-    if st.session_state.pico_outcome:
-        inclusion_criteria_parts.append(f"Outcome: {st.session_state.pico_outcome}")
+    if manual_inclusion_criteria.strip():
+        inclusion_criteria = manual_inclusion_criteria
+        logger.info("Using manual inclusion criteria")
+    else:
+        # Fallback to PICO-derived inclusion criteria (current behavior)
+        inclusion_criteria_parts = []
 
-    inclusion_criteria = (
-        "; ".join(inclusion_criteria_parts)
-        if inclusion_criteria_parts
-        else "Not specified"
-    )
+        if st.session_state.pico_population:
+            inclusion_criteria_parts.append(
+                f"Population: {st.session_state.pico_population}"
+            )
+        if st.session_state.pico_intervention:
+            inclusion_criteria_parts.append(
+                f"Intervention: {st.session_state.pico_intervention}"
+            )
+        if st.session_state.pico_comparison:
+            inclusion_criteria_parts.append(
+                f"Comparison: {st.session_state.pico_comparison}"
+            )
+        if st.session_state.pico_outcome:
+            inclusion_criteria_parts.append(f"Outcome: {st.session_state.pico_outcome}")
+
+        inclusion_criteria = (
+            "; ".join(inclusion_criteria_parts)
+            if inclusion_criteria_parts
+            else "Not specified"
+        )
+        logger.info("Using PICO-derived inclusion criteria")
+
     exclusion_criteria_value = st.session_state.get("exclusion_criteria")
     exclusion_criteria = (
         exclusion_criteria_value if exclusion_criteria_value else "Not specified"
@@ -181,6 +191,8 @@ if "research_question" not in st.session_state:
     st.session_state["research_question"] = ""
 if "exclusion_criteria" not in st.session_state:
     st.session_state["exclusion_criteria"] = ""
+if "inclusion_criteria" not in st.session_state:
+    st.session_state["inclusion_criteria"] = ""
 
 if "llm_suggestions" not in st.session_state:
     st.session_state["llm_suggestions"] = ""
@@ -205,6 +217,24 @@ with col1:
         height=100,
         placeholder="E.g. 'Does intervention X improve outcome Y in population Z?'",
         help="The central question the systematic review aims to answer.",
+    )
+
+    st.divider()
+
+    # Manual Inclusion Criteria Section
+    st.subheader("Inclusion Criteria")
+    st.session_state.inclusion_criteria = st.text_area(
+        label="Manual Inclusion Criteria (Optional)",
+        value=st.session_state.inclusion_criteria,
+        height=100,
+        placeholder="E.g., 'Studies must include participants aged 18-65, randomized controlled trials, published in English after 2010...'",
+        help="Define specific inclusion criteria for your systematic review. If left blank, criteria will be auto-generated from PICO elements below.",
+    )
+
+    draft_pico_button = st.button(
+        "Draft PICO from Inclusion Criteria",
+        help="Use AI to extract PICO elements from your inclusion criteria text above",
+        disabled=not (st.session_state.inclusion_criteria or "").strip(),
     )
 
     st.divider()
@@ -297,6 +327,52 @@ if validate_button:
             st.session_state["llm_suggestions"] = general_suggestions
             st.rerun()
 
+# Handle Draft PICO button click
+if draft_pico_button:
+    with suggestions_spinner.container():
+        st.info("Extracting PICO elements from inclusion criteria...")
+        # Create a temporary review with just the inclusion criteria to get PICO suggestions
+        temp_review_data = SystematicReview(
+            id=st.session_state.review_id,
+            background=st.session_state.get("background", ""),
+            research_question=st.session_state.get("research_question", ""),
+            inclusion_criteria=st.session_state.inclusion_criteria,
+            exclusion_criteria="",
+        )
+        with st.spinner("Analyzing inclusion criteria and drafting PICO..."):
+            suggestion_result: SuggestionResult = st.session_state[
+                "suggestions_agent"
+            ].get_suggestions(temp_review_data)
+
+            pico_suggestions: PicosSuggestions | None = suggestion_result.get("pico")
+
+            if pico_suggestions:
+                # Populate PICO fields with suggestions
+                if pico_suggestions.population:
+                    st.session_state.pico_population = pico_suggestions.population
+                    logger.info("Drafted PICO Population from inclusion criteria.")
+                if pico_suggestions.intervention:
+                    st.session_state.pico_intervention = pico_suggestions.intervention
+                    logger.info("Drafted PICO Intervention from inclusion criteria.")
+                if pico_suggestions.comparison:
+                    st.session_state.pico_comparison = pico_suggestions.comparison
+                    logger.info("Drafted PICO Comparison from inclusion criteria.")
+                if pico_suggestions.outcome:
+                    st.session_state.pico_outcome = pico_suggestions.outcome
+                    logger.info("Drafted PICO Outcome from inclusion criteria.")
+
+                # Show the general suggestions as well
+                general_suggestions = suggestion_result.get(
+                    "raw_response",
+                    "PICO elements have been drafted from your inclusion criteria.",
+                )
+                st.session_state["llm_suggestions"] = general_suggestions
+                st.rerun()
+            else:
+                st.warning(
+                    "Could not extract PICO elements from the inclusion criteria. Please refine your criteria or fill PICO manually."
+                )
+
 st.subheader("Save Protocol")
 st.write(
     "Once you are happy with the question and criteria, click the 'Save Protocol' button."
@@ -307,8 +383,13 @@ if st.button("Save Protocol"):
     if not st.session_state.research_question:
         notification_widget.warning("Please define a research question")
         st.stop()
-    elif not st.session_state.pico_population:
-        notification_widget.warning("Please define the Population/Problem (PICO)")
+    elif (
+        not (st.session_state.inclusion_criteria or "").strip()
+        and not st.session_state.pico_population
+    ):
+        notification_widget.warning(
+            "Please define either Manual Inclusion Criteria or the Population/Problem (PICO)"
+        )
         st.stop()
     else:
         review = build_review_model_from_pico(review_model_widget)
