@@ -1,3 +1,0 @@
-# User-Defined Preferred Patterns and Preferences
-
-- `pytest`, `pytest-mock`, **NO `unittest`**
