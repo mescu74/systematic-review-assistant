@@ -1,167 +1,157 @@
-# Product Requirements Document (PRD) for MPH SR Prototype Recovery Project
+# SRA Recovery Project Product Requirements Document (PRD)
 
-## Status: Draft
+## Goals and Background Context
 
-## Intro
+### Goals
 
-The Systematic Review Assistant (MPH SR Prototype) application is currently in a significantly unstable and partially dysfunctional state due to incomplete, concurrent development efforts: a search functionality refactoring with a new service layer, and the implementation of an automated screening conflict resolver. These unfinished initiatives have resulted in numerous errors, data model inconsistencies, and a non-functional screening workflow. This document outlines the requirements for a recovery project to stabilize the application, complete the refactoring and resolver feature, and establish a solid foundation for future development, as detailed in `docs/SRA_Recovery_Project_Brief.md`.
+- Restore the MPH SR Prototype to a stable, robust, and reliable state.
+- Correctly implement a generic search infrastructure, initially focused on PubMed, using a well-defined service layer.
+- Deliver a fully functional automated screening conflict resolver.
+- Achieve comprehensive test coverage for all core components.
 
-## Goals and Context
+### Background Context
 
-- **Project Objectives:**
-    - Restore the MPH SR Prototype to a stable, robust, and reliable state.
-    - Correctly implement a generic search infrastructure, initially focused on PubMed.
-    - Deliver a fully functional automated screening conflict resolver.
-    - Establish a well-defined service layer architecture.
-    - Implement comprehensive test coverage.
-- **Measurable Outcomes:**
-    - Elimination of all current linter errors in critical modules (`search.py`, `screen_abstracts.py`, `services.py`, `repositories.py`, and related tests).
-    - Successful and reliable PubMed search functionality via `SearchService`.
-    - Accurate display and processing of `SearchResult` data throughout the screening workflow.
-    - Automated conflict resolver accurately processes disagreements, with results correctly stored and displayed.
-    - Unit test coverage for services, repositories, and models meets defined targets (e.g., >75%).
-    - All specified integration tests, including an end-to-end PubMed search-screen-resolve flow, pass reliably.
-- **Success Criteria:**
-    - The application is stable and key workflows (PubMed search, abstract screening, conflict resolution) are fully operational without errors.
-    - The implemented service layer and data models are consistent and correctly utilized.
-    - The automated conflict resolver functions as specified in `docs/ai/prd.resolver.md` (with necessary adaptations).
-    - Test suites provide confidence in the stability and correctness of the application.
-    - Integration testing can be performed safely and reliably against the designated test database.
-- **Key Performance Indicators (KPIs):**
-    - Number of linter errors in key modules (target: 0).
-    - Pass rate for all unit and integration tests (target: 100%).
-    - Unit test coverage percentage for `services.py`, `repositories.py`, `models.py` (target: >80%).
-    - Successful completion of the end-to-end PubMed search -> screen -> resolve workflow without manual intervention or errors.
+The Systematic Review Assistant (MPH SR Prototype) application is currently in a significantly unstable state due to incomplete, concurrent development efforts. A search functionality refactoring and the implementation of an automated screening conflict resolver were left unfinished, resulting in numerous errors and a non-functional screening workflow. This recovery project aims to stabilize the application, complete the features, and establish a solid architectural foundation for future development.
 
-## Scope and Requirements (MVP / Current Version)
+### Change Log
 
-### Functional Requirements (High-Level)
+| Date       | Version | Description                   | Author |
+| :--------- | :------ | :---------------------------- | :----- |
+| 2024-07-30 | 1.2     | Migrated to v4 PRD Template   | AIDE   |
+| 2025-05-09 | 1.1     | Clarified resolver scope      | PM Agent |
+| 2025-05-09 | 1.0     | Initial Draft                 | PM Agent |
 
-- **FR1: Stabilized Search & Service Layer (PubMed Focus):**
-    - `search.py` UI correctly interacts with `SearchService` for PubMed searches.
-    - `SearchService` correctly manages PubMed search logic, DB sessions, and calls appropriate `SearchResultRepository` methods.
-    - `SearchResultRepository` is equipped with all necessary methods (e.g., for storing, retrieving, deleting search results by review ID for PubMed).
-    - PubMed search results are consistently stored and retrieved using the `SearchResult` model, with correct `source_db` ('PubMed') and `source_id` (PMID).
-    - Resolve all linter errors in `search.py`, `services.py`, `repositories.py` and related tests.
-    - PubMed search functionality is fully operational.
-- **FR2: Completed Automated Conflict Resolver Implementation:**
-    - Implement the missing `resolve_screening_conflict` function.
-    - Update `SearchResult` model to include `final_decision` (with DB migration).
-    - Ensure correct data flow for the resolver LLM and storage of its decisions in `ScreeningResolution` and `SearchResult`.
-    - Integrate fully into `screen_abstracts.py` UI and workflow.
-    - *(Note: The scope of disagreements handled by the resolver now includes cases involving UNCERTAIN decisions, as per the updated `docs/prd-resolver.md` v1.1).*
-- **FR3: Comprehensive and Safe Test Suite:**
-    - Develop unit tests for all services in `services.py` (e.g., `SearchService`, `ScreeningService`).
-    - Repair and significantly expand unit tests for all data models (`models.py`) and repositories (`repositories.py`), reflecting service-managed session patterns.
-    - Complete and ensure all integration tests for the resolver feature pass (e.g., `tests/integration/test_resolver.py`, `tests/integration/test_resolver_agent.py`).
-    - Create and pass at least one end-to-end integration test covering the PubMed search -> abstract screening -> conflict resolution workflow.
-    - Document and enforce safe integration testing procedures against the `sra_integration_test` Supabase database, including environment variable management (`.env.test`) and awareness of schema cleaning in `conftest.py`.
+## Requirements
 
-### Non-Functional Requirements (NFRs)
+### Functional
 
-- **Stability:** The application must be free of critical runtime errors in the recovered workflows.
-- **Reliability:** Core features (search, screen, resolve) must function consistently and predictably.
-- **Data Integrity:** Data models (`SearchResult`, `ScreeningResolution`) must be consistent, and database interactions must be correct. `source_id` and `source_db` must be used correctly for PubMed data (i.e. `source_db` = 'PubMed'). The `final_decision` field must be accurately populated.
-- **Maintainability:** Code should adhere to defined quality standards, be well-documented where necessary, and the service layer architecture must be clearly implemented.
-    - Non-critical linter errors (e.g., the known issue with `Model.id` in `repositories.py`) may be temporarily addressed with `noqa` or `pyright: ignore` comments to focus on application-breaking issues. Critical linter errors that impede functionality must be fixed.
-- **Testability:** The system must be structured to support comprehensive unit and integration testing.
-- **Performance:** While not a primary focus for deep optimization in recovery, the system should perform searches and screening actions within a reasonable timeframe for user interaction. Linter errors that might impact performance should be resolved.
+- **FR1:** The `search.py` UI must correctly interact with `SearchService` for all PubMed search operations.
+- **FR2:** `SearchService` must manage PubMed search logic, database sessions, and repository calls correctly.
+- **FR3:** `SearchResultRepository` must contain all methods needed to manage `SearchResult` entities for PubMed.
+- **FR4:** PubMed search results must be stored and retrieved consistently using the `SearchResult` model.
+- **FR5:** The `resolve_screening_conflict` function must be fully implemented and integrated.
+- **FR6:** The `SearchResult` model must be updated with a `final_decision` field (including DB migration).
+- **FR7:** The automated conflict resolver's decisions must be correctly stored in `ScreeningResolution` and `SearchResult` tables.
+- **FR8:** The resolver workflow, including handling of "UNCERTAIN" decisions, must be fully integrated into the `screen_abstracts.py` page.
+- **FR9:** Unit tests must be developed for all services in `services.py`.
+- **FR10:** Unit tests for `models.py` and `repositories.py` must be repaired and expanded.
+- **FR11:** All integration tests for the resolver feature must be completed and pass reliably.
+- **FR12:** A new end-to-end integration test for the PubMed search -> screen -> resolve workflow must be created and pass.
 
-### User Experience (UX) Requirements (High-Level)
+### Non Functional
 
-- The existing UI in `search.py` and `screen_abstracts.py` should correctly display data from the `SearchResult` model (using `source_id`, `source_db` where `source_db` is 'PubMed' for PubMed results).
-- The UI in `screen_abstracts.py` should clearly indicate the status of screening decisions, including resolved conflicts and the resolver's reasoning.
+- **NFR1:** The application must be free of critical runtime errors in the recovered search, screen, and resolve workflows.
+- **NFR2:** Core features must function consistently and predictably.
+- **NFR3:** Data integrity must be enforced, with correct usage of `source_id` and `source_db` for PubMed data.
+- **NFR4:** Code must adhere to defined quality standards and the service layer architecture must be clearly implemented.
+- **NFR5:** The system must be structured to support comprehensive and safe unit and integration testing against a dedicated test database.
 
-### Integration Requirements (High-Level)
+## User Interface Design Goals
 
-- Integration with OpenAI API for the resolver LLM agent.
-- Integration with Supabase (PostgreSQL) for data persistence.
-- (Implicit) Integration with PubMed API via existing mechanisms, managed by `SearchService`.
+N/A for this recovery project. The focus is on backend stabilization and ensuring existing UI correctly reflects the fixed data flows.
 
-### Testing Requirements (High-Level)
+## Technical Assumptions
 
-- Comprehensive unit tests for services, repositories, and models.
-- Robust integration tests for the conflict resolver functionality.
-- At least one end-to-end integration test for the primary PubMed search-screen-resolve workflow.
-- Clear documentation and procedures for safe execution of integration tests against a dedicated test database.
-- *(See `docs/SRA_Recovery_Project_Brief.md` Goal 3 for detailed testing specifics and `docs/templates/testing-strategy.md` for general strategy if/when created).*
+### Repository Structure
 
-## Tech Stack
+Monorepo (existing)
 
-- **Languages:** Python
-- **Frameworks/Libraries:** Streamlit, SQLModel, SQLAlchemy, LangChain, LangGraph, OpenAI SDK
-- **Database:** PostgreSQL (via Supabase)
-- **Testing:** Pytest
-- *(This reflects the existing stack to be stabilized. Further details may be in `docs/tech-stack.md` if it exists or is created).*
+### Service Architecture
 
-## Epic Overview (MVP / Current Version)
+Service-Oriented Monolith (existing)
 
-- **Epic-1: Search and Service Layer Stabilization (Current)** - Goal: Fully refactor and stabilize `search.py`, `services.py`, and `repositories.py` to correctly implement and utilize the `SearchResult` model and the new service layer architecture for PubMed search operations, ensuring all related functionalities are operational and error-free.
-- **Epic-2: Resolver Agent Implementation and Integration (Future)** - Goal: Complete the implementation and integration of the automated screening conflict resolver, including model updates, backend logic, and UI integration, ensuring it accurately processes conflicts and stores results.
-- **Epic-3: Comprehensive Testing and Database Integrity (Future)** - Goal: Establish a robust testing framework (unit, integration, E2E for the core recovery flow) and ensure database integrity, including clear documentation for safe integration testing protocols.
+### Testing requirements
 
-## Key Reference Documents
+- Unit tests for all services, models, and repositories.
+- Integration tests for the conflict resolver.
+- One end-to-end integration test for the core PubMed workflow.
+- Integration tests must run safely against the `sra_integration_test` Supabase database.
 
-- `docs/SRA_Recovery_Project_Brief.md`
-- `docs/SRA_Recovery_PM_Prompt.md`
-- `docs/ai/prd.resolver.md` (for resolver logic guidance)
-- `src/sr_assistant/core/models.py`
-- `src/sr_assistant/core/repositories.py`
-- `src/sr_assistant/app/services.py`
-- `src/sr_assistant/app/pages/search.py`
-- `src/sr_assistant/app/pages/screen_abstracts.py`
-- `src/sr_assistant/app/agents/screening_agents.py`
-- `tests/conftest.py`
-- Existing integration tests (e.g., `tests/integration/core/test_repositories.py`, `tests/integration/test_resolver.py`)
+### Additional Technical Assumptions and Requests
 
-## Post-MVP / Future Enhancements
+- Use existing tech stack: Python, Streamlit, SQLModel, LangChain, Pytest.
+- Adhere to the intended service layer pattern where services manage DB sessions.
+- Non-critical linter errors may be temporarily ignored to focus on functionality, but critical errors must be fixed.
 
-- Implementation of search functionality for Embase and Scopus.
-- Development of the new Benchmarking Module.
-- Enhancements to XAI and logging/tracing dashboards.
-- *(These are beyond the scope of this recovery PRD and will be addressed in `docs/MPH_SR_Prototype_Main_Project_Brief.md` and subsequent PRDs).*
+## Epics
 
-## Change Log
+### Epic 1: Search and Service Layer Stabilization
 
-| Change          | Date       | Version | Description                                                                                                | Author               |
-|-----------------|------------|---------|------------------------------------------------------------------------------------------------------------|----------------------|
-| Scope Update    | 2025-05-09 | 0.2     | Clarified resolver scope in FR2 to align with updated `prd-resolver.md` (handling of UNCERTAIN cases). | Product Manager Agent |
-| Initial Draft   | 2025-05-09 | 0.1     | First draft of PRD                                                                                         | Product Manager Agent |
+**Goal:** Fully refactor and stabilize `search.py`, `services.py`, and `repositories.py` to correctly implement and utilize the `SearchResult` model and the new service layer architecture for PubMed search operations, ensuring all related functionalities are operational and error-free.
 
-## Initial Architect Prompt
+#### Story 1.1: Fix Service and Repository Layers
 
-### Technical Infrastructure
+As a developer, I want to refactor the service and repository layers to manage database sessions correctly and align with the defined architecture, so that data operations are stable and testable.
 
-- **Starter Project/Template:** The existing "MPH SR Prototype" codebase.
-- **Hosting/Cloud Provider:** Supabase (for PostgreSQL database) is the primary hosted component. The Streamlit application runs locally during this recovery phase.
-- **Frontend Platform:** Streamlit (existing).
-- **Backend Platform:** Python with Streamlit. FastAPI is a post-prototype consideration and not part of the current recovery effort. The application is primarily synchronous; existing asynchronous database code is not currently in active use.
-- **Database Requirements:** PostgreSQL (via Supabase), using SQLModel and SQLAlchemy.
+##### Acceptance Criteria
 
-### Technical Constraints
+- 1: `SearchService` correctly handles its own DB session lifecycle.
+- 2: `SearchResultRepository` methods are updated to accept a session from the service layer.
+- 3: All linter errors in `services.py` and `repositories.py` are resolved.
 
-- Adhere to the intended service layer pattern: services manage sessions and business logic; repositories handle data I/O.
-- Resolver implementation should align with `docs/ai/prd.resolver.md` where feasible.
-- Continue using the remote Supabase instance (`sra_integration_test`) for integration tests, with strict adherence to safety protocols defined in `tests/conftest.py` and `.env.test`.
-- Ensure all LLM interactions (especially for the resolver) are robust and handle potential API errors.
+#### Story 1.2: Stabilize PubMed Search
 
-### Deployment Considerations
+As a researcher, I want to perform a PubMed search and see the results stored and displayed correctly, so that I can begin the screening process.
 
-- The immediate goal is a stable application for local development and testing. CI/CD for deployment is not in scope for this recovery project.
-- Deployment to Streamlit Community Cloud is planned for a future phase, after the recovery is complete and the initial benchmarking module is developed.
-- Existing GitHub Actions for running tests are in place and considered sufficient for the recovery phase.
-- Ensure `.env.test` is correctly configured and used for integration tests to target `sra_integration_test` DB.
+##### Acceptance Criteria
 
-### Local Development & Testing Requirements
+- 1: `search.py` UI successfully calls `SearchService`.
+- 2: PubMed results are fetched and stored in the `search_results` table with `source_db` = 'PubMed' and `source_id` = PMID.
+- 3: The UI correctly displays the fetched results from the database.
 
-- Developers must be able to run the Streamlit application locally.
-- Pytest should be used for running unit and integration tests.
-- Clear instructions for setting up the local environment, including environment variables for development (`.env`, `.env.local`) and testing (`.env.test`).
-- The schema cleaning mechanism in `tests/conftest.py` for the integration test database must be understood and maintained.
-- Pre-commit hooks are part of the project but are temporarily disabled; re-enabling and refining them is a post-recovery concern.
+### Epic 2: Resolver Agent Implementation and Integration
 
-### Other Technical Considerations
+**Goal:** Complete the implementation and integration of the automated screening conflict resolver, including model updates, backend logic, and UI integration, ensuring it accurately processes conflicts and stores results.
 
-- **Data Migration:** Alembic is used for database migrations. Migrations will be generated and run by the user as needed (e.g., for adding the `final_decision` field).
-- **Error Handling:** Robust error handling should be implemented, especially around service calls, database interactions, and LLM API calls.
-- **Logging/Tracing:** While LangSmith is mentioned for the full vision, ensure sufficient logging within the recovery scope to debug issues.
+#### Story 2.1: Implement Resolver Logic
+
+As a developer, I want to implement the `resolve_screening_conflict` function and related database changes, so that screening disagreements can be automatically resolved.
+
+##### Acceptance Criteria
+
+- 1: `SearchResult` model is migrated to include `final_decision`.
+- 2: The resolver LLM chain is implemented and correctly processes inputs.
+- 3: Resolver output is correctly stored in the `screening_resolutions` table and linked back to the `search_results` table.
+
+#### Story 2.2: Integrate Resolver into UI
+
+As a user, I want to see the final, resolved decisions in the screening interface, so that I know the outcome of the automated process.
+
+##### Acceptance Criteria
+
+- 1: The `screen_abstracts.py` workflow correctly invokes the resolver logic after the initial dual-agent screening.
+- 2: The final decision and the resolver's reasoning are clearly displayed in the UI.
+- 3: The workflow correctly handles cases involving 'UNCERTAIN' decisions from the primary reviewers.
+
+### Epic 3: Comprehensive Testing and Database Integrity
+
+**Goal:** Establish a robust testing framework (unit, integration, E2E for the core recovery flow) and ensure database integrity, including clear documentation for safe integration testing protocols.
+
+#### Story 3.1: Build Unit Test Suite
+
+As a developer, I want a comprehensive suite of unit tests, so that I can verify the correctness of individual components in isolation.
+
+##### Acceptance Criteria
+
+- 1: Unit tests for `SearchService` and `ScreeningService` are written, mocking all external dependencies.
+- 2: Unit tests for all `SQLModel` models and `Pydantic` schemas are complete.
+- 3: Unit tests for all `Repository` methods are complete.
+- 4: Unit test coverage for core logic exceeds 80%.
+
+#### Story 3.2: Create End-to-End Integration Test
+
+As a developer, I want an end-to-end integration test, so that I can validate the entire PubMed search-screen-resolve workflow against a real database.
+
+##### Acceptance Criteria
+
+- 1: An integration test is created that performs a PubMed search, triggers screening, and verifies the conflict resolution.
+- 2: The test runs successfully against the `sra_integration_test` database.
+- 3: The test includes assertions to verify data integrity at each step of the process.
+
+## Checklist Results Report
+
+[[LLM: This section will be populated after running the `pm-checklist` task.]]
+
+## Next Steps
+
+[[LLM: This section will contain prompts for the Design Architect and Architect.]]

@@ -1,124 +1,155 @@
-# Product Requirements Document (PRD): SRA Benchmarking Module (MVP)
+# SRA Benchmarking Module PRD
 
-**Version:** 2.3
-**Status:** Draft
-**Date:** 2025-05-16
-**Author:** Product Manager (Gemini)
+## Goals and Background Context
 
-### 1. Intro
+### Goals
 
-This document outlines the requirements for a new Benchmarking Module within the Systematic Review Assistant (SRA) application. The primary purpose of this module is to evaluate the performance of the SRA's AI-driven Title & Abstract (T&A) screening pipeline (including initial dual review and subsequent conflict resolution) against a predefined, human-annotated dataset ([`docs/benchmark/human-reviewer-results-to-bench-against.csv`](/docs/benchmark/human-reviewer-results-to-bench-against.csv)). This will allow us to measure key accuracy metrics (as defined in [`/docs/sr_metrics.md`](/docs/sr_metrics.md)), identify areas for improvement in the screening agents/resolver, and provide quantitative data for academic reporting. Results of each benchmark run **must** be persisted to the database.
+- Establish a reliable method to load a benchmark dataset and its corresponding systematic review protocol.
+- Enable users to trigger the SRA's AI screening pipeline on the benchmark dataset.
+- Persist benchmark run details and individual screening outcomes to the database.
+- Automatically calculate and display key screening performance metrics against a human-annotated ground truth.
+- Provide a mechanism to export detailed and summary benchmark results.
 
-**Note:** This benchmark focuses exclusively on T&A screening. Full-text screening is not yet implemented in the SRA and is out of scope for this module.
+### Background Context
 
-### 2. Goals and Context
+To quantitatively measure the performance of the SRA's AI-driven Title & Abstract screening pipeline, a new Benchmarking Module is required. This module will evaluate the entire AI workflow (dual review + conflict resolution) against a predefined, human-annotated dataset. This will allow for the calculation of key accuracy metrics, help identify areas for improvement in the AI agents, and provide verifiable data for reporting.
 
-- **Project Objectives:**
-    1. **Data Foundation:** Establish a reliable method to load the benchmark dataset and its corresponding systematic review protocol within the SRA's existing data models (`SystematicReview`, `SearchResult`), accurately reflecting the PICO and exclusion criteria outlined in [`docs/benchmark/bechmark-protocol.md`](/docs/benchmark/bechmark-protocol.md) and refined by user input (with XML tagging for PICO elements in the protocol stored in the database).
-    2. **Bug Resolution (Critical Prerequisite):** Ensure the SRA's core abstract screening mechanism can correctly process multiple abstracts in a single batch within the main application (`ScreeningService`).
-    3. **Benchmarking Execution & Persistence:** Enable users to trigger the SRA's AI screening pipeline (initial dual review via `screen_abstracts_batch()` and conflict resolution logic via `invoke_resolver_chain()` for relevant cases) on the benchmark dataset. Persist the overall run details (including individual metric columns) and individual item screening outcomes (AI vs. Human) to new database tables.
-    4. **Performance Evaluation:** Automatically calculate and display key screening performance metrics by comparing the SRA's final AI decisions against the human-annotated ground truth from the persisted benchmark results.
-    5. **Results Export:** Provide a mechanism for users to export both the detailed comparison of AI vs. human decisions and the summary performance metrics from a selected benchmark run.
-- **Measurable Outcomes:**
-    1. The benchmark protocol (derived from [`docs/benchmark/bechmark-protocol.md`](/docs/benchmark/bechmark-protocol.md) with user-specified PICO/exclusions using XML tags) is successfully converted and stored as a `SystematicReview` record.
-    2. The benchmark dataset ([`docs/benchmark/human-reviewer-results-to-bench-against.csv`](/docs/benchmark/human-reviewer-results-to-bench-against.csv)) is successfully converted and stored as `SearchResult` records, linked to the benchmark review, with human ground truth decisions and inferred original `source_db` correctly captured.
-    3. The multi-abstract screening bug in the main application is resolved, allowing the benchmark module to process its dataset efficiently.
-    4. The benchmark module UI allows users to initiate AI screening of the dataset and view all specified performance metrics.
-    5. Users can download detailed comparison data and summary metrics in CSV format.
-- **Success Criteria:**
-    1. A one-time data seeding process populates the database with the benchmark review protocol (using user-specified PICO/exclusions with XML tags based on details from [`docs/benchmark/bechmark-protocol.md`](/docs/benchmark/bechmark-protocol.md)) and associated search results from [`docs/benchmark/human-reviewer-results-to-bench-against.csv`](/docs/benchmark/human-reviewer-results-to-bench-against.csv) (including human ground truth and inferred original `source_db`).
-    2. The multi-result screening bug is fixed in the main application (`screen_abstracts.py` and/or `services.py`), verified by testing.
-    3. The benchmark module UI correctly loads and presents the benchmark protocol information.
-    4. The AI screening process (using `screen_abstracts_batch` directly, followed by resolver logic) can be initiated from the UI and runs to completion on the full benchmark dataset, with results stored in `BenchmarkRun` (with individual metric columns) and `BenchmarkResultItem` tables.
-    5. All defined performance metrics are accurately calculated from stored benchmark results and displayed.
-    6. Detailed and summary results are exportable in the specified CSV format.
-- **Key Performance Indicators (KPIs):**
-    1. 100% of benchmark dataset items processed by the SRA's AI screening pipeline (dual review + resolver logic) and results stored in the database.
-    2. Successful calculation and display of all required performance metrics from [`/docs/sr_metrics.md`](/docs/sr_metrics.md).
-    3. Ability to export results in the specified formats.
+### Change Log
 
-### 3. Scope and Requirements (MVP / Current Version)
+| Date       | Version | Description                   | Author |
+| :--------- | :------ | :---------------------------- | :----- |
+| 2024-07-30 | 3.0     | Migrated to v4 PRD Template   | AIDE   |
+| 2025-05-16 | 2.3     | Initial Draft                 | PM Agent |
 
-#### Functional Requirements (FRs)
+## Requirements
 
-- **FR1: Benchmark Data Preparation & Seeding (One-Time)**
-    - FR1.1: Develop/update a script (`tools/seed_benchmark_data.py`) to parse the refined PICO elements and exclusion criteria (as provided by user with XML tag instructions, based on [`docs/benchmark/bechmark-protocol.md`](/docs/benchmark/bechmark-protocol.md)) and create a corresponding `SystematicReview` database record. PICO elements **MUST** be stored with XML tags in the `criteria_framework_answers` field of the `SystematicReview` model. `inclusion_criteria` and `exclusion_criteria` strings **MUST** use newline delimiters.
-    - FR1.2: The script must parse [`docs/benchmark/human-reviewer-results-to-bench-against.csv`](/docs/benchmark/human-reviewer-results-to-bench-against.csv) and create `SearchResult` database records, linked to the benchmark `SystematicReview`. `source_db` **MUST** be inferred (default `OTHER`). `source_metadata` must store `{"benchmark_human_decision": true/false/null}`.
-    - FR1.3: The seeding script must be idempotent.
-- **FR2: Fix Multi-Abstract Screening Capability (Core Application - Prerequisite)**
-    - FR2.1: The SRA development team must identify and resolve the bug in the existing SRA application that causes errors when screening multiple search results in a batch. This primarily involves ensuring correct transaction management (e.g., single commit per batch) within the `ScreeningService.perform_batch_abstract_screening` method.
-- **FR3: Benchmark Database Models & Schemas**
-    - FR3.1: Create new SQLModel `BenchmarkRun` (id, timestamp, config_details JSONB). The `BenchmarkRun` table **MUST** include individual typed columns for all key summary metrics defined in [`/docs/sr_metrics.md`](/docs/sr_metrics.md) (e.g., `tp INT`, `fp INT`, `fn INT`, `tn INT`, `sensitivity FLOAT`, `specificity FLOAT`, `accuracy FLOAT`, `f1_score FLOAT`, `mcc_score FLOAT`, `cohen_kappa FLOAT`, `pabak FLOAT`, `lr_plus FLOAT`, `lr_minus FLOAT`).
-    - FR3.2: Create new SQLModel `BenchmarkResultItem` (id, benchmark_run_id FK, search_result_id FK, human_decision BOOLEAN, conservative_decision TEXT, comprehensive_decision TEXT, final_decision TEXT, classification TEXT (TP/TN/FP/FN)). Note: `final_decision` in `BenchmarkResultItem` refers to the SRA's overall decision for that item in that run.
-    - FR3.3: Define corresponding Pydantic schemas for these models in `schemas.py`.
-    - FR3.4: Update [`/docs/data-models.md`](/docs/data-models.md) with these new models and schemas.
-- **FR4: Benchmark Module UI & Workflow (`benchmark_tool.py`)**
-    - FR4.1: UI button "Load Benchmark Data" (fetches seeded `SystematicReview` and `SearchResult`s).
-    - FR4.2: Display benchmark protocol details (stripping XML for UI readability).
-    - FR4.3: UI button "Run New Benchmark Screening" that:
-        - Creates a new `BenchmarkRun` record (initially without summary metrics).
-        - For each benchmark `SearchResult`:
-            a.  Invokes `screen_abstracts_batch()` (directly) to get conservative and comprehensive decisions.
-            b.  If decisions conflict or involve uncertainty (as per SRA's resolver logic, e.g., one INCLUDE, one EXCLUDE; or one definitive, one UNCERTAIN; or both UNCERTAIN), invoke `invoke_resolver_chain()` (directly) to get a `resolver_decision`.
-            c.  Determine the `final_decision_for_benchmark_item` (this is the SRA's overall output: resolver's if available, else agreed upon if no conflict, else derived based on specific handling of UNCERTAIN cases if resolver not triggered).
-            d.  Store a new `BenchmarkResultItem` record with all relevant decisions (human_decision from `SearchResult.source_metadata`, conservative_decision, comprehensive_decision, `final_decision_for_benchmark_item` as `final_decision`) and link to the `BenchmarkRun`.
-        - Display progress.
-- **FR5: Metrics Calculation, Display & Persistence (Benchmark Module)**
-    - FR5.1: After all items in a benchmark run are processed and `BenchmarkResultItem` records are created, calculate performance metrics (as per [`/docs/sr_metrics.md`](/docs/sr_metrics.md)) by comparing `BenchmarkResultItem.final_decision` against the human ground truth (`SearchResult.source_metadata.benchmark_human_decision`) for all items associated with that `BenchmarkRun`.
-    - FR5.2: Update the corresponding `BenchmarkRun` record by populating its individual metric columns (e.g., `tp`, `sensitivity`, etc.) with the calculated summary metrics.
-    - FR5.3: Display these metrics in the UI from the `BenchmarkRun` record.
-    - FR5.4: Display statistics for AI confidence scores (conservative, comprehensive, resolver if available) from the `BenchmarkResultItem` records for the selected run.
-- **FR6: Results Export (Benchmark Module)**
-    - FR6.1: UI to select a `BenchmarkRun` (if multiple runs are supported in future, for MVP can default to latest, or list existing runs by timestamp).
-    - FR6.2: Download button for a CSV of detailed `BenchmarkResultItem` data for the selected run: `search_result_source_id`, `title`, `human_decision`, `conservative_decision`, `comprehensive_decision`, `final_decision` (from BenchmarkResultItem, representing SRA's final output for the item), `classification`.
-    - FR6.3: Download button for a CSV of summary metrics from the selected `BenchmarkRun` (reading from its individual metric columns).
-- **FR7: Adherence to Logging Standards**
-    - FR7.1: All new and modified Python code related to the benchmark module and data seeding **MUST** adhere to logging standards outlined in `py/python-logging-rules.mdc` and general [`/docs/coding-standards.md`](/docs/coding-standards.md) (e.g., use `logger.exception()` correctly).
+### Functional
 
-#### Non-Functional Requirements (NFRs)
+- **FR1:** A data seeding script (`tools/seed_benchmark_data.py`) must be created to parse a benchmark protocol and dataset CSV, creating `SystematicReview` and `SearchResult` records.
+- **FR2:** The `SystematicReview` record must store PICO elements with XML tags and criteria with newline delimiters.
+- **FR3:** The `SearchResult` records must store the human ground truth decision in their `source_metadata` field.
+- **FR4:** The seeding script must be idempotent.
+- **FR5:** A critical bug causing errors when screening multiple abstracts in a batch must be fixed in the core application's `ScreeningService`.
+- **FR6:** A new `BenchmarkRun` database model must be created to store run details and summary metrics in dedicated, typed columns.
+- **FR7:** A new `BenchmarkResultItem` database model must be created to store the outcome of each individual screening comparison (AI vs. Human).
+- **FR8:** A new UI page for the benchmark module must be created.
+- **FR9:** The UI must allow a user to load the seeded benchmark data and initiate a new benchmark run.
+- **FR10:** Initiating a run will create a `BenchmarkRun` record and then process each item by calling the SRA's `screen_abstracts_batch()` and `invoke_resolver_chain()` functions directly.
+- **FR11:** A `BenchmarkResultItem` record will be stored for each processed item, containing all AI decisions and the human ground truth.
+- **FR12:** After a run completes, all summary performance metrics must be calculated and persisted into the appropriate columns of the `BenchmarkRun` record.
+- **FR13:** The UI must display all summary metrics from a completed `BenchmarkRun`.
+- **FR14:** The UI must provide buttons to download the detailed `BenchmarkResultItem` data and the summary `BenchmarkRun` metrics as separate CSV files.
 
-- **NFR1: Simplicity & Speed of Development:** Implementation must prioritize simplicity and reuse. Direct agent calls for benchmark execution are preferred.
-- **NFR2: Correctness of Metrics:** Metric calculations must align with [`/docs/sr_metrics.md`](/docs/sr_metrics.md).
-- **NFR3: Data Integrity:** Accurate data seeding of the benchmark protocol (with XML-tagged PICO) and dataset (with correctly inferred original source DB). Metrics stored in `BenchmarkRun` must be typed correctly.
-- **NFR4: User Feedback:** Clear UI feedback for all operations.
+### Non Functional
 
-#### Out of Scope for this MVP
+- **NFR1:** The implementation should prioritize simplicity and reuse of existing SRA components (e.g., direct agent calls).
+- **NFR2:** Metric calculations must be correct and align with the definitions in `docs/sr_metrics.md`.
+- **NFR3:** Data seeding and storage must ensure high data integrity.
+- **NFR4:** All new and modified code must adhere to project logging standards.
 
-- User uploads for benchmark datasets.
-- UI for comparing multiple `BenchmarkRun` records side-by-side.
-- User-configurable AI models/prompts for benchmark runs (uses SRA defaults).
+## User Interface Design Goals
 
-### 4. Tech Stack (Leveraging Existing)
+A simple, functional UI is required for the MVP.
+- A single page for the benchmark module.
+- Buttons to "Load Benchmark Data" and "Run New Benchmark Screening".
+- A clear display area for the benchmark protocol details.
+- A table or list to display summary metrics from a completed run.
+- Download buttons for exporting results.
 
-- Python, Streamlit, SQLModel, SQLAlchemy, LangChain, Pandas, scikit-learn, Supabase (PostgreSQL).
+## Technical Assumptions
 
-### 5. Initial Architect & Developer Guidance
+### Repository Structure
 
-- **Data Seeding:** Robust script (`tools/seed_benchmark_data.py`) for protocol (XML PICO, newline criteria) and CSV data (infer `source_db`).
-- **Multi-Result Bug:** The core development team needs to address the batch screening bug in `ScreeningService` by ensuring proper session and transaction management (single commit per batch).
-- **New DB Models:** `BenchmarkRun` (with individual metric columns), `BenchmarkResultItem` in `models.py`, `schemas.py`, update [`/docs/data-models.md`](/docs/data-models.md). Alembic migration needed.
-- **Benchmark Tool (`benchmark_tool.py`):** Orchestrate agent calls (`screen_abstracts_batch`, `invoke_resolver_chain`), persist to new tables, calculate metrics from DB, display, export.
-- **Logging:** Strictly follow project logging rules.
+Monorepo (existing)
 
-### 6. Key Reference Documents
+### Service Architecture
 
-- This Product Requirements Document (PRD) for the SRA Benchmarking Module.
-- Systematic Review Metrics: [`/docs/sr_metrics.md`](/docs/sr_metrics.md)
-- Benchmark Protocol Definition: [`/docs/benchmark/bechmark-protocol.md`](/docs/benchmark/bechmark-protocol.md)
-- Benchmark Ground Truth Dataset: [`/docs/benchmark/human-reviewer-results-to-bench-against.csv`](/docs/benchmark/human-reviewer-results-to-bench-against.csv)
-- SRA Architecture Document: [`/docs/architecture.md`](/docs/architecture.md)
-- SRA Data Models (to be updated): [`/docs/data-models.md`](/docs/data-models.md)
-- SRA Coding Standards: [`/docs/coding-standards.md`](/docs/coding-standards.md)
-- SRA Testing Standards: [`docs/testing-strategy.md`](/docs/testing-strategy.md)
-- Streamlit UI testing guide: [`docs/streamlit-testing-framework.md`](/docs/streamlit-testing-framework.md)
-- Python Logging Rules: [`py/python-logging-rules.mdc`](/.cursor/rules/py/python-logging-rules.mdc) (as referenced in FR7.1)
+The benchmark module will be a new sub-system within the existing service-oriented monolith, with its own UI pages and logic that directly call the core SRA agent functions.
 
-### 7. Epics
+### Testing requirements
 
-This PRD primarily defines the scope for the following new epic:
+- Unit tests for the data seeding script.
+- Unit tests for the metric calculation logic.
+- Integration tests for the benchmark workflow, mocking the LLM calls.
 
-- **Epic 4: SRA Benchmarking Module Implementation**
-    - **Goal:** To design, develop, and integrate a benchmarking module into the SRA application that allows for the evaluation of the AI-driven T&A screening pipeline against a human-annotated dataset. This includes data preparation and seeding, persistence of benchmark runs and results, calculation and display of performance metrics, and mechanisms for results export, all as detailed in this PRD.
-    - **Scope:** The functional and non-functional requirements outlined in sections 3.1 and 3.2 of this PRD constitute the primary scope for this epic. Detailed user stories will be derived from these requirements during backlog grooming and sprint planning.
+## Epics
 
-This PRD aims to guide the development of a functional and valuable benchmarking module within the specified constraints.
+### Epic 1: Data Foundation and Core Logic
+
+**Goal:** Establish the database models, schemas, and data seeding script required for the benchmarking module.
+
+#### Story 1.1: Create Benchmark DB Models
+
+As a developer, I want to create the `BenchmarkRun` and `BenchmarkResultItem` SQLModels, so that I can persist all data from a benchmark run.
+
+##### Acceptance Criteria
+
+- 1: `BenchmarkRun` model is created with typed columns for all summary metrics.
+- 2: `BenchmarkResultItem` model is created to store individual comparisons.
+- 3: Pydantic schemas for the new models are defined.
+- 4: An Alembic migration is created and applied successfully.
+
+#### Story 1.2: Implement Data Seeding Script
+
+As a developer, I want a script to populate the database with the benchmark protocol and dataset, so that the module has data to operate on.
+
+##### Acceptance Criteria
+
+- 1: `tools/seed_benchmark_data.py` is created.
+- 2: The script correctly parses the protocol markdown and dataset CSV.
+- 3: The script creates `SystematicReview` and `SearchResult` records with the correct data and metadata.
+- 4: The script is idempotent and can be run multiple times without creating duplicate data.
+
+### Epic 2: Benchmark Execution and UI
+
+**Goal:** Build the user interface and orchestration logic to execute a benchmark run, calculate metrics, and display/export the results.
+
+#### Story 2.1: Fix Core Screening Bug
+
+As a developer, I must fix the multi-abstract screening bug in the main application, so that the benchmark module can process its dataset reliably.
+
+##### Acceptance Criteria
+
+- 1: The root cause of the batch screening error in `ScreeningService` is identified.
+- 2: The bug is fixed, ensuring correct transaction management.
+- 3: A test is created to verify that batch screening now works as expected.
+
+#### Story 2.2: Build Benchmark UI
+
+As a user, I want a simple interface to load data, run a benchmark, and see the results, so that I can evaluate the SRA's performance.
+
+##### Acceptance Criteria
+
+- 1: A new Streamlit page for the benchmark module is created.
+- 2: UI buttons exist to load data and start a new run.
+- 3: The benchmark protocol is displayed correctly on the page.
+- 4: A status indicator provides feedback during a run.
+
+#### Story 2.3: Implement Benchmark Orchestration
+
+As a developer, I want to write the logic that orchestrates the benchmark run, so that it correctly processes the data and calculates metrics.
+
+##### Acceptance Criteria
+
+- 1: The "Run New Benchmark" button triggers the orchestration logic.
+- 2: The logic correctly iterates through the dataset, calls the SRA screening agents, and stores `BenchmarkResultItem` records.
+- 3: After the run, summary metrics are calculated correctly.
+- 4: The summary metrics are persisted to the `BenchmarkRun` record in the database.
+
+#### Story 2.4: Display and Export Results
+
+As a user, I want to view the summary metrics and download the full results, so that I can analyze the SRA's performance in detail.
+
+##### Acceptance Criteria
+
+- 1: The summary metrics from the latest `BenchmarkRun` are displayed in the UI.
+- 2: A download button provides a CSV of the detailed `BenchmarkResultItem` data.
+- 3: A second download button provides a CSV of the summary metrics.
+
+## Checklist Results Report
+
+[[LLM: This section will be populated after running the `pm-checklist` task.]]
+
+## Next Steps
+
+[[LLM: This section will contain prompts for the Design Architect and Architect.]]
