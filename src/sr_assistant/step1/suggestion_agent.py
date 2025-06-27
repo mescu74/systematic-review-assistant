@@ -5,11 +5,24 @@ Needs a rewrite.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from typing import Union
+
 from langchain_openai import ChatOpenAI
 from loguru import logger
 
 from sr_assistant.core.models import SystematicReview
 from sr_assistant.core.schemas import PicosSuggestions, SuggestionResult
+
+
+@dataclass
+class ReviewCriteria:
+    """Minimal research criteria used for generating suggestions."""
+
+    research_question: str
+    inclusion_criteria: str = ""
+    exclusion_criteria: str = ""
+    background: str = ""
 
 
 class SuggestionAgent:
@@ -22,7 +35,9 @@ class SuggestionAgent:
         ).with_structured_output(PicosSuggestions)
 
     @logger.catch(Exception)
-    def get_suggestions(self, review: SystematicReview) -> SuggestionResult:
+    def get_suggestions(
+        self, review: Union[SystematicReview, ReviewCriteria]
+    ) -> SuggestionResult:
         """Generates PICO suggestions and critique based on background and question."""
         logger.info("Generating PICO suggestions...")
 
