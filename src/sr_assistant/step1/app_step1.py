@@ -8,7 +8,7 @@ import streamlit as st
 from dotenv import load_dotenv
 from langchain_core.runnables import RunnableConfig
 
-from step1.suggestion_agent import ReviewCriteria, SuggestionAgent
+from sr_assistant.step1.suggestion_agent import ReviewCriteria, SuggestionAgent
 
 # Load environment variables from .env if present
 load_dotenv()
